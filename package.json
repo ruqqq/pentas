@@ -1,0 +1,19 @@
+{
+  "name": "tok-juara",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsgo --noEmit",
+    "lint": "oxlint",
+    "format": "oxfmt"
+  },
+  "devDependencies": {
+    "@typescript/native-preview": "latest",
+    "oxfmt": "latest",
+    "oxlint": "latest"
+  }
+}

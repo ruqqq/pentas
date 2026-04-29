@@ -16,6 +16,7 @@ Conformance: wayang implements the tracker contract from the dalang spec §11 ve
 ## 2. Scope
 
 ### In scope (v1)
+
 - Single-user, single-project, single-host. Loopback HTTP only.
 - SQLite-backed persistent storage.
 - REST API: dalang-facing read endpoints + agent/UI mutation endpoints.
@@ -28,6 +29,7 @@ Conformance: wayang implements the tracker contract from the dalang spec §11 ve
 - "Paste Linear URL" convenience on the create form.
 
 ### Out of scope (v1)
+
 - Multi-user, multi-project, teams, assignees, sprints/cycles, custom fields, attachments.
 - Sync-back to Linear or any external tracker.
 - Webhook outbound.
@@ -36,21 +38,22 @@ Conformance: wayang implements the tracker contract from the dalang spec §11 ve
 
 ## 3. Stack
 
-| Concern               | Tool                                |
-| --------------------- | ----------------------------------- |
-| Runtime               | Bun                                 |
-| Language              | TypeScript                          |
-| HTTP                  | `Bun.serve` (built-in)              |
-| Storage               | `bun:sqlite` (built-in)             |
+| Concern               | Tool                                                              |
+| --------------------- | ----------------------------------------------------------------- |
+| Runtime               | Bun                                                               |
+| Language              | TypeScript                                                        |
+| HTTP                  | `Bun.serve` (built-in)                                            |
+| Storage               | `bun:sqlite` (built-in)                                           |
 | Templating            | TypeScript template literals (graduate to `eta` if it gets messy) |
-| Frontend interactions | HTMX (vendored, no bundler)         |
-| Markdown              | `marked` + sanitizer                |
-| Type checker          | `tsgo` (typescript-native preview)  |
-| Linter                | `oxlint`                            |
-| Formatter             | `oxfmt`                             |
-| Test runner           | `bun test`                          |
+| Frontend interactions | HTMX (vendored, no bundler)                                       |
+| Markdown              | `marked` + sanitizer                                              |
+| Type checker          | `tsgo` (typescript-native preview)                                |
+| Linter                | `oxlint`                                                          |
+| Formatter             | `oxfmt`                                                           |
+| Test runner           | `bun test`                                                        |
 
 ### Testing rules (binding, same as dalang)
+
 - No React Testing Library or component-rendering tests.
 - UI logic that warrants tests is extracted into pure modules and unit-tested.
 - HTML output is tested by snapshotting the string returned from a partial render function.
@@ -261,8 +264,8 @@ interface NormalizedIssue {
   priority: number | null;
   state: string;
   branch_name: string | null;
-  url: string | null;          // mirrors external_url; named `url` for Symphony §4.1.1 compatibility
-  labels: string[];            // lowercase
+  url: string | null; // mirrors external_url; named `url` for Symphony §4.1.1 compatibility
+  labels: string[]; // lowercase
   blocked_by: { id: string | null; identifier: string | null; state: string | null }[];
   created_at: string | null;
   updated_at: string | null;
@@ -271,19 +274,19 @@ interface NormalizedIssue {
 interface Comment {
   id: string;
   issue_id: string;
-  body: string;                // raw markdown
-  body_html: string;           // server-rendered, sanitized
-  author: 'user' | 'agent';
+  body: string; // raw markdown
+  body_html: string; // server-rendered, sanitized
+  author: "user" | "agent";
   created_at: string;
 }
 
 interface HistoryEntry {
   id: string;
   issue_id: string;
-  kind: 'created' | 'state_changed' | 'edited' | 'comment_added' | 'deleted';
+  kind: "created" | "state_changed" | "edited" | "comment_added" | "deleted";
   from_value: string | null;
   to_value: string | null;
-  actor: 'user' | 'agent';
+  actor: "user" | "agent";
   at: string;
 }
 ```
@@ -349,13 +352,13 @@ In-memory pub/sub. A singleton `EventBus` keeps the set of active SSE writers.
 
 ## 11. Failure Model
 
-| Class       | Examples                                            | Response                                  |
-| ----------- | --------------------------------------------------- | ----------------------------------------- |
-| Validation  | missing `title`, invalid `state`, bad cursor format | 400 `{error:{code,message,fields?}}`      |
-| Auth        | missing/wrong bearer when token configured          | 401                                       |
-| Not found   | unknown issue id                                    | 404 `{error:{code:"issue_not_found"}}`    |
-| Conflict    | unique-constraint violation                         | 409 `{error:{code,message}}`              |
-| Server      | DB error / unexpected exception                     | 500, log full stack, return generic JSON  |
+| Class      | Examples                                            | Response                                 |
+| ---------- | --------------------------------------------------- | ---------------------------------------- |
+| Validation | missing `title`, invalid `state`, bad cursor format | 400 `{error:{code,message,fields?}}`     |
+| Auth       | missing/wrong bearer when token configured          | 401                                      |
+| Not found  | unknown issue id                                    | 404 `{error:{code:"issue_not_found"}}`   |
+| Conflict   | unique-constraint violation                         | 409 `{error:{code,message}}`             |
+| Server     | DB error / unexpected exception                     | 500, log full stack, return generic JSON |
 
 UI errors render an inline error partial via HTMX `hx-target` + `hx-swap`.
 

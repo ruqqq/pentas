@@ -19,6 +19,7 @@ These tasks set up the bun workspace shared by both packages. Run once, before e
 ### Task 0.1: Initialize bun workspace root
 
 **Files:**
+
 - Create: `package.json`
 - Create: `tsconfig.base.json`
 - Create: `.gitignore`
@@ -97,6 +98,7 @@ git commit -m "chore: initialize bun workspace root"
 ### Task 0.2: Configure oxlint and oxfmt
 
 **Files:**
+
 - Create: `oxlint.json`
 - Create: `.oxfmtrc`
 
@@ -154,6 +156,7 @@ git commit -m "chore: add oxlint and oxfmt configs"
 ### Task 0.3: Create package stubs
 
 **Files:**
+
 - Create: `packages/wayang/package.json`
 - Create: `packages/wayang/tsconfig.json`
 - Create: `packages/wayang/src/index.ts`
@@ -195,12 +198,13 @@ git commit -m "chore: add oxlint and oxfmt configs"
 - [ ] **Step 3: Wayang stub `src/index.ts`**
 
 ```typescript
-console.log('wayang stub');
+console.log("wayang stub");
 ```
 
 - [ ] **Step 4: Dalang stub** (mirrors above for dalang)
 
 `packages/dalang/package.json`:
+
 ```json
 {
   "name": "@tok-juara/dalang",
@@ -218,6 +222,7 @@ console.log('wayang stub');
 ```
 
 `packages/dalang/tsconfig.json`:
+
 ```json
 {
   "extends": "../../tsconfig.base.json",
@@ -226,8 +231,9 @@ console.log('wayang stub');
 ```
 
 `packages/dalang/src/index.ts`:
+
 ```typescript
-console.log('dalang stub');
+console.log("dalang stub");
 ```
 
 - [ ] **Step 5: Verify both run**
@@ -252,22 +258,23 @@ git commit -m "chore: add wayang and dalang package stubs"
 ### Task 1.1: ULID and identifier sequence
 
 **Files:**
+
 - Create: `packages/wayang/src/lib/ids.ts`
 - Create: `packages/wayang/tests/lib/ids.test.ts`
 
 - [ ] **Step 1: Write failing test** at `packages/wayang/tests/lib/ids.test.ts`
 
 ```typescript
-import { describe, expect, test } from 'bun:test';
-import { ulid, formatIdentifier } from '../../src/lib/ids';
+import { describe, expect, test } from "bun:test";
+import { ulid, formatIdentifier } from "../../src/lib/ids";
 
-describe('ulid', () => {
-  test('produces 26-char Crockford base32 string', () => {
+describe("ulid", () => {
+  test("produces 26-char Crockford base32 string", () => {
     const id = ulid();
     expect(id).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
   });
 
-  test('two IDs in sequence are unique and lexicographically ordered', () => {
+  test("two IDs in sequence are unique and lexicographically ordered", () => {
     const a = ulid();
     const b = ulid();
     expect(a).not.toEqual(b);
@@ -275,10 +282,10 @@ describe('ulid', () => {
   });
 });
 
-describe('formatIdentifier', () => {
-  test('formats as JUARA-N', () => {
-    expect(formatIdentifier(1)).toBe('JUARA-1');
-    expect(formatIdentifier(42)).toBe('JUARA-42');
+describe("formatIdentifier", () => {
+  test("formats as JUARA-N", () => {
+    expect(formatIdentifier(1)).toBe("JUARA-1");
+    expect(formatIdentifier(42)).toBe("JUARA-42");
   });
 });
 ```
@@ -291,13 +298,13 @@ Expected: FAIL — module not found.
 - [ ] **Step 3: Implement** at `packages/wayang/src/lib/ids.ts`
 
 ```typescript
-const ENCODING = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+const ENCODING = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 let lastTime = 0;
 let lastRandom = new Uint8Array(10);
 
 function encodeTime(now: number, len: number): string {
-  let out = '';
+  let out = "";
   let t = now;
   for (let i = len - 1; i >= 0; i--) {
     out = ENCODING[t % 32]! + out;
@@ -307,7 +314,7 @@ function encodeTime(now: number, len: number): string {
 }
 
 function encodeRandom(bytes: Uint8Array): string {
-  let out = '';
+  let out = "";
   for (let i = 0; i < bytes.length; i++) out += ENCODING[bytes[i]! % 32];
   return out;
 }
@@ -363,6 +370,7 @@ git commit -m "feat(wayang): add ULID and identifier formatter"
 ### Task 1.2: SQLite schema and migration runner
 
 **Files:**
+
 - Create: `packages/wayang/src/db/schema.sql`
 - Create: `packages/wayang/src/db/migrations.ts`
 - Create: `packages/wayang/tests/db/migrations.test.ts`
@@ -433,31 +441,33 @@ INSERT OR IGNORE INTO seq (name, value) VALUES ('issue_identifier', 0);
 - [ ] **Step 2: Write failing test** at `packages/wayang/tests/db/migrations.test.ts`
 
 ```typescript
-import { describe, expect, test } from 'bun:test';
-import { Database } from 'bun:sqlite';
-import { runMigrations } from '../../src/db/migrations';
+import { describe, expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
+import { runMigrations } from "../../src/db/migrations";
 
-describe('runMigrations', () => {
-  test('creates all tables idempotently', () => {
-    const db = new Database(':memory:');
+describe("runMigrations", () => {
+  test("creates all tables idempotently", () => {
+    const db = new Database(":memory:");
     runMigrations(db);
     runMigrations(db); // idempotent
 
     const tables = db
-      .query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+      .query<{ name: string }, []>(
+        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
+      )
       .all()
       .map((r) => r.name);
 
-    expect(tables).toContain('issues');
-    expect(tables).toContain('issue_labels');
-    expect(tables).toContain('issue_blockers');
-    expect(tables).toContain('comments');
-    expect(tables).toContain('history');
-    expect(tables).toContain('seq');
+    expect(tables).toContain("issues");
+    expect(tables).toContain("issue_labels");
+    expect(tables).toContain("issue_blockers");
+    expect(tables).toContain("comments");
+    expect(tables).toContain("history");
+    expect(tables).toContain("seq");
   });
 
-  test('initializes issue_identifier sequence to 0', () => {
-    const db = new Database(':memory:');
+  test("initializes issue_identifier sequence to 0", () => {
+    const db = new Database(":memory:");
     runMigrations(db);
     const row = db
       .query<{ value: number }, []>("SELECT value FROM seq WHERE name='issue_identifier'")
@@ -475,11 +485,11 @@ Expected: FAIL — module not found.
 - [ ] **Step 4: Implement** at `packages/wayang/src/db/migrations.ts`
 
 ```typescript
-import type { Database } from 'bun:sqlite';
-import schema from './schema.sql' with { type: 'text' };
+import type { Database } from "bun:sqlite";
+import schema from "./schema.sql" with { type: "text" };
 
 export function runMigrations(db: Database): void {
-  db.exec('PRAGMA foreign_keys = ON;');
+  db.exec("PRAGMA foreign_keys = ON;");
   db.exec(schema);
 }
 ```
@@ -501,24 +511,25 @@ git commit -m "feat(wayang): add SQLite schema and migration runner"
 ### Task 1.3: Identifier sequence allocator
 
 **Files:**
+
 - Create: `packages/wayang/src/db/seq.ts`
 - Create: `packages/wayang/tests/db/seq.test.ts`
 
 - [ ] **Step 1: Write failing test**
 
 ```typescript
-import { describe, expect, test } from 'bun:test';
-import { Database } from 'bun:sqlite';
-import { runMigrations } from '../../src/db/migrations';
-import { allocateIdentifier } from '../../src/db/seq';
+import { describe, expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
+import { runMigrations } from "../../src/db/migrations";
+import { allocateIdentifier } from "../../src/db/seq";
 
-describe('allocateIdentifier', () => {
-  test('returns monotonically increasing JUARA-N', () => {
-    const db = new Database(':memory:');
+describe("allocateIdentifier", () => {
+  test("returns monotonically increasing JUARA-N", () => {
+    const db = new Database(":memory:");
     runMigrations(db);
-    expect(allocateIdentifier(db)).toBe('JUARA-1');
-    expect(allocateIdentifier(db)).toBe('JUARA-2');
-    expect(allocateIdentifier(db)).toBe('JUARA-3');
+    expect(allocateIdentifier(db)).toBe("JUARA-1");
+    expect(allocateIdentifier(db)).toBe("JUARA-2");
+    expect(allocateIdentifier(db)).toBe("JUARA-3");
   });
 });
 ```
@@ -528,16 +539,17 @@ describe('allocateIdentifier', () => {
 - [ ] **Step 3: Implement**
 
 ```typescript
-import type { Database } from 'bun:sqlite';
-import { formatIdentifier } from '../lib/ids';
+import type { Database } from "bun:sqlite";
+import { formatIdentifier } from "../lib/ids";
 
 export function allocateIdentifier(db: Database): string {
   const row = db
-    .query<{ value: number }, []>(
-      "UPDATE seq SET value = value + 1 WHERE name = 'issue_identifier' RETURNING value",
-    )
+    .query<
+      { value: number },
+      []
+    >("UPDATE seq SET value = value + 1 WHERE name = 'issue_identifier' RETURNING value")
     .get();
-  if (!row) throw new Error('issue_identifier sequence missing');
+  if (!row) throw new Error("issue_identifier sequence missing");
   return formatIdentifier(row.value);
 }
 ```
@@ -558,34 +570,42 @@ git commit -m "feat(wayang): add identifier sequence allocator"
 ### Task 2.1: Issue type and state machine
 
 **Files:**
+
 - Create: `packages/wayang/src/domain/issue.ts`
 - Create: `packages/wayang/tests/domain/issue.test.ts`
 
 - [ ] **Step 1: Write failing test**
 
 ```typescript
-import { describe, expect, test } from 'bun:test';
-import { ACTIVE_STATES, ALL_STATES, TERMINAL_STATES, isActive, isTerminal, isValidState } from '../../src/domain/issue';
+import { describe, expect, test } from "bun:test";
+import {
+  ACTIVE_STATES,
+  ALL_STATES,
+  TERMINAL_STATES,
+  isActive,
+  isTerminal,
+  isValidState,
+} from "../../src/domain/issue";
 
-describe('issue state machine', () => {
-  test('canonical sets are exhaustive', () => {
-    expect(ALL_STATES).toEqual(['Todo', 'In Progress', 'In Review', 'Done', 'Cancelled']);
-    expect(ACTIVE_STATES).toEqual(['Todo', 'In Progress']);
-    expect(TERMINAL_STATES).toEqual(['Done', 'Cancelled']);
+describe("issue state machine", () => {
+  test("canonical sets are exhaustive", () => {
+    expect(ALL_STATES).toEqual(["Todo", "In Progress", "In Review", "Done", "Cancelled"]);
+    expect(ACTIVE_STATES).toEqual(["Todo", "In Progress"]);
+    expect(TERMINAL_STATES).toEqual(["Done", "Cancelled"]);
   });
 
-  test('isActive / isTerminal classify correctly', () => {
-    expect(isActive('Todo')).toBe(true);
-    expect(isActive('In Progress')).toBe(true);
-    expect(isActive('Done')).toBe(false);
-    expect(isTerminal('Done')).toBe(true);
-    expect(isTerminal('Cancelled')).toBe(true);
-    expect(isTerminal('Todo')).toBe(false);
+  test("isActive / isTerminal classify correctly", () => {
+    expect(isActive("Todo")).toBe(true);
+    expect(isActive("In Progress")).toBe(true);
+    expect(isActive("Done")).toBe(false);
+    expect(isTerminal("Done")).toBe(true);
+    expect(isTerminal("Cancelled")).toBe(true);
+    expect(isTerminal("Todo")).toBe(false);
   });
 
-  test('isValidState recognizes all canonical states', () => {
+  test("isValidState recognizes all canonical states", () => {
     for (const s of ALL_STATES) expect(isValidState(s)).toBe(true);
-    expect(isValidState('garbage')).toBe(false);
+    expect(isValidState("garbage")).toBe(false);
   });
 });
 ```
@@ -595,11 +615,17 @@ describe('issue state machine', () => {
 - [ ] **Step 3: Implement**
 
 ```typescript
-export type IssueState = 'Todo' | 'In Progress' | 'In Review' | 'Done' | 'Cancelled';
+export type IssueState = "Todo" | "In Progress" | "In Review" | "Done" | "Cancelled";
 
-export const ALL_STATES = ['Todo', 'In Progress', 'In Review', 'Done', 'Cancelled'] as const satisfies readonly IssueState[];
-export const ACTIVE_STATES = ['Todo', 'In Progress'] as const satisfies readonly IssueState[];
-export const TERMINAL_STATES = ['Done', 'Cancelled'] as const satisfies readonly IssueState[];
+export const ALL_STATES = [
+  "Todo",
+  "In Progress",
+  "In Review",
+  "Done",
+  "Cancelled",
+] as const satisfies readonly IssueState[];
+export const ACTIVE_STATES = ["Todo", "In Progress"] as const satisfies readonly IssueState[];
+export const TERMINAL_STATES = ["Done", "Cancelled"] as const satisfies readonly IssueState[];
 
 export function isActive(s: string): boolean {
   return (ACTIVE_STATES as readonly string[]).includes(s);
@@ -641,36 +667,37 @@ git commit -m "feat(wayang): add issue state machine and NormalizedIssue type"
 ### Task 2.2: Markdown rendering with sanitization
 
 **Files:**
+
 - Create: `packages/wayang/src/lib/markdown.ts`
 - Create: `packages/wayang/tests/lib/markdown.test.ts`
 
 - [ ] **Step 1: Write failing test**
 
 ```typescript
-import { describe, expect, test } from 'bun:test';
-import { renderMarkdown } from '../../src/lib/markdown';
+import { describe, expect, test } from "bun:test";
+import { renderMarkdown } from "../../src/lib/markdown";
 
-describe('renderMarkdown', () => {
-  test('renders basic markdown', () => {
-    const html = renderMarkdown('# Hello\n\n**bold**');
-    expect(html).toContain('<h1');
-    expect(html).toContain('<strong>bold</strong>');
+describe("renderMarkdown", () => {
+  test("renders basic markdown", () => {
+    const html = renderMarkdown("# Hello\n\n**bold**");
+    expect(html).toContain("<h1");
+    expect(html).toContain("<strong>bold</strong>");
   });
 
-  test('strips inline scripts', () => {
-    const html = renderMarkdown('<script>alert(1)</script>safe');
-    expect(html).not.toContain('<script');
-    expect(html).toContain('safe');
+  test("strips inline scripts", () => {
+    const html = renderMarkdown("<script>alert(1)</script>safe");
+    expect(html).not.toContain("<script");
+    expect(html).toContain("safe");
   });
 
-  test('strips javascript: URLs', () => {
-    const html = renderMarkdown('[click](javascript:alert(1))');
-    expect(html).not.toContain('javascript:');
+  test("strips javascript: URLs", () => {
+    const html = renderMarkdown("[click](javascript:alert(1))");
+    expect(html).not.toContain("javascript:");
   });
 
-  test('preserves http(s) and relative links', () => {
-    expect(renderMarkdown('[a](https://example.com)')).toContain('href="https://example.com"');
-    expect(renderMarkdown('[a](/issues/1)')).toContain('href="/issues/1"');
+  test("preserves http(s) and relative links", () => {
+    expect(renderMarkdown("[a](https://example.com)")).toContain('href="https://example.com"');
+    expect(renderMarkdown("[a](/issues/1)")).toContain('href="/issues/1"');
   });
 });
 ```
@@ -680,19 +707,33 @@ describe('renderMarkdown', () => {
 - [ ] **Step 3: Implement**
 
 ```typescript
-import { marked } from 'marked';
-import DOMPurify from 'isomorphic-dompurify';
+import { marked } from "marked";
+import DOMPurify from "isomorphic-dompurify";
 
 const PURIFY_CONFIG = {
   ALLOWED_TAGS: [
-    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-    'p', 'br', 'hr',
-    'strong', 'em', 'del', 'code', 'pre',
-    'ul', 'ol', 'li',
-    'a', 'blockquote',
-    'img',
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "p",
+    "br",
+    "hr",
+    "strong",
+    "em",
+    "del",
+    "code",
+    "pre",
+    "ul",
+    "ol",
+    "li",
+    "a",
+    "blockquote",
+    "img",
   ],
-  ALLOWED_ATTR: ['href', 'title', 'src', 'alt'],
+  ALLOWED_ATTR: ["href", "title", "src", "alt"],
   ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
 };
 
@@ -716,34 +757,35 @@ git commit -m "feat(wayang): add sanitized markdown renderer"
 ### Task 2.3: Linear URL parser
 
 **Files:**
+
 - Create: `packages/wayang/src/lib/linear-url.ts`
 - Create: `packages/wayang/tests/lib/linear-url.test.ts`
 
 - [ ] **Step 1: Write failing test**
 
 ```typescript
-import { describe, expect, test } from 'bun:test';
-import { parseLinearUrl } from '../../src/lib/linear-url';
+import { describe, expect, test } from "bun:test";
+import { parseLinearUrl } from "../../src/lib/linear-url";
 
-describe('parseLinearUrl', () => {
-  test('extracts org and key from canonical URL', () => {
-    expect(parseLinearUrl('https://linear.app/acme/issue/ABC-123/some-title')).toEqual({
-      external_ref: 'ABC-123',
-      external_url: 'https://linear.app/acme/issue/ABC-123/some-title',
+describe("parseLinearUrl", () => {
+  test("extracts org and key from canonical URL", () => {
+    expect(parseLinearUrl("https://linear.app/acme/issue/ABC-123/some-title")).toEqual({
+      external_ref: "ABC-123",
+      external_url: "https://linear.app/acme/issue/ABC-123/some-title",
     });
   });
 
-  test('extracts when slug is omitted', () => {
-    expect(parseLinearUrl('https://linear.app/acme/issue/ABC-123')).toEqual({
-      external_ref: 'ABC-123',
-      external_url: 'https://linear.app/acme/issue/ABC-123',
+  test("extracts when slug is omitted", () => {
+    expect(parseLinearUrl("https://linear.app/acme/issue/ABC-123")).toEqual({
+      external_ref: "ABC-123",
+      external_url: "https://linear.app/acme/issue/ABC-123",
     });
   });
 
-  test('returns null for non-Linear URLs', () => {
-    expect(parseLinearUrl('https://github.com/foo/bar/issues/1')).toBeNull();
-    expect(parseLinearUrl('not-a-url')).toBeNull();
-    expect(parseLinearUrl('')).toBeNull();
+  test("returns null for non-Linear URLs", () => {
+    expect(parseLinearUrl("https://github.com/foo/bar/issues/1")).toBeNull();
+    expect(parseLinearUrl("not-a-url")).toBeNull();
+    expect(parseLinearUrl("")).toBeNull();
   });
 });
 ```
@@ -783,6 +825,7 @@ git commit -m "feat(wayang): add Linear URL parser"
 ### Task 3.1: Issue repository — CRUD + normalization
 
 **Files:**
+
 - Create: `packages/wayang/src/db/repo/issues.ts`
 - Create: `packages/wayang/tests/db/repo/issues.test.ts`
 
@@ -791,9 +834,9 @@ This task is large because it covers the central repo functions used by all API 
 - [ ] **Step 1: Write failing test**
 
 ```typescript
-import { describe, expect, test } from 'bun:test';
-import { Database } from 'bun:sqlite';
-import { runMigrations } from '../../../src/db/migrations';
+import { describe, expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
+import { runMigrations } from "../../../src/db/migrations";
 import {
   createIssue,
   getIssueById,
@@ -801,79 +844,77 @@ import {
   getIssuesByIds,
   updateIssue,
   deleteIssue,
-} from '../../../src/db/repo/issues';
+} from "../../../src/db/repo/issues";
 
 function freshDb(): Database {
-  const db = new Database(':memory:');
+  const db = new Database(":memory:");
   runMigrations(db);
   return db;
 }
 
-describe('issues repo', () => {
-  test('createIssue assigns identifier and returns NormalizedIssue', () => {
+describe("issues repo", () => {
+  test("createIssue assigns identifier and returns NormalizedIssue", () => {
     const db = freshDb();
-    const issue = createIssue(db, { title: 'first', state: 'Todo' });
-    expect(issue.identifier).toBe('JUARA-1');
-    expect(issue.title).toBe('first');
-    expect(issue.state).toBe('Todo');
+    const issue = createIssue(db, { title: "first", state: "Todo" });
+    expect(issue.identifier).toBe("JUARA-1");
+    expect(issue.title).toBe("first");
+    expect(issue.state).toBe("Todo");
     expect(issue.labels).toEqual([]);
     expect(issue.blocked_by).toEqual([]);
   });
 
-  test('createIssue normalizes labels to lowercase', () => {
+  test("createIssue normalizes labels to lowercase", () => {
     const db = freshDb();
-    const issue = createIssue(db, { title: 't', state: 'Todo', labels: ['Bug', 'P1', 'bug'] });
-    expect(issue.labels.sort()).toEqual(['bug', 'p1']);
+    const issue = createIssue(db, { title: "t", state: "Todo", labels: ["Bug", "P1", "bug"] });
+    expect(issue.labels.sort()).toEqual(["bug", "p1"]);
   });
 
-  test('createIssue persists blockers and hydrates them', () => {
+  test("createIssue persists blockers and hydrates them", () => {
     const db = freshDb();
-    const a = createIssue(db, { title: 'a', state: 'Todo' });
-    const b = createIssue(db, { title: 'b', state: 'Todo', blocker_ids: [a.id] });
-    expect(b.blocked_by).toEqual([{ id: a.id, identifier: 'JUARA-1', state: 'Todo' }]);
+    const a = createIssue(db, { title: "a", state: "Todo" });
+    const b = createIssue(db, { title: "b", state: "Todo", blocker_ids: [a.id] });
+    expect(b.blocked_by).toEqual([{ id: a.id, identifier: "JUARA-1", state: "Todo" }]);
   });
 
-  test('getIssueById returns null for unknown id', () => {
+  test("getIssueById returns null for unknown id", () => {
     const db = freshDb();
-    expect(getIssueById(db, 'nope')).toBeNull();
+    expect(getIssueById(db, "nope")).toBeNull();
   });
 
-  test('getIssuesByStates filters and paginates', () => {
+  test("getIssuesByStates filters and paginates", () => {
     const db = freshDb();
-    createIssue(db, { title: 'a', state: 'Todo' });
-    createIssue(db, { title: 'b', state: 'Done' });
-    createIssue(db, { title: 'c', state: 'Todo' });
-    const result = getIssuesByStates(db, ['Todo'], null, 50);
+    createIssue(db, { title: "a", state: "Todo" });
+    createIssue(db, { title: "b", state: "Done" });
+    createIssue(db, { title: "c", state: "Todo" });
+    const result = getIssuesByStates(db, ["Todo"], null, 50);
     expect(result.issues.length).toBe(2);
     expect(result.next_cursor).toBeNull();
   });
 
-  test('getIssuesByIds returns matching subset', () => {
+  test("getIssuesByIds returns matching subset", () => {
     const db = freshDb();
-    const a = createIssue(db, { title: 'a', state: 'Todo' });
-    const b = createIssue(db, { title: 'b', state: 'Todo' });
-    const result = getIssuesByIds(db, [a.id, 'unknown', b.id]);
+    const a = createIssue(db, { title: "a", state: "Todo" });
+    const b = createIssue(db, { title: "b", state: "Todo" });
+    const result = getIssuesByIds(db, [a.id, "unknown", b.id]);
     expect(result.length).toBe(2);
   });
 
-  test('updateIssue patches and bumps updated_at', () => {
+  test("updateIssue patches and bumps updated_at", () => {
     const db = freshDb();
-    const a = createIssue(db, { title: 'a', state: 'Todo' });
+    const a = createIssue(db, { title: "a", state: "Todo" });
     const before = a.updated_at;
     Bun.sleepSync(5);
-    const updated = updateIssue(db, a.id, { state: 'In Progress' });
-    expect(updated?.state).toBe('In Progress');
+    const updated = updateIssue(db, a.id, { state: "In Progress" });
+    expect(updated?.state).toBe("In Progress");
     expect(updated?.updated_at).not.toBe(before);
   });
 
-  test('deleteIssue removes the row and cascades', () => {
+  test("deleteIssue removes the row and cascades", () => {
     const db = freshDb();
-    const a = createIssue(db, { title: 'a', state: 'Todo', labels: ['x'] });
+    const a = createIssue(db, { title: "a", state: "Todo", labels: ["x"] });
     deleteIssue(db, a.id);
     expect(getIssueById(db, a.id)).toBeNull();
-    const labelCount = db
-      .query<{ n: number }, []>("SELECT COUNT(*) AS n FROM issue_labels")
-      .get();
+    const labelCount = db.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM issue_labels").get();
     expect(labelCount?.n).toBe(0);
   });
 });
@@ -884,10 +925,10 @@ describe('issues repo', () => {
 - [ ] **Step 3: Implement**
 
 ```typescript
-import type { Database } from 'bun:sqlite';
-import { ulid } from '../../lib/ids';
-import { allocateIdentifier } from '../seq';
-import type { NormalizedIssue } from '../../domain/issue';
+import type { Database } from "bun:sqlite";
+import { ulid } from "../../lib/ids";
+import { allocateIdentifier } from "../seq";
+import type { NormalizedIssue } from "../../domain/issue";
 
 export interface CreateIssueInput {
   title: string;
@@ -925,15 +966,12 @@ function nowIso(): string {
 
 function hydrateLabels(db: Database, issueId: string): string[] {
   return db
-    .query<{ label: string }, [string]>('SELECT label FROM issue_labels WHERE issue_id = ?')
+    .query<{ label: string }, [string]>("SELECT label FROM issue_labels WHERE issue_id = ?")
     .all(issueId)
     .map((r) => r.label);
 }
 
-function hydrateBlockers(
-  db: Database,
-  issueId: string,
-): NormalizedIssue['blocked_by'] {
+function hydrateBlockers(db: Database, issueId: string): NormalizedIssue["blocked_by"] {
   return db
     .query<{ id: string; identifier: string; state: string }, [string]>(
       `SELECT i.id, i.identifier, i.state
@@ -996,37 +1034,38 @@ export function createIssue(db: Database, input: CreateIssueInput): NormalizedIs
         const lbl = raw.toLowerCase().trim();
         if (!lbl || seen.has(lbl)) continue;
         seen.add(lbl);
-        db.query('INSERT INTO issue_labels (issue_id, label) VALUES (?, ?)').run(id, lbl);
+        db.query("INSERT INTO issue_labels (issue_id, label) VALUES (?, ?)").run(id, lbl);
       }
     }
 
     if (input.blocker_ids?.length) {
       for (const blockerId of input.blocker_ids) {
         if (blockerId === id) continue;
-        db.query(
-          'INSERT OR IGNORE INTO issue_blockers (issue_id, blocker_id) VALUES (?, ?)',
-        ).run(id, blockerId);
+        db.query("INSERT OR IGNORE INTO issue_blockers (issue_id, blocker_id) VALUES (?, ?)").run(
+          id,
+          blockerId,
+        );
       }
     }
   });
   tx();
 
-  const row = db.query<IssueRow, [string]>('SELECT * FROM issues WHERE id = ?').get(id);
-  if (!row) throw new Error('createIssue: row vanished');
+  const row = db.query<IssueRow, [string]>("SELECT * FROM issues WHERE id = ?").get(id);
+  if (!row) throw new Error("createIssue: row vanished");
   return rowToNormalized(db, row);
 }
 
 export function getIssueById(db: Database, id: string): NormalizedIssue | null {
-  const row = db.query<IssueRow, [string]>('SELECT * FROM issues WHERE id = ?').get(id);
+  const row = db.query<IssueRow, [string]>("SELECT * FROM issues WHERE id = ?").get(id);
   return row ? rowToNormalized(db, row) : null;
 }
 
 function encodeCursor(updated_at: string, id: string): string {
-  return Buffer.from(`${updated_at}|${id}`).toString('base64url');
+  return Buffer.from(`${updated_at}|${id}`).toString("base64url");
 }
 function decodeCursor(c: string): { updated_at: string; id: string } | null {
   try {
-    const [u, i] = Buffer.from(c, 'base64url').toString('utf8').split('|');
+    const [u, i] = Buffer.from(c, "base64url").toString("utf8").split("|");
     if (!u || !i) return null;
     return { updated_at: u, id: i };
   } catch {
@@ -1047,7 +1086,7 @@ export function getIssuesByStates(
 ): PageResult {
   if (states.length === 0) return { issues: [], next_cursor: null };
 
-  const placeholders = states.map(() => '?').join(',');
+  const placeholders = states.map(() => "?").join(",");
   const params: (string | number)[] = [...states];
   let where = `state IN (${placeholders})`;
 
@@ -1070,16 +1109,17 @@ export function getIssuesByStates(
 
   const hasMore = rows.length > limit;
   const slice = hasMore ? rows.slice(0, limit) : rows;
-  const next = hasMore && slice.length
-    ? encodeCursor(slice[slice.length - 1]!.updated_at, slice[slice.length - 1]!.id)
-    : null;
+  const next =
+    hasMore && slice.length
+      ? encodeCursor(slice[slice.length - 1]!.updated_at, slice[slice.length - 1]!.id)
+      : null;
 
   return { issues: slice.map((r) => rowToNormalized(db, r)), next_cursor: next };
 }
 
 export function getIssuesByIds(db: Database, ids: string[]): NormalizedIssue[] {
   if (ids.length === 0) return [];
-  const placeholders = ids.map(() => '?').join(',');
+  const placeholders = ids.map(() => "?").join(",");
   const rows = db
     .query<IssueRow, string[]>(`SELECT * FROM issues WHERE id IN (${placeholders})`)
     .all(...ids);
@@ -1091,59 +1131,60 @@ export function updateIssue(
   id: string,
   input: UpdateIssueInput,
 ): NormalizedIssue | null {
-  const existing = db.query<IssueRow, [string]>('SELECT * FROM issues WHERE id = ?').get(id);
+  const existing = db.query<IssueRow, [string]>("SELECT * FROM issues WHERE id = ?").get(id);
   if (!existing) return null;
 
   const now = nowIso();
   const tx = db.transaction(() => {
-    const fields: string[] = ['updated_at = ?'];
+    const fields: string[] = ["updated_at = ?"];
     const params: (string | number | null)[] = [now];
     const setIfDefined = <K extends keyof CreateIssueInput>(key: K, col: string) => {
       if (input[key] === undefined) return;
       fields.push(`${col} = ?`);
       params.push((input[key] ?? null) as string | number | null);
     };
-    setIfDefined('title', 'title');
-    setIfDefined('description', 'description');
-    setIfDefined('priority', 'priority');
-    setIfDefined('state', 'state');
-    setIfDefined('parent_issue_id', 'parent_issue_id');
-    setIfDefined('external_ref', 'external_ref');
-    setIfDefined('external_url', 'external_url');
-    setIfDefined('branch_name', 'branch_name');
+    setIfDefined("title", "title");
+    setIfDefined("description", "description");
+    setIfDefined("priority", "priority");
+    setIfDefined("state", "state");
+    setIfDefined("parent_issue_id", "parent_issue_id");
+    setIfDefined("external_ref", "external_ref");
+    setIfDefined("external_url", "external_url");
+    setIfDefined("branch_name", "branch_name");
 
     params.push(id);
-    db.query(`UPDATE issues SET ${fields.join(', ')} WHERE id = ?`).run(...params);
+    db.query(`UPDATE issues SET ${fields.join(", ")} WHERE id = ?`).run(...params);
 
     if (input.labels !== undefined) {
-      db.query('DELETE FROM issue_labels WHERE issue_id = ?').run(id);
+      db.query("DELETE FROM issue_labels WHERE issue_id = ?").run(id);
       const seen = new Set<string>();
       for (const raw of input.labels ?? []) {
         const lbl = raw.toLowerCase().trim();
         if (!lbl || seen.has(lbl)) continue;
         seen.add(lbl);
-        db.query('INSERT INTO issue_labels (issue_id, label) VALUES (?, ?)').run(id, lbl);
+        db.query("INSERT INTO issue_labels (issue_id, label) VALUES (?, ?)").run(id, lbl);
       }
     }
 
     if (input.blocker_ids !== undefined) {
-      db.query('DELETE FROM issue_blockers WHERE issue_id = ?').run(id);
+      db.query("DELETE FROM issue_blockers WHERE issue_id = ?").run(id);
       for (const blockerId of input.blocker_ids ?? []) {
         if (blockerId === id) continue;
-        db.query(
-          'INSERT OR IGNORE INTO issue_blockers (issue_id, blocker_id) VALUES (?, ?)',
-        ).run(id, blockerId);
+        db.query("INSERT OR IGNORE INTO issue_blockers (issue_id, blocker_id) VALUES (?, ?)").run(
+          id,
+          blockerId,
+        );
       }
     }
   });
   tx();
 
-  const row = db.query<IssueRow, [string]>('SELECT * FROM issues WHERE id = ?').get(id);
+  const row = db.query<IssueRow, [string]>("SELECT * FROM issues WHERE id = ?").get(id);
   return row ? rowToNormalized(db, row) : null;
 }
 
 export function deleteIssue(db: Database, id: string): boolean {
-  const result = db.query('DELETE FROM issues WHERE id = ?').run(id);
+  const result = db.query("DELETE FROM issues WHERE id = ?").run(id);
   return result.changes > 0;
 }
 ```
@@ -1165,6 +1206,7 @@ git commit -m "feat(wayang): add issues repository with CRUD and pagination"
 ### Task 3.2: Comments and history repos
 
 **Files:**
+
 - Create: `packages/wayang/src/db/repo/comments.ts`
 - Create: `packages/wayang/src/db/repo/history.ts`
 - Create: `packages/wayang/tests/db/repo/comments.test.ts`
@@ -1173,58 +1215,72 @@ git commit -m "feat(wayang): add issues repository with CRUD and pagination"
 - [ ] **Step 1: Write failing tests**
 
 `tests/db/repo/comments.test.ts`:
+
 ```typescript
-import { describe, expect, test } from 'bun:test';
-import { Database } from 'bun:sqlite';
-import { runMigrations } from '../../../src/db/migrations';
-import { createIssue } from '../../../src/db/repo/issues';
-import { addComment, listComments } from '../../../src/db/repo/comments';
+import { describe, expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
+import { runMigrations } from "../../../src/db/migrations";
+import { createIssue } from "../../../src/db/repo/issues";
+import { addComment, listComments } from "../../../src/db/repo/comments";
 
 function freshDb(): Database {
-  const db = new Database(':memory:');
+  const db = new Database(":memory:");
   runMigrations(db);
   return db;
 }
 
-describe('comments repo', () => {
-  test('addComment + listComments roundtrip', () => {
+describe("comments repo", () => {
+  test("addComment + listComments roundtrip", () => {
     const db = freshDb();
-    const issue = createIssue(db, { title: 't', state: 'Todo' });
-    const c1 = addComment(db, issue.id, { body: 'first', author: 'user' });
-    const c2 = addComment(db, issue.id, { body: 'second', author: 'agent' });
+    const issue = createIssue(db, { title: "t", state: "Todo" });
+    const c1 = addComment(db, issue.id, { body: "first", author: "user" });
+    const c2 = addComment(db, issue.id, { body: "second", author: "agent" });
     const list = listComments(db, issue.id);
     expect(list.map((c) => c.id)).toEqual([c1.id, c2.id]);
-    expect(list[0]!.author).toBe('user');
-    expect(list[1]!.author).toBe('agent');
-    expect(list[0]!.body_html).toContain('first');
+    expect(list[0]!.author).toBe("user");
+    expect(list[1]!.author).toBe("agent");
+    expect(list[0]!.body_html).toContain("first");
   });
 });
 ```
 
 `tests/db/repo/history.test.ts`:
+
 ```typescript
-import { describe, expect, test } from 'bun:test';
-import { Database } from 'bun:sqlite';
-import { runMigrations } from '../../../src/db/migrations';
-import { createIssue } from '../../../src/db/repo/issues';
-import { addHistory, listHistory } from '../../../src/db/repo/history';
+import { describe, expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
+import { runMigrations } from "../../../src/db/migrations";
+import { createIssue } from "../../../src/db/repo/issues";
+import { addHistory, listHistory } from "../../../src/db/repo/history";
 
 function freshDb(): Database {
-  const db = new Database(':memory:');
+  const db = new Database(":memory:");
   runMigrations(db);
   return db;
 }
 
-describe('history repo', () => {
-  test('appends and lists in order', () => {
+describe("history repo", () => {
+  test("appends and lists in order", () => {
     const db = freshDb();
-    const issue = createIssue(db, { title: 't', state: 'Todo' });
-    addHistory(db, { issue_id: issue.id, kind: 'created', from_value: null, to_value: 'Todo', actor: 'user' });
-    addHistory(db, { issue_id: issue.id, kind: 'state_changed', from_value: 'Todo', to_value: 'In Progress', actor: 'agent' });
+    const issue = createIssue(db, { title: "t", state: "Todo" });
+    addHistory(db, {
+      issue_id: issue.id,
+      kind: "created",
+      from_value: null,
+      to_value: "Todo",
+      actor: "user",
+    });
+    addHistory(db, {
+      issue_id: issue.id,
+      kind: "state_changed",
+      from_value: "Todo",
+      to_value: "In Progress",
+      actor: "agent",
+    });
     const list = listHistory(db, issue.id);
     expect(list.length).toBe(2);
-    expect(list[0]!.kind).toBe('created');
-    expect(list[1]!.kind).toBe('state_changed');
+    expect(list[0]!.kind).toBe("created");
+    expect(list[1]!.kind).toBe("state_changed");
   });
 });
 ```
@@ -1234,20 +1290,22 @@ describe('history repo', () => {
 - [ ] **Step 3: Implement**
 
 `src/domain/comment.ts`:
+
 ```typescript
 export interface Comment {
   id: string;
   issue_id: string;
   body: string;
   body_html: string;
-  author: 'user' | 'agent';
+  author: "user" | "agent";
   created_at: string;
 }
 ```
 
 `src/domain/history.ts`:
+
 ```typescript
-export type HistoryKind = 'created' | 'state_changed' | 'edited' | 'comment_added' | 'deleted';
+export type HistoryKind = "created" | "state_changed" | "edited" | "comment_added" | "deleted";
 
 export interface HistoryEntry {
   id: string;
@@ -1255,28 +1313,29 @@ export interface HistoryEntry {
   kind: HistoryKind;
   from_value: string | null;
   to_value: string | null;
-  actor: 'user' | 'agent';
+  actor: "user" | "agent";
   at: string;
 }
 ```
 
 `src/db/repo/comments.ts`:
+
 ```typescript
-import type { Database } from 'bun:sqlite';
-import { ulid } from '../../lib/ids';
-import { renderMarkdown } from '../../lib/markdown';
-import type { Comment } from '../../domain/comment';
+import type { Database } from "bun:sqlite";
+import { ulid } from "../../lib/ids";
+import { renderMarkdown } from "../../lib/markdown";
+import type { Comment } from "../../domain/comment";
 
 export interface AddCommentInput {
   body: string;
-  author?: 'user' | 'agent';
+  author?: "user" | "agent";
 }
 
 interface CommentRow {
   id: string;
   issue_id: string;
   body: string;
-  author: 'user' | 'agent';
+  author: "user" | "agent";
   created_at: string;
 }
 
@@ -1286,36 +1345,38 @@ function rowToComment(row: CommentRow): Comment {
 
 export function addComment(db: Database, issueId: string, input: AddCommentInput): Comment {
   const id = ulid();
-  const author = input.author ?? 'user';
+  const author = input.author ?? "user";
   const at = new Date().toISOString();
   db.query(
-    'INSERT INTO comments (id, issue_id, body, author, created_at) VALUES (?, ?, ?, ?, ?)',
+    "INSERT INTO comments (id, issue_id, body, author, created_at) VALUES (?, ?, ?, ?, ?)",
   ).run(id, issueId, input.body, author, at);
   return rowToComment({ id, issue_id: issueId, body: input.body, author, created_at: at });
 }
 
 export function listComments(db: Database, issueId: string): Comment[] {
   return db
-    .query<CommentRow, [string]>(
-      'SELECT * FROM comments WHERE issue_id = ? ORDER BY created_at ASC, id ASC',
-    )
+    .query<
+      CommentRow,
+      [string]
+    >("SELECT * FROM comments WHERE issue_id = ? ORDER BY created_at ASC, id ASC")
     .all(issueId)
     .map(rowToComment);
 }
 ```
 
 `src/db/repo/history.ts`:
+
 ```typescript
-import type { Database } from 'bun:sqlite';
-import { ulid } from '../../lib/ids';
-import type { HistoryEntry, HistoryKind } from '../../domain/history';
+import type { Database } from "bun:sqlite";
+import { ulid } from "../../lib/ids";
+import type { HistoryEntry, HistoryKind } from "../../domain/history";
 
 export interface AddHistoryInput {
   issue_id: string;
   kind: HistoryKind;
   from_value: string | null;
   to_value: string | null;
-  actor: 'user' | 'agent';
+  actor: "user" | "agent";
 }
 
 interface HistoryRow {
@@ -1324,7 +1385,7 @@ interface HistoryRow {
   kind: HistoryKind;
   from_value: string | null;
   to_value: string | null;
-  actor: 'user' | 'agent';
+  actor: "user" | "agent";
   at: string;
 }
 
@@ -1340,9 +1401,7 @@ export function addHistory(db: Database, input: AddHistoryInput): HistoryEntry {
 
 export function listHistory(db: Database, issueId: string): HistoryEntry[] {
   return db
-    .query<HistoryRow, [string]>(
-      'SELECT * FROM history WHERE issue_id = ? ORDER BY at ASC, id ASC',
-    )
+    .query<HistoryRow, [string]>("SELECT * FROM history WHERE issue_id = ? ORDER BY at ASC, id ASC")
     .all(issueId);
 }
 ```
@@ -1365,42 +1424,45 @@ git commit -m "feat(wayang): add comments and history repositories"
 ### Task 4.1: In-memory event bus
 
 **Files:**
+
 - Create: `packages/wayang/src/lib/sse.ts`
 - Create: `packages/wayang/tests/lib/sse.test.ts`
 
 - [ ] **Step 1: Write failing test**
 
 ```typescript
-import { describe, expect, test } from 'bun:test';
-import { EventBus } from '../../src/lib/sse';
+import { describe, expect, test } from "bun:test";
+import { EventBus } from "../../src/lib/sse";
 
-describe('EventBus', () => {
-  test('publishes to all subscribers', () => {
+describe("EventBus", () => {
+  test("publishes to all subscribers", () => {
     const bus = new EventBus();
     const a: unknown[] = [];
     const b: unknown[] = [];
     bus.subscribe((e) => a.push(e));
     bus.subscribe((e) => b.push(e));
-    bus.publish('test', { v: 1 });
-    expect(a).toEqual([{ name: 'test', data: { v: 1 } }]);
-    expect(b).toEqual([{ name: 'test', data: { v: 1 } }]);
+    bus.publish("test", { v: 1 });
+    expect(a).toEqual([{ name: "test", data: { v: 1 } }]);
+    expect(b).toEqual([{ name: "test", data: { v: 1 } }]);
   });
 
-  test('unsubscribe stops delivery', () => {
+  test("unsubscribe stops delivery", () => {
     const bus = new EventBus();
     const seen: unknown[] = [];
     const off = bus.subscribe((e) => seen.push(e));
     off();
-    bus.publish('test', {});
+    bus.publish("test", {});
     expect(seen).toEqual([]);
   });
 
-  test('throwing subscriber is dropped, others still receive', () => {
+  test("throwing subscriber is dropped, others still receive", () => {
     const bus = new EventBus();
-    bus.subscribe(() => { throw new Error('boom'); });
+    bus.subscribe(() => {
+      throw new Error("boom");
+    });
     const seen: unknown[] = [];
     bus.subscribe((e) => seen.push(e));
-    bus.publish('test', {});
+    bus.publish("test", {});
     expect(seen.length).toBe(1);
     expect(bus.size).toBe(1);
   });
@@ -1460,6 +1522,7 @@ git commit -m "feat(wayang): add in-memory SSE event bus"
 ### Task 5.1: Server scaffolding and bearer-token middleware
 
 **Files:**
+
 - Create: `packages/wayang/src/api/auth.ts`
 - Create: `packages/wayang/src/api/server.ts`
 - Create: `packages/wayang/tests/api/auth.test.ts`
@@ -1467,36 +1530,36 @@ git commit -m "feat(wayang): add in-memory SSE event bus"
 - [ ] **Step 1: Write failing test**
 
 ```typescript
-import { describe, expect, test } from 'bun:test';
-import { authMiddleware } from '../../src/api/auth';
+import { describe, expect, test } from "bun:test";
+import { authMiddleware } from "../../src/api/auth";
 
-describe('authMiddleware', () => {
-  test('passes when no token configured', () => {
+describe("authMiddleware", () => {
+  test("passes when no token configured", () => {
     const fn = authMiddleware(undefined);
-    const req = new Request('http://x/api/v1/issues');
+    const req = new Request("http://x/api/v1/issues");
     expect(fn(req)).toBeNull();
   });
 
-  test('rejects /api/v1/* without bearer when token configured', () => {
-    const fn = authMiddleware('s3cret');
-    const req = new Request('http://x/api/v1/issues');
+  test("rejects /api/v1/* without bearer when token configured", () => {
+    const fn = authMiddleware("s3cret");
+    const req = new Request("http://x/api/v1/issues");
     const res = fn(req);
     expect(res?.status).toBe(401);
   });
 
-  test('passes /api/v1/* with correct bearer', () => {
-    const fn = authMiddleware('s3cret');
-    const req = new Request('http://x/api/v1/issues', {
-      headers: { authorization: 'Bearer s3cret' },
+  test("passes /api/v1/* with correct bearer", () => {
+    const fn = authMiddleware("s3cret");
+    const req = new Request("http://x/api/v1/issues", {
+      headers: { authorization: "Bearer s3cret" },
     });
     expect(fn(req)).toBeNull();
   });
 
-  test('skips UI routes when token is configured', () => {
-    const fn = authMiddleware('s3cret');
-    expect(fn(new Request('http://x/'))).toBeNull();
-    expect(fn(new Request('http://x/issues/abc'))).toBeNull();
-    expect(fn(new Request('http://x/static/style.css'))).toBeNull();
+  test("skips UI routes when token is configured", () => {
+    const fn = authMiddleware("s3cret");
+    expect(fn(new Request("http://x/"))).toBeNull();
+    expect(fn(new Request("http://x/issues/abc"))).toBeNull();
+    expect(fn(new Request("http://x/static/style.css"))).toBeNull();
   });
 });
 ```
@@ -1512,10 +1575,13 @@ export function authMiddleware(token: string | undefined): AuthCheck {
   return (req) => {
     if (!token) return null;
     const url = new URL(req.url);
-    if (!url.pathname.startsWith('/api/v1/')) return null;
-    const header = req.headers.get('authorization');
+    if (!url.pathname.startsWith("/api/v1/")) return null;
+    const header = req.headers.get("authorization");
     if (header === `Bearer ${token}`) return null;
-    return Response.json({ error: { code: 'unauthorized', message: 'missing or invalid bearer token' } }, { status: 401 });
+    return Response.json(
+      { error: { code: "unauthorized", message: "missing or invalid bearer token" } },
+      { status: 401 },
+    );
   };
 }
 ```
@@ -1525,9 +1591,9 @@ export function authMiddleware(token: string | undefined): AuthCheck {
 - [ ] **Step 5: Implement server scaffold** at `src/api/server.ts`
 
 ```typescript
-import type { Database } from 'bun:sqlite';
-import { authMiddleware } from './auth';
-import { EventBus } from '../lib/sse';
+import type { Database } from "bun:sqlite";
+import { authMiddleware } from "./auth";
+import { EventBus } from "../lib/sse";
 
 export interface ServerOptions {
   db: Database;
@@ -1561,7 +1627,7 @@ export function startServer(opts: ServerOptions, routes: Route[]): RunningServer
   const ctx = { db: opts.db, bus };
 
   const server = Bun.serve({
-    hostname: opts.hostname ?? '127.0.0.1',
+    hostname: opts.hostname ?? "127.0.0.1",
     port: opts.port,
     async fetch(req) {
       const guard = auth(req);
@@ -1574,14 +1640,14 @@ export function startServer(opts: ServerOptions, routes: Route[]): RunningServer
         try {
           return await r.handler(req, match, ctx);
         } catch (err) {
-          console.error('handler error', err);
+          console.error("handler error", err);
           return Response.json(
-            { error: { code: 'internal_error', message: 'unexpected error' } },
+            { error: { code: "internal_error", message: "unexpected error" } },
             { status: 500 },
           );
         }
       }
-      return new Response('Not Found', { status: 404 });
+      return new Response("Not Found", { status: 404 });
     },
   });
 
@@ -1606,24 +1672,25 @@ git commit -m "feat(wayang): add server scaffolding and bearer-token middleware"
 ### Task 5.2: GET /api/v1/issues (list with state filter and pagination)
 
 **Files:**
+
 - Create: `packages/wayang/src/api/routes/issues-list.ts`
 - Create: `packages/wayang/tests/api/issues-list.test.ts`
 
 - [ ] **Step 1: Write failing test**
 
 ```typescript
-import { describe, expect, test, beforeEach } from 'bun:test';
-import { Database } from 'bun:sqlite';
-import { runMigrations } from '../../src/db/migrations';
-import { createIssue } from '../../src/db/repo/issues';
-import { startServer } from '../../src/api/server';
-import { issuesListRoute } from '../../src/api/routes/issues-list';
+import { describe, expect, test, beforeEach } from "bun:test";
+import { Database } from "bun:sqlite";
+import { runMigrations } from "../../src/db/migrations";
+import { createIssue } from "../../src/db/repo/issues";
+import { startServer } from "../../src/api/server";
+import { issuesListRoute } from "../../src/api/routes/issues-list";
 
 let db: Database;
 let server: ReturnType<typeof startServer>;
 
 beforeEach(() => {
-  db = new Database(':memory:');
+  db = new Database(":memory:");
   runMigrations(db);
 });
 
@@ -1631,19 +1698,19 @@ function start() {
   server = startServer({ db, apiToken: undefined, port: 0 }, [issuesListRoute()]);
 }
 
-describe('GET /api/v1/issues', () => {
-  test('filters by state', async () => {
-    createIssue(db, { title: 'a', state: 'Todo' });
-    createIssue(db, { title: 'b', state: 'Done' });
+describe("GET /api/v1/issues", () => {
+  test("filters by state", async () => {
+    createIssue(db, { title: "a", state: "Todo" });
+    createIssue(db, { title: "b", state: "Done" });
     start();
     const res = await fetch(`${server.url}api/v1/issues?state=Todo`);
     const body = (await res.json()) as { issues: { title: string }[]; next_cursor: string | null };
-    expect(body.issues.map((i) => i.title)).toEqual(['a']);
+    expect(body.issues.map((i) => i.title)).toEqual(["a"]);
     expect(body.next_cursor).toBeNull();
     server.stop();
   });
 
-  test('returns 400 on missing state param', async () => {
+  test("returns 400 on missing state param", async () => {
     start();
     const res = await fetch(`${server.url}api/v1/issues`);
     expect(res.status).toBe(400);
@@ -1657,25 +1724,25 @@ describe('GET /api/v1/issues', () => {
 - [ ] **Step 3: Implement**
 
 ```typescript
-import { getIssuesByStates } from '../../db/repo/issues';
-import type { Route } from '../server';
+import { getIssuesByStates } from "../../db/repo/issues";
+import type { Route } from "../server";
 
 const DEFAULT_LIMIT = 50;
 
 export function issuesListRoute(): Route {
   return {
-    method: 'GET',
-    pattern: new URLPattern({ pathname: '/api/v1/issues' }),
+    method: "GET",
+    pattern: new URLPattern({ pathname: "/api/v1/issues" }),
     handler: (req, _match, { db }) => {
       const url = new URL(req.url);
-      const states = url.searchParams.getAll('state');
+      const states = url.searchParams.getAll("state");
       if (states.length === 0) {
         return Response.json(
-          { error: { code: 'missing_state', message: 'at least one state parameter is required' } },
+          { error: { code: "missing_state", message: "at least one state parameter is required" } },
           { status: 400 },
         );
       }
-      const cursor = url.searchParams.get('cursor');
+      const cursor = url.searchParams.get("cursor");
       const result = getIssuesByStates(db, states, cursor, DEFAULT_LIMIT);
       return Response.json(result);
     },
@@ -1697,6 +1764,7 @@ git commit -m "feat(wayang): add GET /api/v1/issues route"
 ### Task 5.3: GET /api/v1/issues/by-ids and GET /api/v1/issues/:id
 
 **Files:**
+
 - Create: `packages/wayang/src/api/routes/issues-by-ids.ts`
 - Create: `packages/wayang/src/api/routes/issues-detail.ts`
 - Create: `packages/wayang/tests/api/issues-detail.test.ts`
@@ -1704,23 +1772,23 @@ git commit -m "feat(wayang): add GET /api/v1/issues route"
 - [ ] **Step 1: Write failing test**
 
 ```typescript
-import { describe, expect, test, beforeEach } from 'bun:test';
-import { Database } from 'bun:sqlite';
-import { runMigrations } from '../../src/db/migrations';
-import { createIssue } from '../../src/db/repo/issues';
-import { startServer } from '../../src/api/server';
-import { issuesByIdsRoute } from '../../src/api/routes/issues-by-ids';
-import { issuesDetailRoute } from '../../src/api/routes/issues-detail';
+import { describe, expect, test, beforeEach } from "bun:test";
+import { Database } from "bun:sqlite";
+import { runMigrations } from "../../src/db/migrations";
+import { createIssue } from "../../src/db/repo/issues";
+import { startServer } from "../../src/api/server";
+import { issuesByIdsRoute } from "../../src/api/routes/issues-by-ids";
+import { issuesDetailRoute } from "../../src/api/routes/issues-detail";
 
 let db: Database;
 beforeEach(() => {
-  db = new Database(':memory:');
+  db = new Database(":memory:");
   runMigrations(db);
 });
 
-describe('issue lookups', () => {
-  test('GET /api/v1/issues/by-ids', async () => {
-    const a = createIssue(db, { title: 'a', state: 'Todo' });
+describe("issue lookups", () => {
+  test("GET /api/v1/issues/by-ids", async () => {
+    const a = createIssue(db, { title: "a", state: "Todo" });
     const server = startServer({ db, apiToken: undefined, port: 0 }, [issuesByIdsRoute()]);
     const res = await fetch(`${server.url}api/v1/issues/by-ids?id=${a.id}&id=missing`);
     const body = (await res.json()) as { issues: { id: string }[] };
@@ -1728,15 +1796,15 @@ describe('issue lookups', () => {
     server.stop();
   });
 
-  test('GET /api/v1/issues/:id 404', async () => {
+  test("GET /api/v1/issues/:id 404", async () => {
     const server = startServer({ db, apiToken: undefined, port: 0 }, [issuesDetailRoute()]);
     const res = await fetch(`${server.url}api/v1/issues/missing`);
     expect(res.status).toBe(404);
     server.stop();
   });
 
-  test('GET /api/v1/issues/:id 200', async () => {
-    const a = createIssue(db, { title: 'a', state: 'Todo' });
+  test("GET /api/v1/issues/:id 200", async () => {
+    const a = createIssue(db, { title: "a", state: "Todo" });
     const server = startServer({ db, apiToken: undefined, port: 0 }, [issuesDetailRoute()]);
     const res = await fetch(`${server.url}api/v1/issues/${a.id}`);
     expect(res.status).toBe(200);
@@ -1752,17 +1820,18 @@ describe('issue lookups', () => {
 - [ ] **Step 3: Implement**
 
 `issues-by-ids.ts`:
+
 ```typescript
-import { getIssuesByIds } from '../../db/repo/issues';
-import type { Route } from '../server';
+import { getIssuesByIds } from "../../db/repo/issues";
+import type { Route } from "../server";
 
 export function issuesByIdsRoute(): Route {
   return {
-    method: 'GET',
-    pattern: new URLPattern({ pathname: '/api/v1/issues/by-ids' }),
+    method: "GET",
+    pattern: new URLPattern({ pathname: "/api/v1/issues/by-ids" }),
     handler: (req, _match, { db }) => {
       const url = new URL(req.url);
-      const ids = url.searchParams.getAll('id');
+      const ids = url.searchParams.getAll("id");
       const issues = getIssuesByIds(db, ids);
       return Response.json({ issues });
     },
@@ -1771,20 +1840,21 @@ export function issuesByIdsRoute(): Route {
 ```
 
 `issues-detail.ts`:
+
 ```typescript
-import { getIssueById } from '../../db/repo/issues';
-import type { Route } from '../server';
+import { getIssueById } from "../../db/repo/issues";
+import type { Route } from "../server";
 
 export function issuesDetailRoute(): Route {
   return {
-    method: 'GET',
-    pattern: new URLPattern({ pathname: '/api/v1/issues/:id' }),
+    method: "GET",
+    pattern: new URLPattern({ pathname: "/api/v1/issues/:id" }),
     handler: (_req, match, { db }) => {
       const id = match.pathname.groups.id!;
       const issue = getIssueById(db, id);
       if (!issue) {
         return Response.json(
-          { error: { code: 'issue_not_found', message: `issue ${id} not found` } },
+          { error: { code: "issue_not_found", message: `issue ${id} not found` } },
           { status: 404 },
         );
       }
@@ -1810,57 +1880,58 @@ git commit -m "feat(wayang): add issue by-ids and detail routes"
 ### Task 5.4: POST /api/v1/issues with state-change broadcasting
 
 **Files:**
+
 - Create: `packages/wayang/src/api/routes/issues-create.ts`
 - Create: `packages/wayang/tests/api/issues-create.test.ts`
 
 - [ ] **Step 1: Write failing test**
 
 ```typescript
-import { describe, expect, test, beforeEach } from 'bun:test';
-import { Database } from 'bun:sqlite';
-import { runMigrations } from '../../src/db/migrations';
-import { startServer } from '../../src/api/server';
-import { issuesCreateRoute } from '../../src/api/routes/issues-create';
+import { describe, expect, test, beforeEach } from "bun:test";
+import { Database } from "bun:sqlite";
+import { runMigrations } from "../../src/db/migrations";
+import { startServer } from "../../src/api/server";
+import { issuesCreateRoute } from "../../src/api/routes/issues-create";
 
 let db: Database;
 beforeEach(() => {
-  db = new Database(':memory:');
+  db = new Database(":memory:");
   runMigrations(db);
 });
 
-describe('POST /api/v1/issues', () => {
-  test('creates with defaults', async () => {
+describe("POST /api/v1/issues", () => {
+  test("creates with defaults", async () => {
     const server = startServer({ db, apiToken: undefined, port: 0 }, [issuesCreateRoute()]);
     const res = await fetch(`${server.url}api/v1/issues`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ title: 'new' }),
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "new" }),
     });
     expect(res.status).toBe(201);
     const issue = (await res.json()) as { state: string; title: string; identifier: string };
-    expect(issue.state).toBe('Todo');
-    expect(issue.title).toBe('new');
-    expect(issue.identifier).toBe('JUARA-1');
+    expect(issue.state).toBe("Todo");
+    expect(issue.title).toBe("new");
+    expect(issue.identifier).toBe("JUARA-1");
     server.stop();
   });
 
-  test('400 on missing title', async () => {
+  test("400 on missing title", async () => {
     const server = startServer({ db, apiToken: undefined, port: 0 }, [issuesCreateRoute()]);
     const res = await fetch(`${server.url}api/v1/issues`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      method: "POST",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({}),
     });
     expect(res.status).toBe(400);
     server.stop();
   });
 
-  test('400 on invalid state', async () => {
+  test("400 on invalid state", async () => {
     const server = startServer({ db, apiToken: undefined, port: 0 }, [issuesCreateRoute()]);
     const res = await fetch(`${server.url}api/v1/issues`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ title: 't', state: 'Bogus' }),
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "t", state: "Bogus" }),
     });
     expect(res.status).toBe(400);
     server.stop();
@@ -1873,10 +1944,10 @@ describe('POST /api/v1/issues', () => {
 - [ ] **Step 3: Implement**
 
 ```typescript
-import { createIssue } from '../../db/repo/issues';
-import { addHistory } from '../../db/repo/history';
-import { isValidState } from '../../domain/issue';
-import type { Route } from '../server';
+import { createIssue } from "../../db/repo/issues";
+import { addHistory } from "../../db/repo/history";
+import { isValidState } from "../../domain/issue";
+import type { Route } from "../server";
 
 interface CreateBody {
   title?: unknown;
@@ -1893,46 +1964,61 @@ interface CreateBody {
 
 export function issuesCreateRoute(): Route {
   return {
-    method: 'POST',
-    pattern: new URLPattern({ pathname: '/api/v1/issues' }),
+    method: "POST",
+    pattern: new URLPattern({ pathname: "/api/v1/issues" }),
     handler: async (req, _match, { db, bus }) => {
       let body: CreateBody;
       try {
         body = (await req.json()) as CreateBody;
       } catch {
-        return Response.json({ error: { code: 'bad_json', message: 'invalid JSON body' } }, { status: 400 });
-      }
-
-      if (typeof body.title !== 'string' || body.title.trim() === '') {
         return Response.json(
-          { error: { code: 'missing_field', message: 'title is required', fields: ['title'] } },
+          { error: { code: "bad_json", message: "invalid JSON body" } },
           { status: 400 },
         );
       }
 
-      const state = typeof body.state === 'string' ? body.state : 'Todo';
+      if (typeof body.title !== "string" || body.title.trim() === "") {
+        return Response.json(
+          { error: { code: "missing_field", message: "title is required", fields: ["title"] } },
+          { status: 400 },
+        );
+      }
+
+      const state = typeof body.state === "string" ? body.state : "Todo";
       if (!isValidState(state)) {
         return Response.json(
-          { error: { code: 'invalid_state', message: `unknown state ${state}`, fields: ['state'] } },
+          {
+            error: { code: "invalid_state", message: `unknown state ${state}`, fields: ["state"] },
+          },
           { status: 400 },
         );
       }
 
       const issue = createIssue(db, {
         title: body.title.trim(),
-        description: typeof body.description === 'string' ? body.description : null,
-        priority: typeof body.priority === 'number' ? body.priority : null,
+        description: typeof body.description === "string" ? body.description : null,
+        priority: typeof body.priority === "number" ? body.priority : null,
         state,
-        parent_issue_id: typeof body.parent_issue_id === 'string' ? body.parent_issue_id : null,
-        external_ref: typeof body.external_ref === 'string' ? body.external_ref : null,
-        external_url: typeof body.external_url === 'string' ? body.external_url : null,
-        branch_name: typeof body.branch_name === 'string' ? body.branch_name : null,
-        labels: Array.isArray(body.labels) ? body.labels.filter((s): s is string => typeof s === 'string') : [],
-        blocker_ids: Array.isArray(body.blocker_ids) ? body.blocker_ids.filter((s): s is string => typeof s === 'string') : [],
+        parent_issue_id: typeof body.parent_issue_id === "string" ? body.parent_issue_id : null,
+        external_ref: typeof body.external_ref === "string" ? body.external_ref : null,
+        external_url: typeof body.external_url === "string" ? body.external_url : null,
+        branch_name: typeof body.branch_name === "string" ? body.branch_name : null,
+        labels: Array.isArray(body.labels)
+          ? body.labels.filter((s): s is string => typeof s === "string")
+          : [],
+        blocker_ids: Array.isArray(body.blocker_ids)
+          ? body.blocker_ids.filter((s): s is string => typeof s === "string")
+          : [],
       });
 
-      addHistory(db, { issue_id: issue.id, kind: 'created', from_value: null, to_value: state, actor: 'user' });
-      bus.publish('issue.created', issue);
+      addHistory(db, {
+        issue_id: issue.id,
+        kind: "created",
+        from_value: null,
+        to_value: state,
+        actor: "user",
+      });
+      bus.publish("issue.created", issue);
 
       return Response.json(issue, { status: 201 });
     },
@@ -1954,6 +2040,7 @@ git commit -m "feat(wayang): add POST /api/v1/issues route"
 ### Task 5.5: PATCH and DELETE /api/v1/issues/:id
 
 **Files:**
+
 - Create: `packages/wayang/src/api/routes/issues-update.ts`
 - Create: `packages/wayang/src/api/routes/issues-delete.ts`
 - Create: `packages/wayang/tests/api/issues-update.test.ts`
@@ -1961,43 +2048,43 @@ git commit -m "feat(wayang): add POST /api/v1/issues route"
 - [ ] **Step 1: Write failing test**
 
 ```typescript
-import { describe, expect, test, beforeEach } from 'bun:test';
-import { Database } from 'bun:sqlite';
-import { runMigrations } from '../../src/db/migrations';
-import { createIssue } from '../../src/db/repo/issues';
-import { listHistory } from '../../src/db/repo/history';
-import { startServer } from '../../src/api/server';
-import { issuesUpdateRoute } from '../../src/api/routes/issues-update';
-import { issuesDeleteRoute } from '../../src/api/routes/issues-delete';
+import { describe, expect, test, beforeEach } from "bun:test";
+import { Database } from "bun:sqlite";
+import { runMigrations } from "../../src/db/migrations";
+import { createIssue } from "../../src/db/repo/issues";
+import { listHistory } from "../../src/db/repo/history";
+import { startServer } from "../../src/api/server";
+import { issuesUpdateRoute } from "../../src/api/routes/issues-update";
+import { issuesDeleteRoute } from "../../src/api/routes/issues-delete";
 
 let db: Database;
 beforeEach(() => {
-  db = new Database(':memory:');
+  db = new Database(":memory:");
   runMigrations(db);
 });
 
-describe('PATCH/DELETE /api/v1/issues/:id', () => {
-  test('PATCH state change appends history with actor', async () => {
-    const a = createIssue(db, { title: 't', state: 'Todo' });
+describe("PATCH/DELETE /api/v1/issues/:id", () => {
+  test("PATCH state change appends history with actor", async () => {
+    const a = createIssue(db, { title: "t", state: "Todo" });
     const server = startServer({ db, apiToken: undefined, port: 0 }, [issuesUpdateRoute()]);
     const res = await fetch(`${server.url}api/v1/issues/${a.id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ state: 'In Progress', actor: 'agent' }),
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ state: "In Progress", actor: "agent" }),
     });
     expect(res.status).toBe(200);
     const history = listHistory(db, a.id);
-    const stateChange = history.find((h) => h.kind === 'state_changed');
-    expect(stateChange?.actor).toBe('agent');
-    expect(stateChange?.from_value).toBe('Todo');
-    expect(stateChange?.to_value).toBe('In Progress');
+    const stateChange = history.find((h) => h.kind === "state_changed");
+    expect(stateChange?.actor).toBe("agent");
+    expect(stateChange?.from_value).toBe("Todo");
+    expect(stateChange?.to_value).toBe("In Progress");
     server.stop();
   });
 
-  test('DELETE removes', async () => {
-    const a = createIssue(db, { title: 't', state: 'Todo' });
+  test("DELETE removes", async () => {
+    const a = createIssue(db, { title: "t", state: "Todo" });
     const server = startServer({ db, apiToken: undefined, port: 0 }, [issuesDeleteRoute()]);
-    const res = await fetch(`${server.url}api/v1/issues/${a.id}`, { method: 'DELETE' });
+    const res = await fetch(`${server.url}api/v1/issues/${a.id}`, { method: "DELETE" });
     expect(res.status).toBe(204);
     server.stop();
   });
@@ -2009,11 +2096,12 @@ describe('PATCH/DELETE /api/v1/issues/:id', () => {
 - [ ] **Step 3: Implement**
 
 `issues-update.ts`:
+
 ```typescript
-import { getIssueById, updateIssue } from '../../db/repo/issues';
-import { addHistory } from '../../db/repo/history';
-import { isValidState } from '../../domain/issue';
-import type { Route } from '../server';
+import { getIssueById, updateIssue } from "../../db/repo/issues";
+import { addHistory } from "../../db/repo/history";
+import { isValidState } from "../../domain/issue";
+import type { Route } from "../server";
 
 interface PatchBody {
   title?: unknown;
@@ -2031,14 +2119,14 @@ interface PatchBody {
 
 export function issuesUpdateRoute(): Route {
   return {
-    method: 'PATCH',
-    pattern: new URLPattern({ pathname: '/api/v1/issues/:id' }),
+    method: "PATCH",
+    pattern: new URLPattern({ pathname: "/api/v1/issues/:id" }),
     handler: async (req, match, { db, bus }) => {
       const id = match.pathname.groups.id!;
       const existing = getIssueById(db, id);
       if (!existing) {
         return Response.json(
-          { error: { code: 'issue_not_found', message: `issue ${id} not found` } },
+          { error: { code: "issue_not_found", message: `issue ${id} not found` } },
           { status: 404 },
         );
       }
@@ -2047,50 +2135,81 @@ export function issuesUpdateRoute(): Route {
       try {
         body = (await req.json()) as PatchBody;
       } catch {
-        return Response.json({ error: { code: 'bad_json', message: 'invalid JSON body' } }, { status: 400 });
-      }
-
-      if (body.state !== undefined && (typeof body.state !== 'string' || !isValidState(body.state))) {
         return Response.json(
-          { error: { code: 'invalid_state', message: 'unknown state', fields: ['state'] } },
+          { error: { code: "bad_json", message: "invalid JSON body" } },
           { status: 400 },
         );
       }
 
-      const actor: 'user' | 'agent' = body.actor === 'agent' ? 'agent' : 'user';
+      if (
+        body.state !== undefined &&
+        (typeof body.state !== "string" || !isValidState(body.state))
+      ) {
+        return Response.json(
+          { error: { code: "invalid_state", message: "unknown state", fields: ["state"] } },
+          { status: 400 },
+        );
+      }
+
+      const actor: "user" | "agent" = body.actor === "agent" ? "agent" : "user";
       const oldState = existing.state;
 
       const updated = updateIssue(db, id, {
-        ...(typeof body.title === 'string' ? { title: body.title } : {}),
-        ...(body.description !== undefined ? { description: typeof body.description === 'string' ? body.description : null } : {}),
-        ...(body.priority !== undefined ? { priority: typeof body.priority === 'number' ? body.priority : null } : {}),
-        ...(typeof body.state === 'string' ? { state: body.state } : {}),
-        ...(body.parent_issue_id !== undefined ? { parent_issue_id: typeof body.parent_issue_id === 'string' ? body.parent_issue_id : null } : {}),
-        ...(body.external_ref !== undefined ? { external_ref: typeof body.external_ref === 'string' ? body.external_ref : null } : {}),
-        ...(body.external_url !== undefined ? { external_url: typeof body.external_url === 'string' ? body.external_url : null } : {}),
-        ...(body.branch_name !== undefined ? { branch_name: typeof body.branch_name === 'string' ? body.branch_name : null } : {}),
-        ...(Array.isArray(body.labels) ? { labels: body.labels.filter((s): s is string => typeof s === 'string') } : {}),
-        ...(Array.isArray(body.blocker_ids) ? { blocker_ids: body.blocker_ids.filter((s): s is string => typeof s === 'string') } : {}),
+        ...(typeof body.title === "string" ? { title: body.title } : {}),
+        ...(body.description !== undefined
+          ? { description: typeof body.description === "string" ? body.description : null }
+          : {}),
+        ...(body.priority !== undefined
+          ? { priority: typeof body.priority === "number" ? body.priority : null }
+          : {}),
+        ...(typeof body.state === "string" ? { state: body.state } : {}),
+        ...(body.parent_issue_id !== undefined
+          ? {
+              parent_issue_id:
+                typeof body.parent_issue_id === "string" ? body.parent_issue_id : null,
+            }
+          : {}),
+        ...(body.external_ref !== undefined
+          ? { external_ref: typeof body.external_ref === "string" ? body.external_ref : null }
+          : {}),
+        ...(body.external_url !== undefined
+          ? { external_url: typeof body.external_url === "string" ? body.external_url : null }
+          : {}),
+        ...(body.branch_name !== undefined
+          ? { branch_name: typeof body.branch_name === "string" ? body.branch_name : null }
+          : {}),
+        ...(Array.isArray(body.labels)
+          ? { labels: body.labels.filter((s): s is string => typeof s === "string") }
+          : {}),
+        ...(Array.isArray(body.blocker_ids)
+          ? { blocker_ids: body.blocker_ids.filter((s): s is string => typeof s === "string") }
+          : {}),
       });
 
       if (!updated) {
-        return Response.json({ error: { code: 'issue_not_found' } }, { status: 404 });
+        return Response.json({ error: { code: "issue_not_found" } }, { status: 404 });
       }
 
-      if (typeof body.state === 'string' && body.state !== oldState) {
+      if (typeof body.state === "string" && body.state !== oldState) {
         addHistory(db, {
           issue_id: id,
-          kind: 'state_changed',
+          kind: "state_changed",
           from_value: oldState,
           to_value: body.state,
           actor,
         });
-        bus.publish('state.changed', { id, identifier: updated.identifier, from: oldState, to: body.state, actor });
+        bus.publish("state.changed", {
+          id,
+          identifier: updated.identifier,
+          from: oldState,
+          to: body.state,
+          actor,
+        });
       } else {
-        addHistory(db, { issue_id: id, kind: 'edited', from_value: null, to_value: null, actor });
+        addHistory(db, { issue_id: id, kind: "edited", from_value: null, to_value: null, actor });
       }
 
-      bus.publish('issue.updated', updated);
+      bus.publish("issue.updated", updated);
       return Response.json(updated);
     },
   };
@@ -2098,22 +2217,23 @@ export function issuesUpdateRoute(): Route {
 ```
 
 `issues-delete.ts`:
+
 ```typescript
-import { getIssueById, deleteIssue } from '../../db/repo/issues';
-import type { Route } from '../server';
+import { getIssueById, deleteIssue } from "../../db/repo/issues";
+import type { Route } from "../server";
 
 export function issuesDeleteRoute(): Route {
   return {
-    method: 'DELETE',
-    pattern: new URLPattern({ pathname: '/api/v1/issues/:id' }),
+    method: "DELETE",
+    pattern: new URLPattern({ pathname: "/api/v1/issues/:id" }),
     handler: (_req, match, { db, bus }) => {
       const id = match.pathname.groups.id!;
       const existing = getIssueById(db, id);
       if (!existing) {
-        return Response.json({ error: { code: 'issue_not_found' } }, { status: 404 });
+        return Response.json({ error: { code: "issue_not_found" } }, { status: 404 });
       }
       deleteIssue(db, id);
-      bus.publish('issue.deleted', { id, identifier: existing.identifier });
+      bus.publish("issue.deleted", { id, identifier: existing.identifier });
       return new Response(null, { status: 204 });
     },
   };
@@ -2134,6 +2254,7 @@ git commit -m "feat(wayang): add PATCH and DELETE issue routes"
 ### Task 5.6: Comments and history routes
 
 **Files:**
+
 - Create: `packages/wayang/src/api/routes/comments.ts`
 - Create: `packages/wayang/src/api/routes/history.ts`
 - Create: `packages/wayang/tests/api/comments.test.ts`
@@ -2141,44 +2262,44 @@ git commit -m "feat(wayang): add PATCH and DELETE issue routes"
 - [ ] **Step 1: Write failing test**
 
 ```typescript
-import { describe, expect, test, beforeEach } from 'bun:test';
-import { Database } from 'bun:sqlite';
-import { runMigrations } from '../../src/db/migrations';
-import { createIssue } from '../../src/db/repo/issues';
-import { startServer } from '../../src/api/server';
-import { commentsListRoute, commentsCreateRoute } from '../../src/api/routes/comments';
-import { historyListRoute } from '../../src/api/routes/history';
+import { describe, expect, test, beforeEach } from "bun:test";
+import { Database } from "bun:sqlite";
+import { runMigrations } from "../../src/db/migrations";
+import { createIssue } from "../../src/db/repo/issues";
+import { startServer } from "../../src/api/server";
+import { commentsListRoute, commentsCreateRoute } from "../../src/api/routes/comments";
+import { historyListRoute } from "../../src/api/routes/history";
 
 let db: Database;
 beforeEach(() => {
-  db = new Database(':memory:');
+  db = new Database(":memory:");
   runMigrations(db);
 });
 
-describe('comments and history routes', () => {
-  test('POST + GET comments', async () => {
-    const a = createIssue(db, { title: 't', state: 'Todo' });
+describe("comments and history routes", () => {
+  test("POST + GET comments", async () => {
+    const a = createIssue(db, { title: "t", state: "Todo" });
     const server = startServer({ db, apiToken: undefined, port: 0 }, [
       commentsCreateRoute(),
       commentsListRoute(),
     ]);
 
     const post = await fetch(`${server.url}api/v1/issues/${a.id}/comments`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ body: 'hello **world**', author: 'agent' }),
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ body: "hello **world**", author: "agent" }),
     });
     expect(post.status).toBe(201);
 
     const get = await fetch(`${server.url}api/v1/issues/${a.id}/comments`);
     const body = (await get.json()) as { comments: { author: string; body_html: string }[] };
-    expect(body.comments[0]!.author).toBe('agent');
-    expect(body.comments[0]!.body_html).toContain('<strong>world</strong>');
+    expect(body.comments[0]!.author).toBe("agent");
+    expect(body.comments[0]!.body_html).toContain("<strong>world</strong>");
     server.stop();
   });
 
-  test('GET history shows creation event', async () => {
-    const a = createIssue(db, { title: 't', state: 'Todo' });
+  test("GET history shows creation event", async () => {
+    const a = createIssue(db, { title: "t", state: "Todo" });
     const server = startServer({ db, apiToken: undefined, port: 0 }, [historyListRoute()]);
     // No history added by repo; this test verifies route shape only.
     const res = await fetch(`${server.url}api/v1/issues/${a.id}/history`);
@@ -2195,11 +2316,12 @@ describe('comments and history routes', () => {
 - [ ] **Step 3: Implement**
 
 `comments.ts`:
+
 ```typescript
-import { addComment, listComments } from '../../db/repo/comments';
-import { addHistory } from '../../db/repo/history';
-import { getIssueById } from '../../db/repo/issues';
-import type { Route } from '../server';
+import { addComment, listComments } from "../../db/repo/comments";
+import { addHistory } from "../../db/repo/history";
+import { getIssueById } from "../../db/repo/issues";
+import type { Route } from "../server";
 
 interface CommentBody {
   body?: unknown;
@@ -2208,12 +2330,12 @@ interface CommentBody {
 
 export function commentsListRoute(): Route {
   return {
-    method: 'GET',
-    pattern: new URLPattern({ pathname: '/api/v1/issues/:id/comments' }),
+    method: "GET",
+    pattern: new URLPattern({ pathname: "/api/v1/issues/:id/comments" }),
     handler: (_req, match, { db }) => {
       const id = match.pathname.groups.id!;
       const issue = getIssueById(db, id);
-      if (!issue) return Response.json({ error: { code: 'issue_not_found' } }, { status: 404 });
+      if (!issue) return Response.json({ error: { code: "issue_not_found" } }, { status: 404 });
       return Response.json({ comments: listComments(db, id) });
     },
   };
@@ -2221,31 +2343,37 @@ export function commentsListRoute(): Route {
 
 export function commentsCreateRoute(): Route {
   return {
-    method: 'POST',
-    pattern: new URLPattern({ pathname: '/api/v1/issues/:id/comments' }),
+    method: "POST",
+    pattern: new URLPattern({ pathname: "/api/v1/issues/:id/comments" }),
     handler: async (req, match, { db, bus }) => {
       const id = match.pathname.groups.id!;
       const issue = getIssueById(db, id);
-      if (!issue) return Response.json({ error: { code: 'issue_not_found' } }, { status: 404 });
+      if (!issue) return Response.json({ error: { code: "issue_not_found" } }, { status: 404 });
 
       let body: CommentBody;
       try {
         body = (await req.json()) as CommentBody;
       } catch {
-        return Response.json({ error: { code: 'bad_json' } }, { status: 400 });
+        return Response.json({ error: { code: "bad_json" } }, { status: 400 });
       }
 
-      if (typeof body.body !== 'string' || body.body.trim() === '') {
+      if (typeof body.body !== "string" || body.body.trim() === "") {
         return Response.json(
-          { error: { code: 'missing_field', message: 'body is required', fields: ['body'] } },
+          { error: { code: "missing_field", message: "body is required", fields: ["body"] } },
           { status: 400 },
         );
       }
 
-      const author: 'user' | 'agent' = body.author === 'agent' ? 'agent' : 'user';
+      const author: "user" | "agent" = body.author === "agent" ? "agent" : "user";
       const comment = addComment(db, id, { body: body.body, author });
-      addHistory(db, { issue_id: id, kind: 'comment_added', from_value: null, to_value: null, actor: author });
-      bus.publish('comment.added', { issue_id: id, comment });
+      addHistory(db, {
+        issue_id: id,
+        kind: "comment_added",
+        from_value: null,
+        to_value: null,
+        actor: author,
+      });
+      bus.publish("comment.added", { issue_id: id, comment });
       return Response.json(comment, { status: 201 });
     },
   };
@@ -2253,19 +2381,20 @@ export function commentsCreateRoute(): Route {
 ```
 
 `history.ts`:
+
 ```typescript
-import { listHistory } from '../../db/repo/history';
-import { getIssueById } from '../../db/repo/issues';
-import type { Route } from '../server';
+import { listHistory } from "../../db/repo/history";
+import { getIssueById } from "../../db/repo/issues";
+import type { Route } from "../server";
 
 export function historyListRoute(): Route {
   return {
-    method: 'GET',
-    pattern: new URLPattern({ pathname: '/api/v1/issues/:id/history' }),
+    method: "GET",
+    pattern: new URLPattern({ pathname: "/api/v1/issues/:id/history" }),
     handler: (_req, match, { db }) => {
       const id = match.pathname.groups.id!;
       const issue = getIssueById(db, id);
-      if (!issue) return Response.json({ error: { code: 'issue_not_found' } }, { status: 404 });
+      if (!issue) return Response.json({ error: { code: "issue_not_found" } }, { status: 404 });
       return Response.json({ history: listHistory(db, id) });
     },
   };
@@ -2286,42 +2415,43 @@ git commit -m "feat(wayang): add comments and history routes"
 ### Task 5.7: GET /api/v1/events (SSE stream)
 
 **Files:**
+
 - Create: `packages/wayang/src/api/routes/events.ts`
 - Create: `packages/wayang/tests/api/events.test.ts`
 
 - [ ] **Step 1: Write failing test**
 
 ```typescript
-import { describe, expect, test, beforeEach } from 'bun:test';
-import { Database } from 'bun:sqlite';
-import { runMigrations } from '../../src/db/migrations';
-import { startServer } from '../../src/api/server';
-import { eventsRoute } from '../../src/api/routes/events';
+import { describe, expect, test, beforeEach } from "bun:test";
+import { Database } from "bun:sqlite";
+import { runMigrations } from "../../src/db/migrations";
+import { startServer } from "../../src/api/server";
+import { eventsRoute } from "../../src/api/routes/events";
 
 let db: Database;
 beforeEach(() => {
-  db = new Database(':memory:');
+  db = new Database(":memory:");
   runMigrations(db);
 });
 
-describe('GET /api/v1/events', () => {
-  test('streams a published event', async () => {
+describe("GET /api/v1/events", () => {
+  test("streams a published event", async () => {
     const server = startServer({ db, apiToken: undefined, port: 0 }, [eventsRoute()]);
     const res = await fetch(`${server.url}api/v1/events`);
-    expect(res.headers.get('content-type')).toContain('text/event-stream');
+    expect(res.headers.get("content-type")).toContain("text/event-stream");
 
     // publish from outside the stream
-    setTimeout(() => server.bus.publish('test.evt', { v: 1 }), 20);
+    setTimeout(() => server.bus.publish("test.evt", { v: 1 }), 20);
 
     const reader = res.body!.getReader();
     const decoder = new TextDecoder();
-    let buf = '';
-    while (!buf.includes('event: test.evt')) {
+    let buf = "";
+    while (!buf.includes("event: test.evt")) {
       const { value, done } = await reader.read();
       if (done) break;
       buf += decoder.decode(value);
     }
-    expect(buf).toContain('event: test.evt');
+    expect(buf).toContain("event: test.evt");
     expect(buf).toContain('data: {"v":1}');
     await reader.cancel();
     server.stop();
@@ -2334,12 +2464,12 @@ describe('GET /api/v1/events', () => {
 - [ ] **Step 3: Implement**
 
 ```typescript
-import type { Route } from '../server';
+import type { Route } from "../server";
 
 export function eventsRoute(): Route {
   return {
-    method: 'GET',
-    pattern: new URLPattern({ pathname: '/api/v1/events' }),
+    method: "GET",
+    pattern: new URLPattern({ pathname: "/api/v1/events" }),
     handler: (_req, _match, { bus }) => {
       const stream = new ReadableStream({
         start(controller) {
@@ -2353,15 +2483,15 @@ export function eventsRoute(): Route {
             }
           });
           // initial comment to establish stream
-          controller.enqueue(enc.encode(': connected\n\n'));
+          controller.enqueue(enc.encode(": connected\n\n"));
         },
       });
 
       return new Response(stream, {
         headers: {
-          'content-type': 'text/event-stream',
-          'cache-control': 'no-cache',
-          connection: 'keep-alive',
+          "content-type": "text/event-stream",
+          "cache-control": "no-cache",
+          connection: "keep-alive",
         },
       });
     },
@@ -2387,6 +2517,7 @@ The structural pass produces correct, accessible HTML and HTMX behavior with **p
 ### Task 6.1: Static asset serving and HTMX vendoring
 
 **Files:**
+
 - Create: `packages/wayang/src/ui/public/style.css` (placeholder)
 - Create: `packages/wayang/src/ui/public/htmx.min.js` (vendored)
 - Create: `packages/wayang/src/ui/public/sse.js` (vendored)
@@ -2395,36 +2526,43 @@ The structural pass produces correct, accessible HTML and HTMX behavior with **p
 - [ ] **Step 1: Vendor HTMX**
 
 Run:
+
 ```bash
 mkdir -p packages/wayang/src/ui/public
 curl -L -o packages/wayang/src/ui/public/htmx.min.js https://unpkg.com/htmx.org@2.0.3/dist/htmx.min.js
 curl -L -o packages/wayang/src/ui/public/sse.js https://unpkg.com/htmx-ext-sse@2.2.2/sse.js
 ```
+
 Verify both files are non-empty.
 
 - [ ] **Step 2: Placeholder `style.css`**
 
 ```css
 /* placeholder; replaced by frontend-design pass in Phase 7 */
-body { font-family: system-ui, sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
+body {
+  font-family: system-ui, sans-serif;
+  max-width: 960px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
 ```
 
 - [ ] **Step 3: Implement static route at `src/ui/static.ts`**
 
 ```typescript
-import type { Route } from '../api/server';
+import type { Route } from "../api/server";
 
-const ROOT = new URL('./public/', import.meta.url);
+const ROOT = new URL("./public/", import.meta.url);
 
 export function staticRoute(): Route {
   return {
-    method: 'GET',
-    pattern: new URLPattern({ pathname: '/static/:rest+' }),
+    method: "GET",
+    pattern: new URLPattern({ pathname: "/static/:rest+" }),
     handler: async (_req, match) => {
       const rel = match.pathname.groups.rest!;
-      if (rel.includes('..')) return new Response('Not Found', { status: 404 });
+      if (rel.includes("..")) return new Response("Not Found", { status: 404 });
       const file = Bun.file(new URL(rel, ROOT).pathname);
-      if (!(await file.exists())) return new Response('Not Found', { status: 404 });
+      if (!(await file.exists())) return new Response("Not Found", { status: 404 });
       return new Response(file);
     },
   };
@@ -2447,6 +2585,7 @@ git commit -m "feat(wayang): vendor HTMX and add static asset route"
 ### Task 6.2: Layout shell and partial helpers
 
 **Files:**
+
 - Create: `packages/wayang/src/ui/layout.ts`
 - Create: `packages/wayang/src/ui/partials/state-badge.ts`
 - Create: `packages/wayang/tests/ui/state-badge.test.ts`
@@ -2454,19 +2593,19 @@ git commit -m "feat(wayang): vendor HTMX and add static asset route"
 - [ ] **Step 1: Write failing test**
 
 ```typescript
-import { describe, expect, test } from 'bun:test';
-import { renderStateBadge } from '../../src/ui/partials/state-badge';
+import { describe, expect, test } from "bun:test";
+import { renderStateBadge } from "../../src/ui/partials/state-badge";
 
-describe('renderStateBadge', () => {
-  test('renders state label inside data-state attribute', () => {
-    const html = renderStateBadge('In Progress');
+describe("renderStateBadge", () => {
+  test("renders state label inside data-state attribute", () => {
+    const html = renderStateBadge("In Progress");
     expect(html).toContain('data-state="In Progress"');
-    expect(html).toContain('In Progress');
+    expect(html).toContain("In Progress");
   });
 
-  test('escapes user-provided values', () => {
-    const html = renderStateBadge('<script>x</script>');
-    expect(html).not.toContain('<script>');
+  test("escapes user-provided values", () => {
+    const html = renderStateBadge("<script>x</script>");
+    expect(html).not.toContain("<script>");
   });
 });
 ```
@@ -2476,14 +2615,15 @@ describe('renderStateBadge', () => {
 - [ ] **Step 3: Implement**
 
 `src/ui/layout.ts`:
+
 ```typescript
 export function escapeHtml(s: string): string {
   return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 export function layout(title: string, body: string): string {
@@ -2511,8 +2651,9 @@ ${body}
 ```
 
 `src/ui/partials/state-badge.ts`:
+
 ```typescript
-import { escapeHtml } from '../layout';
+import { escapeHtml } from "../layout";
 
 export function renderStateBadge(state: string): string {
   const safe = escapeHtml(state);
@@ -2534,6 +2675,7 @@ git commit -m "feat(wayang): add UI layout shell and state-badge partial"
 ### Task 6.3: Issue list page and row partial
 
 **Files:**
+
 - Create: `packages/wayang/src/ui/partials/issue-row.ts`
 - Create: `packages/wayang/src/ui/pages/list.ts`
 - Create: `packages/wayang/src/ui/routes.ts`
@@ -2542,36 +2684,36 @@ git commit -m "feat(wayang): add UI layout shell and state-badge partial"
 - [ ] **Step 1: Write failing test**
 
 ```typescript
-import { describe, expect, test } from 'bun:test';
-import { renderIssueRow } from '../../src/ui/partials/issue-row';
-import type { NormalizedIssue } from '../../src/domain/issue';
+import { describe, expect, test } from "bun:test";
+import { renderIssueRow } from "../../src/ui/partials/issue-row";
+import type { NormalizedIssue } from "../../src/domain/issue";
 
 const issue: NormalizedIssue = {
-  id: '01ABC',
-  identifier: 'JUARA-1',
-  title: 'first',
+  id: "01ABC",
+  identifier: "JUARA-1",
+  title: "first",
   description: null,
   priority: 2,
-  state: 'Todo',
+  state: "Todo",
   branch_name: null,
   url: null,
-  labels: ['bug'],
+  labels: ["bug"],
   blocked_by: [],
-  created_at: '2026-04-29T00:00:00Z',
-  updated_at: '2026-04-29T00:00:00Z',
+  created_at: "2026-04-29T00:00:00Z",
+  updated_at: "2026-04-29T00:00:00Z",
 };
 
-describe('renderIssueRow', () => {
-  test('contains identifier link, title, state, labels', () => {
+describe("renderIssueRow", () => {
+  test("contains identifier link, title, state, labels", () => {
     const html = renderIssueRow(issue);
     expect(html).toContain('href="/issues/01ABC"');
-    expect(html).toContain('JUARA-1');
-    expect(html).toContain('first');
+    expect(html).toContain("JUARA-1");
+    expect(html).toContain("first");
     expect(html).toContain('data-state="Todo"');
-    expect(html).toContain('bug');
+    expect(html).toContain("bug");
   });
 
-  test('row has hx-target id for SSE swap', () => {
+  test("row has hx-target id for SSE swap", () => {
     const html = renderIssueRow(issue);
     expect(html).toContain('id="row-01ABC"');
   });
@@ -2583,17 +2725,18 @@ describe('renderIssueRow', () => {
 - [ ] **Step 3: Implement**
 
 `partials/issue-row.ts`:
+
 ```typescript
-import type { NormalizedIssue } from '../../domain/issue';
-import { ALL_STATES } from '../../domain/issue';
-import { escapeHtml } from '../layout';
-import { renderStateBadge } from './state-badge';
+import type { NormalizedIssue } from "../../domain/issue";
+import { ALL_STATES } from "../../domain/issue";
+import { escapeHtml } from "../layout";
+import { renderStateBadge } from "./state-badge";
 
 export function renderIssueRow(issue: NormalizedIssue): string {
-  const labels = issue.labels.map((l) => `<span class="label">${escapeHtml(l)}</span>`).join(' ');
+  const labels = issue.labels.map((l) => `<span class="label">${escapeHtml(l)}</span>`).join(" ");
   const stateOptions = ALL_STATES.map(
-    (s) => `<option value="${s}"${s === issue.state ? ' selected' : ''}>${s}</option>`,
-  ).join('');
+    (s) => `<option value="${s}"${s === issue.state ? " selected" : ""}>${s}</option>`,
+  ).join("");
   return `<tr id="row-${escapeHtml(issue.id)}">
   <td><a href="/issues/${escapeHtml(issue.id)}">${escapeHtml(issue.identifier)}</a></td>
   <td>${escapeHtml(issue.title)}</td>
@@ -2606,19 +2749,20 @@ export function renderIssueRow(issue: NormalizedIssue): string {
       ${stateOptions}
     </select>
   </td>
-  <td>${issue.priority ?? ''}</td>
+  <td>${issue.priority ?? ""}</td>
   <td>${labels}</td>
-  <td>${escapeHtml(issue.updated_at ?? '')}</td>
+  <td>${escapeHtml(issue.updated_at ?? "")}</td>
 </tr>`;
 }
 ```
 
 `pages/list.ts`:
+
 ```typescript
-import { layout } from '../layout';
-import { renderIssueRow } from '../partials/issue-row';
-import { ACTIVE_STATES, ALL_STATES, TERMINAL_STATES } from '../../domain/issue';
-import type { NormalizedIssue } from '../../domain/issue';
+import { layout } from "../layout";
+import { renderIssueRow } from "../partials/issue-row";
+import { ACTIVE_STATES, ALL_STATES, TERMINAL_STATES } from "../../domain/issue";
+import type { NormalizedIssue } from "../../domain/issue";
 
 export interface ListPageInput {
   issues: NormalizedIssue[];
@@ -2628,60 +2772,61 @@ export interface ListPageInput {
 
 export function renderListPage({ issues, selectedStates, q }: ListPageInput): string {
   const stateChips = ALL_STATES.map((s) => {
-    const checked = selectedStates.includes(s) ? ' checked' : '';
+    const checked = selectedStates.includes(s) ? " checked" : "";
     return `<label><input type="checkbox" name="state" value="${s}"${checked}> ${s}</label>`;
-  }).join(' ');
+  }).join(" ");
 
-  const rows = issues.map(renderIssueRow).join('\n');
+  const rows = issues.map(renderIssueRow).join("\n");
 
   const body = `
 <form method="get" action="/" class="filters">
   <input type="search" name="q" value="${q}" placeholder="Search title or description">
   <fieldset><legend>State</legend>${stateChips}</fieldset>
   <button type="submit">Filter</button>
-  <a href="/?state=${ACTIVE_STATES.join('&state=')}">Active</a>
-  <a href="/?state=${TERMINAL_STATES.join('&state=')}">Terminal</a>
+  <a href="/?state=${ACTIVE_STATES.join("&state=")}">Active</a>
+  <a href="/?state=${TERMINAL_STATES.join("&state=")}">Terminal</a>
 </form>
 <table>
 <thead><tr><th>ID</th><th>Title</th><th>State</th><th>Priority</th><th>Labels</th><th>Updated</th></tr></thead>
 <tbody id="issues-tbody"
        sse-swap="issue.created,issue.updated,state.changed,issue.deleted"
-       hx-get="/partials/issues?${selectedStates.map((s) => `state=${encodeURIComponent(s)}`).join('&')}&q=${encodeURIComponent(q)}"
+       hx-get="/partials/issues?${selectedStates.map((s) => `state=${encodeURIComponent(s)}`).join("&")}&q=${encodeURIComponent(q)}"
        hx-trigger="sse:issue.created,sse:issue.updated,sse:state.changed,sse:issue.deleted">
 ${rows}
 </tbody>
 </table>`;
-  return layout('Issues', body);
+  return layout("Issues", body);
 }
 ```
 
 `src/ui/routes.ts`:
+
 ```typescript
-import type { Route } from '../api/server';
-import { getIssuesByStates } from '../db/repo/issues';
-import { renderListPage } from './pages/list';
-import { ACTIVE_STATES } from '../domain/issue';
+import type { Route } from "../api/server";
+import { getIssuesByStates } from "../db/repo/issues";
+import { renderListPage } from "./pages/list";
+import { ACTIVE_STATES } from "../domain/issue";
 
 export function uiListRoute(): Route {
   return {
-    method: 'GET',
-    pattern: new URLPattern({ pathname: '/' }),
+    method: "GET",
+    pattern: new URLPattern({ pathname: "/" }),
     handler: (req, _match, { db }) => {
       const url = new URL(req.url);
-      const selected = url.searchParams.getAll('state');
+      const selected = url.searchParams.getAll("state");
       const states = selected.length > 0 ? selected : (ACTIVE_STATES as readonly string[]).slice();
-      const q = url.searchParams.get('q') ?? '';
+      const q = url.searchParams.get("q") ?? "";
       const { issues } = getIssuesByStates(db, states, null, 200);
       // q-filter (LIKE) deferred to a tbody-only partial; basic filter:
       const filtered = q
         ? issues.filter(
             (i) =>
               i.title.toLowerCase().includes(q.toLowerCase()) ||
-              (i.description ?? '').toLowerCase().includes(q.toLowerCase()),
+              (i.description ?? "").toLowerCase().includes(q.toLowerCase()),
           )
         : issues;
       return new Response(renderListPage({ issues: filtered, selectedStates: states, q }), {
-        headers: { 'content-type': 'text/html; charset=utf-8' },
+        headers: { "content-type": "text/html; charset=utf-8" },
       });
     },
   };
@@ -2702,6 +2847,7 @@ git commit -m "feat(wayang): add issue list page"
 ### Task 6.4: Issue detail page with HTMX inline editing
 
 **Files:**
+
 - Create: `packages/wayang/src/ui/pages/detail.ts`
 - Create: `packages/wayang/src/ui/partials/comment.ts`
 - Create: `packages/wayang/src/ui/partials/history-item.ts`
@@ -2711,21 +2857,30 @@ git commit -m "feat(wayang): add issue list page"
 - [ ] **Step 1: Write failing test**
 
 ```typescript
-import { describe, expect, test } from 'bun:test';
-import { renderDetailPage } from '../../src/ui/pages/detail';
-import type { NormalizedIssue } from '../../src/domain/issue';
+import { describe, expect, test } from "bun:test";
+import { renderDetailPage } from "../../src/ui/pages/detail";
+import type { NormalizedIssue } from "../../src/domain/issue";
 
 const issue: NormalizedIssue = {
-  id: 'X', identifier: 'JUARA-1', title: 't', description: 'hello',
-  priority: null, state: 'Todo', branch_name: null, url: null,
-  labels: [], blocked_by: [], created_at: '', updated_at: '',
+  id: "X",
+  identifier: "JUARA-1",
+  title: "t",
+  description: "hello",
+  priority: null,
+  state: "Todo",
+  branch_name: null,
+  url: null,
+  labels: [],
+  blocked_by: [],
+  created_at: "",
+  updated_at: "",
 };
 
-describe('renderDetailPage', () => {
-  test('shows title, identifier, description, state-change form', () => {
+describe("renderDetailPage", () => {
+  test("shows title, identifier, description, state-change form", () => {
     const html = renderDetailPage({ issue, comments: [], history: [] });
-    expect(html).toContain('JUARA-1');
-    expect(html).toContain('hello');
+    expect(html).toContain("JUARA-1");
+    expect(html).toContain("hello");
     expect(html).toContain(`hx-patch="/api/v1/issues/X"`);
     expect(html).toContain('id="comments"');
     expect(html).toContain('id="history"');
@@ -2738,9 +2893,10 @@ describe('renderDetailPage', () => {
 - [ ] **Step 3: Implement**
 
 `partials/comment.ts`:
+
 ```typescript
-import type { Comment } from '../../domain/comment';
-import { escapeHtml } from '../layout';
+import type { Comment } from "../../domain/comment";
+import { escapeHtml } from "../layout";
 
 export function renderComment(c: Comment): string {
   return `<article class="comment" data-author="${c.author}" id="comment-${escapeHtml(c.id)}">
@@ -2751,32 +2907,44 @@ export function renderComment(c: Comment): string {
 ```
 
 `partials/history-item.ts`:
+
 ```typescript
-import type { HistoryEntry } from '../../domain/history';
-import { escapeHtml } from '../layout';
+import type { HistoryEntry } from "../../domain/history";
+import { escapeHtml } from "../layout";
 
 export function renderHistoryItem(h: HistoryEntry): string {
   let line: string;
   switch (h.kind) {
-    case 'created': line = `created with state ${escapeHtml(h.to_value ?? '')}`; break;
-    case 'state_changed': line = `state ${escapeHtml(h.from_value ?? '')} → ${escapeHtml(h.to_value ?? '')}`; break;
-    case 'edited': line = 'edited'; break;
-    case 'comment_added': line = 'comment added'; break;
-    case 'deleted': line = 'deleted'; break;
+    case "created":
+      line = `created with state ${escapeHtml(h.to_value ?? "")}`;
+      break;
+    case "state_changed":
+      line = `state ${escapeHtml(h.from_value ?? "")} → ${escapeHtml(h.to_value ?? "")}`;
+      break;
+    case "edited":
+      line = "edited";
+      break;
+    case "comment_added":
+      line = "comment added";
+      break;
+    case "deleted":
+      line = "deleted";
+      break;
   }
   return `<li><time>${escapeHtml(h.at)}</time> · <strong>${h.actor}</strong> ${line}</li>`;
 }
 ```
 
 `pages/detail.ts`:
+
 ```typescript
-import { layout, escapeHtml } from '../layout';
-import { renderStateBadge } from '../partials/state-badge';
-import { renderComment } from '../partials/comment';
-import { renderHistoryItem } from '../partials/history-item';
-import { ALL_STATES, type NormalizedIssue } from '../../domain/issue';
-import type { Comment } from '../../domain/comment';
-import type { HistoryEntry } from '../../domain/history';
+import { layout, escapeHtml } from "../layout";
+import { renderStateBadge } from "../partials/state-badge";
+import { renderComment } from "../partials/comment";
+import { renderHistoryItem } from "../partials/history-item";
+import { ALL_STATES, type NormalizedIssue } from "../../domain/issue";
+import type { Comment } from "../../domain/comment";
+import type { HistoryEntry } from "../../domain/history";
 
 export interface DetailPageInput {
   issue: NormalizedIssue;
@@ -2786,16 +2954,19 @@ export interface DetailPageInput {
 
 export function renderDetailPage({ issue, comments, history }: DetailPageInput): string {
   const stateOptions = ALL_STATES.map(
-    (s) => `<option value="${s}"${s === issue.state ? ' selected' : ''}>${s}</option>`,
-  ).join('');
+    (s) => `<option value="${s}"${s === issue.state ? " selected" : ""}>${s}</option>`,
+  ).join("");
 
-  const labels = issue.labels.map((l) => `<span class="label">${escapeHtml(l)}</span>`).join(' ');
+  const labels = issue.labels.map((l) => `<span class="label">${escapeHtml(l)}</span>`).join(" ");
   const blockers = issue.blocked_by
-    .map((b) => `<a href="/issues/${escapeHtml(b.id ?? '')}">${escapeHtml(b.identifier ?? '?')}</a> (${escapeHtml(b.state ?? '?')})`)
-    .join(', ');
+    .map(
+      (b) =>
+        `<a href="/issues/${escapeHtml(b.id ?? "")}">${escapeHtml(b.identifier ?? "?")}</a> (${escapeHtml(b.state ?? "?")})`,
+    )
+    .join(", ");
 
-  const commentList = comments.map(renderComment).join('\n');
-  const historyList = history.map(renderHistoryItem).join('\n');
+  const commentList = comments.map(renderComment).join("\n");
+  const historyList = history.map(renderHistoryItem).join("\n");
 
   const body = `
 <article id="issue-${escapeHtml(issue.id)}"
@@ -2817,19 +2988,21 @@ export function renderDetailPage({ issue, comments, history }: DetailPageInput):
 
   <aside>
     <dl>
-      <dt>Priority</dt><dd>${issue.priority ?? '—'}</dd>
-      <dt>Labels</dt><dd>${labels || '—'}</dd>
-      <dt>Blockers</dt><dd>${blockers || '—'}</dd>
+      <dt>Priority</dt><dd>${issue.priority ?? "—"}</dd>
+      <dt>Labels</dt><dd>${labels || "—"}</dd>
+      <dt>Blockers</dt><dd>${blockers || "—"}</dd>
       <dt>External</dt><dd>${
-        issue.url ? `<a href="${escapeHtml(issue.url)}" target="_blank" rel="noopener">link</a>` : '—'
+        issue.url
+          ? `<a href="${escapeHtml(issue.url)}" target="_blank" rel="noopener">link</a>`
+          : "—"
       }</dd>
-      <dt>Branch</dt><dd>${escapeHtml(issue.branch_name ?? '—')}</dd>
+      <dt>Branch</dt><dd>${escapeHtml(issue.branch_name ?? "—")}</dd>
     </dl>
   </aside>
 
   <section class="description">
     <h2>Description</h2>
-    <div class="markdown">${escapeHtml(issue.description ?? '')}</div>
+    <div class="markdown">${escapeHtml(issue.description ?? "")}</div>
   </section>
 
   <section id="comments">
@@ -2858,23 +3031,23 @@ export function renderDetailPage({ issue, comments, history }: DetailPageInput):
 In `src/ui/routes.ts` add:
 
 ```typescript
-import { renderDetailPage } from './pages/detail';
-import { getIssueById } from '../db/repo/issues';
-import { listComments } from '../db/repo/comments';
-import { listHistory } from '../db/repo/history';
+import { renderDetailPage } from "./pages/detail";
+import { getIssueById } from "../db/repo/issues";
+import { listComments } from "../db/repo/comments";
+import { listHistory } from "../db/repo/history";
 
 export function uiDetailRoute(): Route {
   return {
-    method: 'GET',
-    pattern: new URLPattern({ pathname: '/issues/:id' }),
+    method: "GET",
+    pattern: new URLPattern({ pathname: "/issues/:id" }),
     handler: (_req, match, { db }) => {
       const id = match.pathname.groups.id!;
       const issue = getIssueById(db, id);
-      if (!issue) return new Response('Not Found', { status: 404 });
+      if (!issue) return new Response("Not Found", { status: 404 });
       const comments = listComments(db, id);
       const history = listHistory(db, id);
       return new Response(renderDetailPage({ issue, comments, history }), {
-        headers: { 'content-type': 'text/html; charset=utf-8' },
+        headers: { "content-type": "text/html; charset=utf-8" },
       });
     },
   };
@@ -2895,6 +3068,7 @@ git commit -m "feat(wayang): add issue detail page with HTMX interactions"
 ### Task 6.5: Create issue page with Linear URL paste
 
 **Files:**
+
 - Create: `packages/wayang/src/ui/pages/new.ts`
 - Modify: `packages/wayang/src/ui/routes.ts` — add `uiNewRoute()` (GET) and `uiCreatePostRoute()` (POST form handler)
 - Create: `packages/wayang/tests/ui/new.test.ts`
@@ -2902,11 +3076,11 @@ git commit -m "feat(wayang): add issue detail page with HTMX interactions"
 - [ ] **Step 1: Write failing test**
 
 ```typescript
-import { describe, expect, test } from 'bun:test';
-import { renderNewPage } from '../../src/ui/pages/new';
+import { describe, expect, test } from "bun:test";
+import { renderNewPage } from "../../src/ui/pages/new";
 
-describe('renderNewPage', () => {
-  test('contains title, description, linear-url paste, state default', () => {
+describe("renderNewPage", () => {
+  test("contains title, description, linear-url paste, state default", () => {
     const html = renderNewPage({});
     expect(html).toContain('name="title"');
     expect(html).toContain('name="description"');
@@ -2922,9 +3096,10 @@ describe('renderNewPage', () => {
 - [ ] **Step 3: Implement**
 
 `pages/new.ts`:
+
 ```typescript
-import { layout, escapeHtml } from '../layout';
-import { ALL_STATES } from '../../domain/issue';
+import { layout, escapeHtml } from "../layout";
+import { ALL_STATES } from "../../domain/issue";
 
 export interface NewPageInput {
   error?: string;
@@ -2933,19 +3108,19 @@ export interface NewPageInput {
 
 export function renderNewPage({ error, values = {} }: NewPageInput): string {
   const stateOptions = ALL_STATES.map(
-    (s) => `<option value="${s}"${s === 'Todo' ? ' selected' : ''}>${s}</option>`,
-  ).join('');
+    (s) => `<option value="${s}"${s === "Todo" ? " selected" : ""}>${s}</option>`,
+  ).join("");
   const body = `
-${error ? `<div class="error">${escapeHtml(error)}</div>` : ''}
+${error ? `<div class="error">${escapeHtml(error)}</div>` : ""}
 <form method="post" action="/new">
   <label>Paste Linear URL (optional)
-    <input type="url" name="linear_url" value="${escapeHtml(values.linear_url ?? '')}" placeholder="https://linear.app/...">
+    <input type="url" name="linear_url" value="${escapeHtml(values.linear_url ?? "")}" placeholder="https://linear.app/...">
   </label>
   <label>Title
-    <input type="text" name="title" required value="${escapeHtml(values.title ?? '')}">
+    <input type="text" name="title" required value="${escapeHtml(values.title ?? "")}">
   </label>
   <label>Description (markdown)
-    <textarea name="description">${escapeHtml(values.description ?? '')}</textarea>
+    <textarea name="description">${escapeHtml(values.description ?? "")}</textarea>
   </label>
   <label>State
     <select name="state">${stateOptions}</select>
@@ -2960,53 +3135,53 @@ ${error ? `<div class="error">${escapeHtml(error)}</div>` : ''}
     </select>
   </label>
   <label>Labels (comma-separated)
-    <input type="text" name="labels" value="${escapeHtml(values.labels ?? '')}">
+    <input type="text" name="labels" value="${escapeHtml(values.labels ?? "")}">
   </label>
   <button type="submit">Create</button>
 </form>`;
-  return layout('New issue', body);
+  return layout("New issue", body);
 }
 ```
 
 In `src/ui/routes.ts` add:
 
 ```typescript
-import { renderNewPage } from './pages/new';
-import { createIssue } from '../db/repo/issues';
-import { addHistory } from '../db/repo/history';
-import { parseLinearUrl } from '../lib/linear-url';
+import { renderNewPage } from "./pages/new";
+import { createIssue } from "../db/repo/issues";
+import { addHistory } from "../db/repo/history";
+import { parseLinearUrl } from "../lib/linear-url";
 
 export function uiNewRoute(): Route {
   return {
-    method: 'GET',
-    pattern: new URLPattern({ pathname: '/new' }),
+    method: "GET",
+    pattern: new URLPattern({ pathname: "/new" }),
     handler: () =>
-      new Response(renderNewPage({}), { headers: { 'content-type': 'text/html; charset=utf-8' } }),
+      new Response(renderNewPage({}), { headers: { "content-type": "text/html; charset=utf-8" } }),
   };
 }
 
 export function uiCreatePostRoute(): Route {
   return {
-    method: 'POST',
-    pattern: new URLPattern({ pathname: '/new' }),
+    method: "POST",
+    pattern: new URLPattern({ pathname: "/new" }),
     handler: async (req, _match, { db, bus }) => {
       const form = await req.formData();
-      const title = String(form.get('title') ?? '').trim();
-      if (title === '') {
-        return new Response(
-          renderNewPage({ error: 'Title is required', values: { title: '' } }),
-          { status: 400, headers: { 'content-type': 'text/html; charset=utf-8' } },
-        );
+      const title = String(form.get("title") ?? "").trim();
+      if (title === "") {
+        return new Response(renderNewPage({ error: "Title is required", values: { title: "" } }), {
+          status: 400,
+          headers: { "content-type": "text/html; charset=utf-8" },
+        });
       }
-      const description = String(form.get('description') ?? '');
-      const state = String(form.get('state') ?? 'Todo');
-      const priorityRaw = String(form.get('priority') ?? '');
-      const priority = priorityRaw === '' ? null : Number(priorityRaw);
-      const labels = String(form.get('labels') ?? '')
-        .split(',')
+      const description = String(form.get("description") ?? "");
+      const state = String(form.get("state") ?? "Todo");
+      const priorityRaw = String(form.get("priority") ?? "");
+      const priority = priorityRaw === "" ? null : Number(priorityRaw);
+      const labels = String(form.get("labels") ?? "")
+        .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
-      const linearUrl = String(form.get('linear_url') ?? '');
+      const linearUrl = String(form.get("linear_url") ?? "");
       const parsed = linearUrl ? parseLinearUrl(linearUrl) : null;
 
       const issue = createIssue(db, {
@@ -3018,8 +3193,14 @@ export function uiCreatePostRoute(): Route {
         external_ref: parsed?.external_ref ?? null,
         external_url: parsed?.external_url ?? null,
       });
-      addHistory(db, { issue_id: issue.id, kind: 'created', from_value: null, to_value: state, actor: 'user' });
-      bus.publish('issue.created', issue);
+      addHistory(db, {
+        issue_id: issue.id,
+        kind: "created",
+        from_value: null,
+        to_value: state,
+        actor: "user",
+      });
+      bus.publish("issue.created", issue);
 
       return new Response(null, { status: 302, headers: { location: `/issues/${issue.id}` } });
     },
@@ -3041,29 +3222,30 @@ git commit -m "feat(wayang): add new-issue page with Linear URL paste"
 ### Task 6.6: Wire all routes into main entry
 
 **Files:**
+
 - Modify: `packages/wayang/src/index.ts`
 - Create: `packages/wayang/src/main.ts`
 
 - [ ] **Step 1: Implement** at `src/main.ts`
 
 ```typescript
-import { Database } from 'bun:sqlite';
-import { homedir } from 'node:os';
-import { mkdirSync, existsSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
-import { runMigrations } from './db/migrations';
-import { startServer } from './api/server';
-import { issuesListRoute } from './api/routes/issues-list';
-import { issuesByIdsRoute } from './api/routes/issues-by-ids';
-import { issuesDetailRoute } from './api/routes/issues-detail';
-import { issuesCreateRoute } from './api/routes/issues-create';
-import { issuesUpdateRoute } from './api/routes/issues-update';
-import { issuesDeleteRoute } from './api/routes/issues-delete';
-import { commentsListRoute, commentsCreateRoute } from './api/routes/comments';
-import { historyListRoute } from './api/routes/history';
-import { eventsRoute } from './api/routes/events';
-import { staticRoute } from './ui/static';
-import { uiListRoute, uiDetailRoute, uiNewRoute, uiCreatePostRoute } from './ui/routes';
+import { Database } from "bun:sqlite";
+import { homedir } from "node:os";
+import { mkdirSync, existsSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { runMigrations } from "./db/migrations";
+import { startServer } from "./api/server";
+import { issuesListRoute } from "./api/routes/issues-list";
+import { issuesByIdsRoute } from "./api/routes/issues-by-ids";
+import { issuesDetailRoute } from "./api/routes/issues-detail";
+import { issuesCreateRoute } from "./api/routes/issues-create";
+import { issuesUpdateRoute } from "./api/routes/issues-update";
+import { issuesDeleteRoute } from "./api/routes/issues-delete";
+import { commentsListRoute, commentsCreateRoute } from "./api/routes/comments";
+import { historyListRoute } from "./api/routes/history";
+import { eventsRoute } from "./api/routes/events";
+import { staticRoute } from "./ui/static";
+import { uiListRoute, uiDetailRoute, uiNewRoute, uiCreatePostRoute } from "./ui/routes";
 
 export interface RunOptions {
   port?: number;
@@ -3071,17 +3253,17 @@ export interface RunOptions {
 }
 
 export function defaultDbPath(): string {
-  return resolve(homedir(), '.wayang', 'wayang.db');
+  return resolve(homedir(), ".wayang", "wayang.db");
 }
 
 export function runWayang(opts: RunOptions = {}) {
-  const dbPath = opts.dbPath ?? process.env['WAYANG_DB_PATH'] ?? defaultDbPath();
+  const dbPath = opts.dbPath ?? process.env["WAYANG_DB_PATH"] ?? defaultDbPath();
   if (!existsSync(dirname(dbPath))) mkdirSync(dirname(dbPath), { recursive: true });
   const db = new Database(dbPath);
   runMigrations(db);
 
-  const port = opts.port ?? Number(process.env['WAYANG_PORT'] ?? 3001);
-  const apiToken = process.env['WAYANG_API_TOKEN'] || undefined;
+  const port = opts.port ?? Number(process.env["WAYANG_PORT"] ?? 3001);
+  const apiToken = process.env["WAYANG_API_TOKEN"] || undefined;
 
   const server = startServer({ db, apiToken, port }, [
     // Order matters: more specific paths first.
@@ -3111,15 +3293,15 @@ export function runWayang(opts: RunOptions = {}) {
 
 ```typescript
 #!/usr/bin/env bun
-import { runWayang } from './main';
+import { runWayang } from "./main";
 
 const args = Bun.argv.slice(2);
 let port: number | undefined;
 let dbPath: string | undefined;
 for (let i = 0; i < args.length; i++) {
   const a = args[i];
-  if (a === '--port') port = Number(args[++i]);
-  else if (a === '--db') dbPath = args[++i];
+  if (a === "--port") port = Number(args[++i]);
+  else if (a === "--db") dbPath = args[++i];
 }
 runWayang({ port, dbPath });
 ```
@@ -3127,12 +3309,14 @@ runWayang({ port, dbPath });
 - [ ] **Step 3: Smoke run**
 
 Run:
+
 ```bash
 WAYANG_DB_PATH=/tmp/wayang-smoke.db bun run packages/wayang/src/index.ts --port 3033 &
 sleep 1
 curl -s http://localhost:3033/ | head -c 200
 kill %1 2>/dev/null || true
 ```
+
 Expected: HTML containing `<title>Issues · wayang</title>`.
 
 - [ ] **Step 4: Commit**
@@ -3155,11 +3339,13 @@ This phase **must** run after Phase 6 is complete and all behavior tests pass. T
 > Visual design pass for the **wayang** tracker UI. Single-user agent inbox; aesthetic should be calm, minimal, dense-but-readable, suited for a single user reviewing their own work queue. Inspirations: Linear (information density, restrained palette), Things (clean typography, tactile spacing), Stripe Docs (calm grays + one accent). NOT Material Design, NOT Tailwind defaults, NOT generic dashboard chrome.
 >
 > Pages to design:
+>
 > 1. Issue list (`/`) — table of issues with state filter, search, inline state-change dropdown.
 > 2. Issue detail (`/issues/:id`) — title, description (markdown), sidebar metadata, comments thread, history timeline.
 > 3. New issue (`/new`) — form.
 >
 > Constraints (non-negotiable, structural):
+>
 > - Server-rendered HTML, no SPA, no React. Output is a single hand-written CSS file at `packages/wayang/src/ui/public/style.css`.
 > - Existing HTML structure in `packages/wayang/src/ui/pages/*` and `packages/wayang/src/ui/partials/*` is the contract; do not change DOM structure or class names.
 > - HTMX-driven swaps must keep working — avoid CSS that depends on stable DOM identity beyond what's already there.
@@ -3168,6 +3354,7 @@ This phase **must** run after Phase 6 is complete and all behavior tests pass. T
 > - Light theme primary; dark theme via `prefers-color-scheme: dark`.
 >
 > Deliverables:
+>
 > 1. Replacement `packages/wayang/src/ui/public/style.css`.
 > 2. Suggested microcopy improvements (header labels, button text, empty states) — apply by editing the existing template files in `src/ui/pages/` and `src/ui/partials/`.
 
@@ -3180,11 +3367,13 @@ Replace `style.css`. Apply microcopy edits. Re-run all UI tests.
 - [ ] **Step 3: Manual visual smoke check**
 
 Start the server (`bun run packages/wayang/src/index.ts --port 3033 --db /tmp/wayang-design.db`), visit:
+
 - `http://localhost:3033/` — list page
 - `http://localhost:3033/new` — create page (create a few seed issues)
 - `http://localhost:3033/issues/<id>` — detail page
 
 Verify:
+
 - All states have distinct visual treatment.
 - Dark mode triggers via OS setting.
 - HTMX inline state changes still apply visually.
@@ -3204,28 +3393,29 @@ git commit -m "feat(wayang): apply frontend-design visual pass"
 ### Task 8.1: Integration test — full HTTP cycle
 
 **Files:**
+
 - Create: `packages/wayang/tests/integration/full-cycle.test.ts`
 
 - [ ] **Step 1: Write integration test** (gated)
 
 ```typescript
-import { describe, expect, test } from 'bun:test';
-import { runWayang } from '../../src/main';
-import { unlinkSync, existsSync } from 'node:fs';
+import { describe, expect, test } from "bun:test";
+import { runWayang } from "../../src/main";
+import { unlinkSync, existsSync } from "node:fs";
 
-const RUN = process.env['RUN_INTEGRATION'] === '1';
+const RUN = process.env["RUN_INTEGRATION"] === "1";
 
-describe.skipIf(!RUN)('full HTTP cycle', () => {
-  test('create → list → patch state → comment → SSE event', async () => {
-    const dbPath = '/tmp/wayang-it.db';
+describe.skipIf(!RUN)("full HTTP cycle", () => {
+  test("create → list → patch state → comment → SSE event", async () => {
+    const dbPath = "/tmp/wayang-it.db";
     if (existsSync(dbPath)) unlinkSync(dbPath);
     const { server, db } = runWayang({ port: 0, dbPath });
     try {
       // 1. create
       const created = await fetch(`${server.url}api/v1/issues`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ title: 'integration', state: 'Todo' }),
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: "integration", state: "Todo" }),
       });
       const issue = (await created.json()) as { id: string };
 
@@ -3236,17 +3426,17 @@ describe.skipIf(!RUN)('full HTTP cycle', () => {
 
       // 3. patch
       const patch = await fetch(`${server.url}api/v1/issues/${issue.id}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ state: 'In Progress', actor: 'agent' }),
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ state: "In Progress", actor: "agent" }),
       });
       expect(patch.status).toBe(200);
 
       // 4. comment
       const comment = await fetch(`${server.url}api/v1/issues/${issue.id}/comments`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ body: 'progress', author: 'agent' }),
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ body: "progress", author: "agent" }),
       });
       expect(comment.status).toBe(201);
 
@@ -3256,19 +3446,19 @@ describe.skipIf(!RUN)('full HTTP cycle', () => {
       const decoder = new TextDecoder();
 
       void fetch(`${server.url}api/v1/issues/${issue.id}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ state: 'Done', actor: 'user' }),
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ state: "Done", actor: "user" }),
       });
 
-      let buf = '';
+      let buf = "";
       const deadline = Date.now() + 3000;
-      while (!buf.includes('event: state.changed') && Date.now() < deadline) {
+      while (!buf.includes("event: state.changed") && Date.now() < deadline) {
         const { value, done } = await reader.read();
         if (done) break;
         buf += decoder.decode(value);
       }
-      expect(buf).toContain('event: state.changed');
+      expect(buf).toContain("event: state.changed");
       await reader.cancel();
       db.close();
     } finally {
@@ -3322,6 +3512,7 @@ Expected: all pass.
 - [ ] **Step 5: Manual smoke against the dalang contract**
 
 Run wayang and verify the three dalang-facing endpoints respond correctly:
+
 ```bash
 WAYANG_DB_PATH=/tmp/wayang-contract.db bun run packages/wayang/src/index.ts --port 3034 &
 sleep 1
@@ -3332,11 +3523,13 @@ curl -s -X POST -H 'content-type: application/json' \
 curl -s "http://localhost:3034/api/v1/issues/by-ids?id=missing" | head -c 200
 kill %1 2>/dev/null || true
 ```
+
 All three should return JSON with the expected shape.
 
 - [ ] **Step 6: Commit any final fixes**
 
 If the harness sweep surfaced anything:
+
 ```bash
 git add -A
 git commit -m "chore(wayang): post-implementation cleanup"

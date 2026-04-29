@@ -17,6 +17,7 @@ Conformance posture: dalang aims to be Symphony-extension-clean. A WORKFLOW.md a
 ## 2. Scope
 
 ### In scope (v1)
+
 - Polling daemon with bounded concurrency, retries, and reconciliation against `wayang`.
 - Per-issue git worktrees off a shared local clone.
 - Claude Agent SDK-driven worker sessions with multi-turn continuation on a single thread.
@@ -25,6 +26,7 @@ Conformance posture: dalang aims to be Symphony-extension-clean. A WORKFLOW.md a
 - Bun-native monorepo workspace; `dalang` and `wayang` live as sibling packages.
 
 ### Out of scope (v1, deferred)
+
 - Persistence layer (in-memory scheduler state only, per Symphony §14.3).
 - SSH worker pool (Symphony Appendix A).
 - Multi-repo per orchestrator instance.
@@ -56,20 +58,20 @@ Bun's native workspace support (`"workspaces": ["packages/*"]`) is sufficient fo
 
 ## 4. Stack & Harness
 
-| Concern        | Tool                                    |
-| -------------- | --------------------------------------- |
-| Runtime        | Bun (latest stable)                     |
-| Language       | TypeScript                              |
-| Type checker   | `tsgo` (typescript-native preview)      |
-| Linter         | `oxlint`                                |
-| Formatter      | `oxfmt`                                 |
-| Test runner    | `bun test`                              |
-| Agent SDK      | `@anthropic-ai/claude-agent-sdk` (Node) |
-| YAML parser    | `yaml`                                  |
-| Template engine| `liquidjs` (strict mode)                |
-| File watcher   | `chokidar`                              |
-| HTTP server    | `Bun.serve` (built-in)                  |
-| Logger         | `pino` (JSON, structured)               |
+| Concern         | Tool                                    |
+| --------------- | --------------------------------------- |
+| Runtime         | Bun (latest stable)                     |
+| Language        | TypeScript                              |
+| Type checker    | `tsgo` (typescript-native preview)      |
+| Linter          | `oxlint`                                |
+| Formatter       | `oxfmt`                                 |
+| Test runner     | `bun test`                              |
+| Agent SDK       | `@anthropic-ai/claude-agent-sdk` (Node) |
+| YAML parser     | `yaml`                                  |
+| Template engine | `liquidjs` (strict mode)                |
+| File watcher    | `chokidar`                              |
+| HTTP server     | `Bun.serve` (built-in)                  |
+| Logger          | `pino` (JSON, structured)               |
 
 ### Testing rules (binding)
 
@@ -85,17 +87,17 @@ dalang invokes Claude through the Agent SDK in **subscription-auth mode**, inher
 
 Dalang adopts Symphony's normalized issue, workflow, workspace, run-attempt, live-session, retry-entry, and orchestrator-runtime-state models verbatim (Symphony §4). The only adjustments are renamed identifiers in `LiveSession` to drop "codex":
 
-| Symphony field             | Dalang field                |
-| -------------------------- | --------------------------- |
-| `codex_app_server_pid`     | `claude_session_pid`        |
-| `last_codex_event`         | `last_event`                |
-| `last_codex_timestamp`     | `last_event_at`             |
-| `last_codex_message`       | `last_message`              |
-| `codex_input_tokens`       | `input_tokens`              |
-| `codex_output_tokens`      | `output_tokens`             |
-| `codex_total_tokens`       | `total_tokens`              |
-| `codex_totals` (state)     | `claude_totals`             |
-| `codex_rate_limits`        | `rate_limits`               |
+| Symphony field         | Dalang field         |
+| ---------------------- | -------------------- |
+| `codex_app_server_pid` | `claude_session_pid` |
+| `last_codex_event`     | `last_event`         |
+| `last_codex_timestamp` | `last_event_at`      |
+| `last_codex_message`   | `last_message`       |
+| `codex_input_tokens`   | `input_tokens`       |
+| `codex_output_tokens`  | `output_tokens`      |
+| `codex_total_tokens`   | `total_tokens`       |
+| `codex_totals` (state) | `claude_totals`      |
+| `codex_rate_limits`    | `rate_limits`        |
 
 All other LiveSession fields are preserved as-is (`last_reported_input_tokens`, `last_reported_output_tokens`, `last_reported_total_tokens`, `turn_count`).
 
@@ -105,7 +107,7 @@ Workspace key sanitization rule from Symphony §4.2 is preserved: any character 
 
 ### 5.1 Orchestrator runtime state (effective values)
 
-The orchestrator's in-memory state (Symphony §4.1.8) holds the *effective* runtime values resolved at last successful config load, so that hot-reload can swap them atomically:
+The orchestrator's in-memory state (Symphony §4.1.8) holds the _effective_ runtime values resolved at last successful config load, so that hot-reload can swap them atomically:
 
 - `poll_interval_ms` — current effective `polling.interval_ms`
 - `max_concurrent_agents` — current effective `agent.max_concurrent_agents`
@@ -115,7 +117,7 @@ The orchestrator's in-memory state (Symphony §4.1.8) holds the *effective* runt
 - `completed` — set of issue ids (bookkeeping only, not a dispatch gate)
 - `claude_totals` — aggregate `{ input_tokens, output_tokens, total_tokens, seconds_running }`
 - `rate_limits` — latest rate-limit snapshot from agent events
-- `effective_config` — full typed config snapshot (paths, hooks, claude.*, repo.*, server.*, etc.)
+- `effective_config` — full typed config snapshot (paths, hooks, claude._, repo._, server.\*, etc.)
 - `prompt_template` — last-known-good Liquid template
 - `workflow_mtime` — last successful load mtime (used by §6.3 defensive reload)
 
@@ -226,6 +228,7 @@ Failure semantics match Symphony §9.4 verbatim.
 ### 6.3 Hot reload
 
 Watched via `chokidar`. On change:
+
 1. Re-parse front matter and prompt body.
 2. Validate. Invalid → keep last-good `effectiveConfig`, log warning, emit `workflow_reload_failed` log event. Service does not crash.
 3. Valid → atomically swap `effectiveConfig` and `promptTemplate`. Future ticks/dispatches/retries pick up new values.
@@ -242,6 +245,7 @@ Templates MUST preserve nested arrays/maps (`issue.labels`, `issue.blocked_by`) 
 ### 6.5 Repo extension semantics
 
 When `repo.url` is present:
+
 1. On first run, dalang clones `repo.url` as a bare repo under `<workspace.root>/.repo.git` — this is the **shared clone**. Subsequent runs reuse it.
 2. On workspace creation for issue `<id>` (workspace path does not yet exist):
    - Compute branch name `<branch_prefix><sanitized_identifier>`.
@@ -302,7 +306,7 @@ When `repo.*` is **absent**, dalang's workspace manager only ensures the directo
    - `fetchIssuesByStates(states)` — used by startup terminal cleanup
    - `fetchIssueStatesByIds(ids)` — used by reconciliation
    - `fetchIssue(id)` — detail, used by agent context if needed
-   Auth header: `Authorization: Bearer <api_key>` if set. Network timeout 30 s. Pagination via `?cursor=`.
+     Auth header: `Authorization: Bearer <api_key>` if set. Network timeout 30 s. Pagination via `?cursor=`.
 
 4. **Orchestrator** — owns the poll loop and the single source of truth for scheduling state. All mutations go through one async event channel (a TS async generator or a mailbox-style queue) to avoid the shared-mutable-state bug surface. Tracks `running`, `claimed`, `retry_attempts`, `completed`, `claude_totals`, `rate_limits`.
 
@@ -359,6 +363,7 @@ Symphony §8 verbatim. Tick sequence:
 **Concurrency counting (Symphony §8.3):** for the per-state limit, the orchestrator counts issues by their **current tracked state in the `running` map** (which is updated by reconciliation each tick). State keys are normalized to lowercase before lookup in `agent.max_concurrent_agents_by_state`; entries without an override fall back to the global `max_concurrent_agents` limit.
 
 Retry/backoff:
+
 - Continuation retry after clean worker exit: 1000 ms fixed.
 - Failure retry: `delay = min(10000 * 2^(attempt - 1), agent.max_retry_backoff_ms)`.
 - **Before scheduling a retry, the orchestrator MUST cancel any existing retry timer for the same `issue_id`** (Symphony §8.4) to prevent stacked timers and double-dispatch.
@@ -374,11 +379,11 @@ Startup terminal cleanup: `fetchIssuesByStates(terminal_states)`, remove each co
 import { query } from "@anthropic-ai/claude-agent-sdk";
 
 const result = query({
-  prompt: renderedPrompt,                       // first turn only; continuations omit this
+  prompt: renderedPrompt, // first turn only; continuations omit this
   options: {
-    cwd: workspace.path,                        // MUST equal workspace_path
+    cwd: workspace.path, // MUST equal workspace_path
     permissionMode: config.claude.permissionMode, // default "auto"
-    model: config.claude.model,                 // "claude-opus-4-7"
+    model: config.claude.model, // "claude-opus-4-7"
     abortSignal: controller.signal,
     // SDK uses subscription auth automatically when ANTHROPIC_API_KEY is unset.
   },
@@ -390,6 +395,7 @@ for await (const msg of result) {
 ```
 
 The orchestrator MUST:
+
 - Validate `cwd === workspace_path` immediately before invoking `query()`.
 - Validate `workspace_path` is a subpath of `workspace.root` (normalized absolute).
 - Reject and fail the attempt if either invariant fails.
@@ -408,12 +414,13 @@ The orchestrator MUST:
 ```ts
 let turn = 1;
 while (true) {
-  const prompt = turn === 1
-    ? renderedPrompt
-    : continuationGuidance(issue, turn, max_turns);
+  const prompt = turn === 1 ? renderedPrompt : continuationGuidance(issue, turn, max_turns);
 
   const result = await runOneTurn({ prompt, session, abortSignal });
-  if (!result.success) { fail(result.reason); break; }
+  if (!result.success) {
+    fail(result.reason);
+    break;
+  }
 
   const refreshed = await tracker.fetchIssueStatesByIds([issue.id]);
   if (!refreshed.length) break;
@@ -432,31 +439,31 @@ After exit, orchestrator schedules a 1 s continuation retry per Symphony §7.1.
 
 The agent runner translates SDK message types into Symphony-style runtime events forwarded to the orchestrator:
 
-| SDK event / condition                      | Emitted runtime event                 |
-| ------------------------------------------ | ------------------------------------- |
-| First system/init message                  | `session_started`                     |
-| Session startup error (pre-first-turn)     | `startup_failed`                      |
-| `assistant` text chunk                     | `notification` (truncated)            |
-| `tool_use`                                 | `notification`                        |
-| `tool_result`                              | `notification`                        |
-| `result` (turn end, success)               | `turn_completed` (with usage)         |
-| `result` (turn end, error subtype)         | `turn_ended_with_error`               |
-| Abort due to stall/reconcile               | `turn_cancelled`                      |
-| SDK transport/protocol error mid-turn      | `turn_failed`                         |
-| Subprocess exit before turn end            | `turn_failed` (reason: subprocess_exit) |
-| Permission auto-approved (auto-mode)       | `approval_auto_approved` (notification) |
-| Permission auto-denied (auto-mode)         | `approval_auto_denied` (notification) |
-| User-input-required signal                 | `turn_input_required` → run failed (§10.5) |
-| Unsupported tool call                      | `unsupported_tool_call`               |
-| Other recognized SDK message               | `other_message`                       |
-| Malformed/unparsable SDK message           | `malformed`                           |
+| SDK event / condition                  | Emitted runtime event                      |
+| -------------------------------------- | ------------------------------------------ |
+| First system/init message              | `session_started`                          |
+| Session startup error (pre-first-turn) | `startup_failed`                           |
+| `assistant` text chunk                 | `notification` (truncated)                 |
+| `tool_use`                             | `notification`                             |
+| `tool_result`                          | `notification`                             |
+| `result` (turn end, success)           | `turn_completed` (with usage)              |
+| `result` (turn end, error subtype)     | `turn_ended_with_error`                    |
+| Abort due to stall/reconcile           | `turn_cancelled`                           |
+| SDK transport/protocol error mid-turn  | `turn_failed`                              |
+| Subprocess exit before turn end        | `turn_failed` (reason: subprocess_exit)    |
+| Permission auto-approved (auto-mode)   | `approval_auto_approved` (notification)    |
+| Permission auto-denied (auto-mode)     | `approval_auto_denied` (notification)      |
+| User-input-required signal             | `turn_input_required` → run failed (§10.5) |
+| Unsupported tool call                  | `unsupported_tool_call`                    |
+| Other recognized SDK message           | `other_message`                            |
+| Malformed/unparsable SDK message       | `malformed`                                |
 
 **Token accounting (Symphony §13.5):** the SDK's per-turn `result.usage` reports usage for that single turn (it is **not** a cumulative thread total). dalang therefore uses **additive accumulation**, not delta-against-last-reported:
 
 ```ts
-state.claude_totals.input_tokens  += result.usage.input_tokens  ?? 0;
+state.claude_totals.input_tokens += result.usage.input_tokens ?? 0;
 state.claude_totals.output_tokens += result.usage.output_tokens ?? 0;
-state.claude_totals.total_tokens  += result.usage.total_tokens  ?? 0;
+state.claude_totals.total_tokens += result.usage.total_tokens ?? 0;
 ```
 
 The `last_reported_*` LiveSession fields from Symphony §4.1.6 are kept in the model for compatibility and future-proofing (e.g., if a future SDK exposes a cumulative-total event), but in v1 they hold the most recent turn's totals only and do not participate in `claude_totals` aggregation. Generic `usage` maps from non-`result` events MUST NOT be treated as cumulative totals.
@@ -507,7 +514,7 @@ interface NormalizedIssue {
   state: string;
   branch_name: string | null;
   url: string | null;
-  labels: string[];          // normalized lowercase
+  labels: string[]; // normalized lowercase
   blocked_by: { id: string | null; identifier: string | null; state: string | null }[];
   created_at: string | null; // ISO-8601
   updated_at: string | null; // ISO-8601
@@ -548,6 +555,7 @@ Symphony §13.7 verbatim, mounted on `Bun.serve`.
 - `POST /api/v1/refresh` — queues an immediate poll+reconcile cycle; coalesces concurrent calls; 202 with operation summary.
 
 **Universal API conventions (Symphony §13.7):**
+
 - Unsupported HTTP methods on defined routes return `405 Method Not Allowed`.
 - All API errors use the JSON envelope `{error: {code: string, message: string}}`.
 - API endpoints are read-only except for the explicit `POST /api/v1/refresh` operational trigger.
@@ -565,6 +573,7 @@ Categories (Symphony §14.1 + §10.6, renamed):
 - **Observability:** `snapshot_timeout`, `snapshot_unavailable`.
 
 Recovery (Symphony §14.2 verbatim):
+
 - Dispatch validation fail → skip new dispatches, keep service alive, continue reconciliation.
 - Worker fail → schedule backoff retry.
 - Tracker candidate-fetch fail → skip tick.
@@ -725,25 +734,25 @@ Mapped from Symphony §17.
 
 Concise list for review/audit:
 
-| # | Item                                                | Type           |
-| - | --------------------------------------------------- | -------------- |
-| 1 | Codex app-server → Claude Agent SDK (in-process)    | Substitution   |
-| 2 | Linear → wayang (REST adapter)                      | Substitution   |
-| 3 | `codex.*` block → `claude.*` block (`executable_path`, `model`, `permission_mode`, timeouts) | Substitution |
-| 4 | `repo.*` extension block (worktree convenience)     | Addition       |
-| 5 | `permission_mode: auto` as committed default; `acceptEdits` rejected in v1 | Tightening |
-| 5b | Token accounting is additive (per-turn `result.usage` sum) instead of delta-against-cumulative-totals (Symphony §13.5 model assumes a thread-cumulative source the SDK does not expose) | Substitution |
-| 5c | `tracker.board` reserved as the project_slug analogue; not preflight-validated in v1 | Reduction (v1) |
-| 6 | `max_concurrent_agents` default 10 → 4              | Tightening     |
-| 7 | Default `tracker.endpoint` → `http://localhost:3001`| Tightening     |
-| 8 | HTTP server is shipped in v1 (Symphony marks OPTIONAL) | Tightening |
-| 9 | No tmux integration                                 | Reduction (v1) |
-| 10 | No SSH worker pool                                 | Reduction (v1) |
-| 11 | No persistence layer                               | Reduction (v1) |
-| 12 | No `linear_graphql` tool extension                 | Reduction (v1) |
-| 13 | Single tracker adapter only (no pluggability)      | Reduction (v1) |
-| 14 | Branch convention `<prefix><sanitized_id>`         | House style    |
-| 15 | Harness rules: tsgo, oxlint, oxfmt, bun test, no RTL | House style  |
+| #   | Item                                                                                                                                                                                    | Type           |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| 1   | Codex app-server → Claude Agent SDK (in-process)                                                                                                                                        | Substitution   |
+| 2   | Linear → wayang (REST adapter)                                                                                                                                                          | Substitution   |
+| 3   | `codex.*` block → `claude.*` block (`executable_path`, `model`, `permission_mode`, timeouts)                                                                                            | Substitution   |
+| 4   | `repo.*` extension block (worktree convenience)                                                                                                                                         | Addition       |
+| 5   | `permission_mode: auto` as committed default; `acceptEdits` rejected in v1                                                                                                              | Tightening     |
+| 5b  | Token accounting is additive (per-turn `result.usage` sum) instead of delta-against-cumulative-totals (Symphony §13.5 model assumes a thread-cumulative source the SDK does not expose) | Substitution   |
+| 5c  | `tracker.board` reserved as the project_slug analogue; not preflight-validated in v1                                                                                                    | Reduction (v1) |
+| 6   | `max_concurrent_agents` default 10 → 4                                                                                                                                                  | Tightening     |
+| 7   | Default `tracker.endpoint` → `http://localhost:3001`                                                                                                                                    | Tightening     |
+| 8   | HTTP server is shipped in v1 (Symphony marks OPTIONAL)                                                                                                                                  | Tightening     |
+| 9   | No tmux integration                                                                                                                                                                     | Reduction (v1) |
+| 10  | No SSH worker pool                                                                                                                                                                      | Reduction (v1) |
+| 11  | No persistence layer                                                                                                                                                                    | Reduction (v1) |
+| 12  | No `linear_graphql` tool extension                                                                                                                                                      | Reduction (v1) |
+| 13  | Single tracker adapter only (no pluggability)                                                                                                                                           | Reduction (v1) |
+| 14  | Branch convention `<prefix><sanitized_id>`                                                                                                                                              | House style    |
+| 15  | Harness rules: tsgo, oxlint, oxfmt, bun test, no RTL                                                                                                                                    | House style    |
 
 ## 19. Open Questions / Future Work
 

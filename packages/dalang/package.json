@@ -1,0 +1,13 @@
+{
+  "name": "@tok-juara/dalang",
+  "private": true,
+  "bin": {
+    "dalang": "./src/index.ts"
+  },
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "test": "bun test"
+  }
+}
