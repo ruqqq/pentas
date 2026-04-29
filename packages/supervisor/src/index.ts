@@ -11,6 +11,29 @@ interface ParsedArgs {
   dbPath: string | undefined;
 }
 
+const HELP_TEXT = `tok-juara supervisor — runs dalang orchestrator and wayang tracker together.
+
+Usage:
+  supervisor [WORKFLOW] [options]
+
+Arguments:
+  WORKFLOW                 Path to WORKFLOW.md (default: ./WORKFLOW.md).
+                           Also accepted via --workflow <path>.
+
+Options:
+  --workflow <path>        Path to WORKFLOW.md (overrides positional).
+  --dalang-port <port>     Port for dalang HTTP surface (0 = auto-pick, default: 0).
+  --wayang-port <port>     Port for wayang HTTP surface (0 = auto-pick, default: 0).
+  --db <path>              Path to wayang sqlite db (default: <workflow dir>/wayang.db,
+                           or $WAYANG_DB_PATH if set).
+  -h, --help               Show this help and exit.
+
+Environment:
+  WAYANG_API_TOKEN         Shared token between dalang and wayang. Auto-generated
+                           per run if unset.
+  WAYANG_DB_PATH           Default db path when --db is not provided.
+`;
+
 function parseArgs(argv: string[]): ParsedArgs {
   let workflowPath: string | null = null;
   let dalangPort: number | null = null;
@@ -23,7 +46,10 @@ function parseArgs(argv: string[]): ParsedArgs {
       if (v === undefined) throw new Error(`${flag} requires a value`);
       return v;
     };
-    if (a === "--dalang-port") {
+    if (a === "-h" || a === "--help") {
+      process.stdout.write(HELP_TEXT);
+      process.exit(0);
+    } else if (a === "--dalang-port") {
       const n = Number.parseInt(need("--dalang-port"), 10);
       if (!Number.isInteger(n) || n < 0) throw new Error("invalid --dalang-port");
       dalangPort = n;
