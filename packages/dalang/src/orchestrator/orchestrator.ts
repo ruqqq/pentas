@@ -11,6 +11,7 @@ import { WorkspaceManager } from "../workspace/workspace-manager";
 import { GitWorktreeManager } from "../workspace/git-worktree";
 import { runHook } from "../workspace/hooks";
 import { runAttempt, type RunQuery } from "../agent/agent-runner";
+import { transcriptPathFor } from "../agent/transcript";
 import { expandPath } from "../config/env-resolver";
 import { resolveEnvValue } from "../config/env-resolver";
 import { createLogger, type Logger } from "../logging/logger";
@@ -130,6 +131,16 @@ export class Orchestrator {
       retry_attempt: attempt, session: null,
     };
     addRunning(this.state, issue.id, entry);
+    this.log.info(
+      {
+        issue_id: issue.id,
+        identifier: issue.identifier,
+        state: issue.state,
+        workspace_path: entry.workspace_path,
+        retry_attempt: attempt,
+      },
+      "task picked up",
+    );
     const work = this.runWorker(issue, attempt, controller).catch((err) => {
       this.log.error({ issue_id: issue.id, err: (err as Error).message }, "worker crashed");
     });
@@ -200,6 +211,15 @@ export class Orchestrator {
         if (e.thread_id && entry.session.thread_id !== e.thread_id) {
           entry.session.thread_id = e.thread_id;
           entry.session.session_id = `${e.thread_id}-1`;
+          this.log.info(
+            {
+              issue_id: issue.id,
+              identifier: issue.identifier,
+              session_id: entry.session.session_id,
+              transcript_path: transcriptPathFor(entry.workspace_path, e.thread_id),
+            },
+            "session started",
+          );
         }
         entry.session.last_event = e.event;
         entry.session.last_event_at = e.timestamp;
@@ -217,6 +237,15 @@ export class Orchestrator {
 
     if (result.success) {
       this.state.completed.add(issue.id);
+      this.log.info(
+        {
+          issue_id: issue.id,
+          identifier: issue.identifier,
+          turn_count: result.turn_count,
+          tokens: result.tokens,
+        },
+        "task completed",
+      );
       scheduleRetry(this.state, {
         issue_id: issue.id, identifier: issue.identifier,
         attempt: 1, delayMs: CONTINUATION_RETRY_MS, error: null,
@@ -225,6 +254,16 @@ export class Orchestrator {
     } else {
       const nextAttempt = (attempt ?? 0) + 1;
       const delay = computeBackoffMs(nextAttempt, this.cfg.agent.max_retry_backoff_ms);
+      this.log.warn(
+        {
+          issue_id: issue.id,
+          identifier: issue.identifier,
+          reason: result.reason ?? "worker_failed",
+          next_attempt: nextAttempt,
+          retry_in_ms: delay,
+        },
+        "task failed; scheduling retry",
+      );
       scheduleRetry(this.state, {
         issue_id: issue.id, identifier: issue.identifier,
         attempt: nextAttempt, delayMs: delay, error: result.reason ?? "worker_failed",
