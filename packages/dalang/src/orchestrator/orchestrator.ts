@@ -9,7 +9,7 @@ import { scheduleRetry, computeBackoffMs, releaseClaim, CONTINUATION_RETRY_MS } 
 import { detectStalls, classifyTrackerRefresh } from "./reconcile";
 import { WorkspaceManager } from "../workspace/workspace-manager";
 import { GitWorktreeManager } from "../workspace/git-worktree";
-import { runHook } from "../workspace/hooks";
+import { runHook, truncateLogged } from "../workspace/hooks";
 import { runAttempt, type RunQuery } from "../agent/agent-runner";
 import { transcriptPathFor } from "../agent/transcript";
 import { expandPath } from "../config/env-resolver";
@@ -166,12 +166,16 @@ export class Orchestrator {
       ATTEMPT: attempt === null ? "" : String(attempt),
     };
     if (ws.created_now && this.cfg.hooks.after_create) {
-      await runHook({ name: "after_create", script: this.cfg.hooks.after_create, cwd, env, timeoutMs: this.cfg.hooks.timeout_ms });
+      await this.runHookLogged("after_create", this.cfg.hooks.after_create, cwd, env, issue);
     }
     if (this.cfg.hooks.before_run) {
-      await runHook({ name: "before_run", script: this.cfg.hooks.before_run, cwd, env, timeoutMs: this.cfg.hooks.timeout_ms });
+      await this.runHookLogged("before_run", this.cfg.hooks.before_run, cwd, env, issue);
     }
 
+    this.log.info(
+      { issue_id: issue.id, identifier: issue.identifier, workspace_path: cwd, attempt },
+      "spawning agent",
+    );
     const result = await runAttempt({
       issue, attempt,
       promptTemplate: this.promptTemplate,
@@ -234,8 +238,7 @@ export class Orchestrator {
 
     accumulateTokens(this.state, result.tokens);
     if (this.cfg.hooks.after_run) {
-      await runHook({ name: "after_run", script: this.cfg.hooks.after_run, cwd, env, timeoutMs: this.cfg.hooks.timeout_ms })
-        .catch(() => {});
+      await this.runHookLogged("after_run", this.cfg.hooks.after_run, cwd, env, issue).catch(() => {});
     }
     removeRunning(this.state, issue.id);
 
@@ -322,11 +325,46 @@ export class Orchestrator {
       ATTEMPT: "",
     };
     if (this.cfg.hooks.before_remove) {
-      await runHook({ name: "before_remove", script: this.cfg.hooks.before_remove, cwd, env, timeoutMs: this.cfg.hooks.timeout_ms })
-        .catch(() => {});
+      await this.runHookLogged("before_remove", this.cfg.hooks.before_remove, cwd, env, entry.issue).catch(() => {});
     }
     if (this.worktrees) await this.worktrees.removeWorktree(cwd);
     else await this.workspaces.removeWorkspace(entry.issue.identifier);
+  }
+
+  private async runHookLogged(
+    name: "after_create" | "before_run" | "after_run" | "before_remove",
+    script: string,
+    cwd: string,
+    env: Record<string, string>,
+    issue: NormalizedIssue,
+  ): Promise<void> {
+    const startedAt = Date.now();
+    this.log.info(
+      { hook: name, issue_id: issue.id, identifier: issue.identifier, cwd },
+      "running hook",
+    );
+    const result = await runHook({ name, script, cwd, env, timeoutMs: this.cfg.hooks.timeout_ms });
+    const duration_ms = Date.now() - startedAt;
+    if (result.skipped) return;
+    if (result.ok) {
+      this.log.info(
+        { hook: name, issue_id: issue.id, identifier: issue.identifier, duration_ms },
+        "hook completed",
+      );
+    } else {
+      this.log.warn(
+        {
+          hook: name,
+          issue_id: issue.id,
+          identifier: issue.identifier,
+          duration_ms,
+          exit_code: result.exitCode ?? null,
+          timed_out: result.timedOut ?? false,
+          stderr: result.stderr ? truncateLogged(result.stderr) : undefined,
+        },
+        "hook failed",
+      );
+    }
   }
 
   /** Used by tests to await all background workers spawned during a tick. */
