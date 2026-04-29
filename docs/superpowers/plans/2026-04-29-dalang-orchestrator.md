@@ -10,6 +10,8 @@
 
 **Spec reference:** `docs/superpowers/specs/2026-04-29-dalang-orchestrator-design.md`. Section numbers below (e.g. §10.4) refer to that spec.
 
+**Plan ordering:** the **wayang implementation plan owns the monorepo skeleton** — root `package.json` with `workspaces`, `tsconfig.base.json`, `oxlint.json`, `.oxfmtrc`, `bunfig.toml`, `.gitignore`, top-level scripts, and the `wayang` package. Run wayang's plan first (or at least its bootstrap task), or set up that skeleton manually. This plan's Task 1 is a sanity check that gap-fills only what's missing, then adds the `dalang` package on top.
+
 ---
 
 ## File Structure
@@ -70,20 +72,34 @@ The repo root `package.json`, `tsconfig.base.json`, etc. are created in Task 1.
 
 ## Phase A — Bootstrap (Tasks 1–2)
 
-### Task 1: Initialize bun workspace, lint, format, typecheck
+### Task 1: Sanity-check monorepo setup and add the `dalang` package
+
+> **Ownership note:** The monorepo skeleton (root `package.json` with `workspaces`, `tsconfig.base.json`, `oxlint.json`, `.oxfmtrc`, `bunfig.toml`, `.gitignore`, top-level scripts `typecheck` / `lint` / `format` / `test`, and the `wayang` package) is owned by the **wayang implementation plan** and should already be in place when this plan runs. Dalang only adds its own package and fills any gaps it actually needs.
 
 **Files:**
-- Create: `package.json` (root)
-- Create: `tsconfig.base.json`
-- Create: `oxlint.json`
-- Create: `.oxfmtrc`
-- Create: `bunfig.toml`
-- Create: `.gitignore`
+- Verify (do not overwrite if present): `package.json`, `tsconfig.base.json`, `oxlint.json`, `.oxfmtrc`, `bunfig.toml`, `.gitignore`
+- Create only if missing: any of the above (gap-fill)
 - Create: `packages/dalang/package.json`
 - Create: `packages/dalang/tsconfig.json`
 - Create: `packages/dalang/src/index.ts` (placeholder)
 
-- [ ] **Step 1: Create root `package.json`**
+- [ ] **Step 1: Sanity-check the monorepo root**
+
+Run:
+```bash
+test -f package.json && cat package.json | grep -q '"workspaces"' && echo "OK: workspaces" || echo "MISSING: workspaces"
+test -f tsconfig.base.json && echo "OK: tsconfig.base.json" || echo "MISSING: tsconfig.base.json"
+test -f oxlint.json        && echo "OK: oxlint.json"        || echo "MISSING: oxlint.json"
+test -f .oxfmtrc           && echo "OK: .oxfmtrc"           || echo "MISSING: .oxfmtrc"
+test -f bunfig.toml        && echo "OK: bunfig.toml"        || echo "MISSING: bunfig.toml"
+test -f .gitignore         && echo "OK: .gitignore"         || echo "MISSING: .gitignore"
+```
+
+If everything reports `OK`, skip steps 2–7 and go to step 8. Otherwise, gap-fill only the missing files using the templates in steps 2–7.
+
+- [ ] **Step 2: Gap-fill root `package.json` (only if missing)**
+
+If absent, create with the following content. If present but lacking the `workspaces` field or one of the scripts (`typecheck`, `lint`, `format`, `format:check`, `test`), edit it to add what's missing — do not replace fields wayang already set.
 
 ```json
 {
@@ -107,7 +123,7 @@ The repo root `package.json`, `tsconfig.base.json`, etc. are created in Task 1.
 }
 ```
 
-- [ ] **Step 2: Create `tsconfig.base.json`**
+- [ ] **Step 3: Gap-fill `tsconfig.base.json` (only if missing)**
 
 ```json
 {
@@ -132,7 +148,7 @@ The repo root `package.json`, `tsconfig.base.json`, etc. are created in Task 1.
 }
 ```
 
-- [ ] **Step 3: Create `oxlint.json`**
+- [ ] **Step 4: Gap-fill `oxlint.json` (only if missing)**
 
 ```json
 {
@@ -145,7 +161,7 @@ The repo root `package.json`, `tsconfig.base.json`, etc. are created in Task 1.
 }
 ```
 
-- [ ] **Step 4: Create `.oxfmtrc`**
+- [ ] **Step 5: Gap-fill `.oxfmtrc` (only if missing)**
 
 ```json
 {
@@ -155,7 +171,7 @@ The repo root `package.json`, `tsconfig.base.json`, etc. are created in Task 1.
 }
 ```
 
-- [ ] **Step 5: Create `bunfig.toml`**
+- [ ] **Step 6: Gap-fill `bunfig.toml` (only if missing)**
 
 ```toml
 [install]
@@ -165,7 +181,9 @@ exact = true
 preload = []
 ```
 
-- [ ] **Step 6: Create `.gitignore`**
+- [ ] **Step 7: Gap-fill `.gitignore` (append-only — do NOT overwrite if it exists)**
+
+If `.gitignore` is missing, create it with the block below. If it exists, append any of these lines that are missing — do not duplicate or remove wayang-owned entries.
 
 ```
 node_modules/
@@ -178,7 +196,7 @@ dist/
 .env.local
 ```
 
-- [ ] **Step 7: Create `packages/dalang/package.json`**
+- [ ] **Step 8: Create `packages/dalang/package.json`**
 
 ```json
 {
@@ -208,7 +226,7 @@ dist/
 }
 ```
 
-- [ ] **Step 8: Create `packages/dalang/tsconfig.json`**
+- [ ] **Step 9: Create `packages/dalang/tsconfig.json`**
 
 ```json
 {
@@ -217,27 +235,37 @@ dist/
 }
 ```
 
-- [ ] **Step 9: Create `packages/dalang/src/index.ts` placeholder**
+- [ ] **Step 10: Create `packages/dalang/src/index.ts` placeholder**
 
 ```ts
 console.log("dalang scaffold");
 ```
 
-- [ ] **Step 10: Install dependencies**
+- [ ] **Step 11: Install dependencies**
 
 Run: `bun install`
-Expected: success, lockfile created.
+Expected: success; lockfile updated to include dalang's deps.
 
-- [ ] **Step 11: Verify toolchain**
+- [ ] **Step 12: Verify toolchain**
 
 Run: `bun run typecheck && bun run lint && bun run format:check`
-Expected: all three pass with no errors.
+Expected: all three pass with no errors. (Wayang's existing package is also covered by these workspace-wide scripts; if wayang is failing one of them, fix wayang separately — do not work around it here.)
 
-- [ ] **Step 12: Commit**
+- [ ] **Step 13: Commit**
+
+Stage only the dalang package and any genuinely new gap-fill files. Do **not** restage existing wayang-owned files even if their mtime changed.
 
 ```bash
-git add package.json tsconfig.base.json oxlint.json .oxfmtrc bunfig.toml .gitignore bun.lock packages/dalang/
-git commit -m "chore: scaffold bun workspace with dalang package and harness"
+# Always:
+git add packages/dalang/
+
+# Conditionally — only files you created in steps 2–7 because they were missing:
+# git add package.json tsconfig.base.json oxlint.json .oxfmtrc bunfig.toml .gitignore
+
+# If bun install touched the lockfile:
+git add bun.lock
+
+git commit -m "feat(dalang): scaffold dalang package and verify monorepo harness"
 ```
 
 ---
@@ -4640,7 +4668,7 @@ Run after the plan is committed:
 
 | #  | Task                                                  |
 | -- | ----------------------------------------------------- |
-| 1  | Initialize bun workspace, lint, format, typecheck     |
+| 1  | Sanity-check monorepo setup and add the `dalang` package |
 | 2  | Define core domain types                              |
 | 3  | Workspace key sanitization                            |
 | 4  | Env and path resolver                                 |
