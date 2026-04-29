@@ -1,7 +1,16 @@
 import { URLPattern } from "urlpattern-polyfill";
 import type { Route } from "../api/server";
+import styleCss from "./public/style.css" with { type: "file" };
+import htmxJs from "./public/htmx.min.js" with { type: "file" };
+import sseJs from "./public/sse.js" with { type: "file" };
 
-const ROOT = new URL("./public/", import.meta.url);
+// Embedded so the compiled supervisor binary ships these assets. Keys are the
+// public URL suffix (after /static/); values are the bundler-rewritten paths.
+const ASSETS: Record<string, string> = {
+  "style.css": styleCss,
+  "htmx.min.js": htmxJs,
+  "sse.js": sseJs,
+};
 
 export function staticRoute(): Route {
   return {
@@ -9,8 +18,9 @@ export function staticRoute(): Route {
     pattern: new URLPattern({ pathname: "/static/:rest+" }),
     handler: async (_req, match) => {
       const rel = match.pathname.groups.rest!;
-      if (rel.includes("..")) return new Response("Not Found", { status: 404 });
-      const file = Bun.file(new URL(rel, ROOT).pathname);
+      const path = ASSETS[rel];
+      if (path === undefined) return new Response("Not Found", { status: 404 });
+      const file = Bun.file(path);
       if (!(await file.exists())) return new Response("Not Found", { status: 404 });
       return new Response(file);
     },
