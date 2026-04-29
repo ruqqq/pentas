@@ -4,30 +4,53 @@ import { getIssuesByStates, getIssueById, createIssue } from "../db/repo/issues"
 import { listComments } from "../db/repo/comments";
 import { listHistory } from "../db/repo/history";
 import { addHistory } from "../db/repo/history";
-import { renderListPage } from "./pages/list";
+import { renderBoardPage, renderBoardGrid } from "./pages/board";
 import { renderDetailPage } from "./pages/detail";
 import { renderNewPage } from "./pages/new";
-import { ACTIVE_STATES } from "../domain/issue";
+import { ALL_STATES } from "../domain/issue";
 import { parseLinearUrl } from "../lib/linear-url";
 
-export function uiListRoute(): Route {
+const BOARD_LIMIT = 200;
+
+function loadBoardIssues(
+  db: Parameters<typeof getIssuesByStates>[0],
+  q: string,
+) {
+  const { issues } = getIssuesByStates(db, ALL_STATES as readonly string[] as string[], null, BOARD_LIMIT);
+  if (!q) return issues;
+  const needle = q.toLowerCase();
+  return issues.filter(
+    (i) =>
+      i.title.toLowerCase().includes(needle) ||
+      (i.description ?? "").toLowerCase().includes(needle) ||
+      i.identifier.toLowerCase().includes(needle),
+  );
+}
+
+export function uiBoardRoute(): Route {
   return {
     method: "GET",
     pattern: new URLPattern({ pathname: "/" }),
     handler: (req, _match, { db }) => {
       const url = new URL(req.url);
-      const selected = url.searchParams.getAll("state");
-      const states = selected.length > 0 ? selected : (ACTIVE_STATES as readonly string[]).slice();
       const q = url.searchParams.get("q") ?? "";
-      const { issues } = getIssuesByStates(db, states, null, 200);
-      const filtered = q
-        ? issues.filter(
-            (i) =>
-              i.title.toLowerCase().includes(q.toLowerCase()) ||
-              (i.description ?? "").toLowerCase().includes(q.toLowerCase()),
-          )
-        : issues;
-      return new Response(renderListPage({ issues: filtered, selectedStates: states, q }), {
+      const issues = loadBoardIssues(db, q);
+      return new Response(renderBoardPage({ issues, q }), {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    },
+  };
+}
+
+export function uiBoardPartialRoute(): Route {
+  return {
+    method: "GET",
+    pattern: new URLPattern({ pathname: "/partials/board" }),
+    handler: (req, _match, { db }) => {
+      const url = new URL(req.url);
+      const q = url.searchParams.get("q") ?? "";
+      const issues = loadBoardIssues(db, q);
+      return new Response(renderBoardGrid({ issues, q }), {
         headers: { "content-type": "text/html; charset=utf-8" },
       });
     },

@@ -14,7 +14,7 @@ import { commentsListRoute, commentsCreateRoute } from "./api/routes/comments";
 import { historyListRoute } from "./api/routes/history";
 import { eventsRoute } from "./api/routes/events";
 import { staticRoute } from "./ui/static";
-import { uiListRoute, uiDetailRoute, uiNewRoute, uiCreatePostRoute } from "./ui/routes";
+import { uiBoardRoute, uiBoardPartialRoute, uiDetailRoute, uiNewRoute, uiCreatePostRoute } from "./ui/routes";
 
 export interface RunOptions {
   port?: number;
@@ -49,8 +49,9 @@ export function runWayang(opts: RunOptions = {}) {
     issuesDetailRoute(),
     uiCreatePostRoute(),
     uiNewRoute(),
+    uiBoardPartialRoute(),
     uiDetailRoute(),
-    uiListRoute(),
+    uiBoardRoute(),
     staticRoute(),
   ]);
 
