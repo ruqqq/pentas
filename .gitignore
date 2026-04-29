@@ -9,3 +9,11 @@ dist/
 ~/.dalang/
 ~/.wayang/
 .bun/
+
+# Accidental tsc/tsgo emit; sources are .ts and emitted .js next to a .ts is junk.
+# Keep static UI assets under public/.
+packages/*/src/**/*.js
+packages/*/tests/**/*.js
+packages/*/src/**/*.js.map
+packages/*/src/**/*.d.ts.map
+!packages/wayang/src/ui/public/**
