@@ -5,7 +5,10 @@
     "wayang": "./src/index.ts"
   },
   "type": "module",
-  "main": "./src/index.ts",
+  "main": "./src/lib.ts",
+  "exports": {
+    ".": "./src/lib.ts"
+  },
   "scripts": {
     "start": "bun run src/index.ts",
     "test": "bun test",

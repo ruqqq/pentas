@@ -1,4 +1,8 @@
 import type { Database } from "bun:sqlite";
+import type { URLPattern as PolyfillURLPattern } from "urlpattern-polyfill";
+
+type URLPatternInstance = InstanceType<typeof PolyfillURLPattern>;
+type URLPatternResult = NonNullable<ReturnType<URLPatternInstance["exec"]>>;
 import { authMiddleware } from "./auth";
 import { EventBus } from "../lib/sse";
 
@@ -24,7 +28,7 @@ export type RouteHandler = (
 
 export interface Route {
   method: string;
-  pattern: URLPattern;
+  pattern: URLPatternInstance;
   handler: RouteHandler;
 }
 

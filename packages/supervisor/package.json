@@ -1,0 +1,22 @@
+{
+  "name": "@tok-juara/supervisor",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "bin": {
+    "tok-juara": "src/index.ts"
+  },
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "test": "bun test",
+    "typecheck": "bunx --bun tsgo --noEmit"
+  },
+  "dependencies": {
+    "@tok-juara/dalang": "workspace:*",
+    "@tok-juara/wayang": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

@@ -10,7 +10,8 @@
     "typecheck": "bun run --filter='*' typecheck",
     "lint": "oxlint",
     "format": "oxfmt .",
-    "format:check": "bunx --bun oxfmt --check ."
+    "format:check": "bunx --bun oxfmt --check .",
+    "build": "bun build packages/supervisor/src/index.ts --compile --target=bun --outfile=dist/tok-juara"
   },
   "devDependencies": {
     "@types/bun": "^1.3.13",

@@ -29,6 +29,20 @@
         "@types/bun": "latest",
       },
     },
+    "packages/supervisor": {
+      "name": "@tok-juara/supervisor",
+      "version": "0.0.0",
+      "bin": {
+        "tok-juara": "src/index.ts",
+      },
+      "dependencies": {
+        "@tok-juara/dalang": "workspace:*",
+        "@tok-juara/wayang": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+      },
+    },
     "packages/wayang": {
       "name": "@tok-juara/wayang",
       "bin": {
@@ -173,6 +187,8 @@
     "@pinojs/redact": ["@pinojs/redact@0.4.0", "", {}, "sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg=="],
 
     "@tok-juara/dalang": ["@tok-juara/dalang@workspace:packages/dalang"],
+
+    "@tok-juara/supervisor": ["@tok-juara/supervisor@workspace:packages/supervisor"],
 
     "@tok-juara/wayang": ["@tok-juara/wayang@workspace:packages/wayang"],
 
