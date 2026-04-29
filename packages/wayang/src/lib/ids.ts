@@ -1,7 +1,7 @@
 const ENCODING = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 let lastTime = 0;
-let lastRandom = new Uint8Array(10);
+let lastRandom: Uint8Array = new Uint8Array(10);
 
 function encodeTime(now: number, len: number): string {
   let out = "";

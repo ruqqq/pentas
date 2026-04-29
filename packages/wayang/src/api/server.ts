@@ -60,7 +60,7 @@ export function startServer(opts: ServerOptions, routes: Route[]): RunningServer
 
   return {
     url: server.url.toString(),
-    port: server.port,
+    port: server.port!,
     bus,
     stop: () => server.stop(true),
   };

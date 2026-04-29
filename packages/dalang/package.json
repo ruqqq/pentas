@@ -8,6 +8,7 @@
   "main": "./src/index.ts",
   "scripts": {
     "start": "bun run src/index.ts",
-    "test": "bun test"
+    "test": "bun test",
+    "typecheck": "tsgo --noEmit"
   }
 }
