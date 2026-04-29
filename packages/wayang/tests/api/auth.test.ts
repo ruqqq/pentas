@@ -29,4 +29,9 @@ describe("authMiddleware", () => {
     expect(fn(new Request("http://x/issues/abc"))).toBeNull();
     expect(fn(new Request("http://x/static/style.css"))).toBeNull();
   });
+
+  test("skips /api/v1/events SSE feed (EventSource can't send auth header)", () => {
+    const fn = authMiddleware("s3cret");
+    expect(fn(new Request("http://x/api/v1/events"))).toBeNull();
+  });
 });
