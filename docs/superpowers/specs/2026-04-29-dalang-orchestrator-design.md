@@ -97,9 +97,29 @@ Dalang adopts Symphony's normalized issue, workflow, workspace, run-attempt, liv
 | `codex_totals` (state)     | `claude_totals`             |
 | `codex_rate_limits`        | `rate_limits`               |
 
+All other LiveSession fields are preserved as-is (`last_reported_input_tokens`, `last_reported_output_tokens`, `last_reported_total_tokens`, `turn_count`).
+
 `session_id = "<thread_id>-<turn_id>"` is preserved. `thread_id` maps to the Agent SDK session UUID; `turn_id` is a monotonic per-turn counter within that session.
 
 Workspace key sanitization rule from Symphony §4.2 is preserved: any character not in `[A-Za-z0-9._-]` is replaced with `_`.
+
+### 5.1 Orchestrator runtime state (effective values)
+
+The orchestrator's in-memory state (Symphony §4.1.8) holds the *effective* runtime values resolved at last successful config load, so that hot-reload can swap them atomically:
+
+- `poll_interval_ms` — current effective `polling.interval_ms`
+- `max_concurrent_agents` — current effective `agent.max_concurrent_agents`
+- `running` — map `issue_id → running entry`
+- `claimed` — set of issue ids reserved/running/retrying
+- `retry_attempts` — map `issue_id → RetryEntry`
+- `completed` — set of issue ids (bookkeeping only, not a dispatch gate)
+- `claude_totals` — aggregate `{ input_tokens, output_tokens, total_tokens, seconds_running }`
+- `rate_limits` — latest rate-limit snapshot from agent events
+- `effective_config` — full typed config snapshot (paths, hooks, claude.*, repo.*, server.*, etc.)
+- `prompt_template` — last-known-good Liquid template
+- `workflow_mtime` — last successful load mtime (used by §6.3 defensive reload)
+
+When workflow reload succeeds, all of the above are swapped together. When reload fails, the swap is skipped and the previous values remain effective.
 
 ## 6. WORKFLOW.md Schema
 
@@ -189,7 +209,9 @@ Workflow:
 
 ### 6.2 Hooks contract
 
-Hooks run in `bash -lc <script>` with the workspace as `cwd`. The following env vars are exported:
+Hooks run in `bash -lc <script>` with the workspace as `cwd`. The orchestrator MUST log hook start (with hook name and issue context), and log hook completion, failure, and timeout (Symphony §9.4). Hook stdout/stderr is captured and truncated in logs.
+
+The following env vars are exported:
 
 - `WORKSPACE_PATH` — absolute path to the per-issue workspace
 - `ISSUE_ID` — stable tracker-internal id
@@ -333,6 +355,8 @@ Symphony §8 verbatim. Tick sequence:
    - global slots available, per-state slots available
    - if state == `Todo`: all blockers in terminal state
 6. Notify HTTP/log observers.
+
+**Concurrency counting (Symphony §8.3):** for the per-state limit, the orchestrator counts issues by their **current tracked state in the `running` map** (which is updated by reconciliation each tick). State keys are normalized to lowercase before lookup in `agent.max_concurrent_agents_by_state`; entries without an override fall back to the global `max_concurrent_agents` limit.
 
 Retry/backoff:
 - Continuation retry after clean worker exit: 1000 ms fixed.
@@ -490,6 +514,14 @@ interface NormalizedIssue {
 }
 ```
 
+**Defensive normalization in the dalang adapter (Symphony §11.3):** even though wayang is expected to produce normalized issues, the dalang adapter applies a defensive pass to insulate against tracker-side schema drift:
+
+- `labels` are coerced to lowercase strings; non-string entries are dropped.
+- `priority` is integer-only — non-integer numeric values become `null`, and non-numeric values become `null`.
+- `created_at` / `updated_at` are parsed as ISO-8601; unparseable values become `null`.
+- `blocked_by[]` entries with no `id` and no `identifier` are dropped.
+- Missing required fields (`id`, `identifier`, `title`, `state`) cause the issue to be skipped from the candidate set with a `tracker_malformed_payload` warning.
+
 ### 11.3 Auth
 
 `Authorization: Bearer <tracker.api_key>` if set. v1 supports unauthenticated localhost mode (no header).
@@ -511,9 +543,14 @@ dalang does not call these. Symphony §11.5 boundary is preserved: the orchestra
 Symphony §13.7 verbatim, mounted on `Bun.serve`.
 
 - `GET /` — server-rendered HTML dashboard. Lists running, retrying, recent completions, token totals, rate limits.
-- `GET /api/v1/state` — JSON snapshot per Symphony §13.7.2 example shape.
-- `GET /api/v1/:identifier` — issue detail; 404 with `{error:{code:"issue_not_found"}}` if unknown.
+- `GET /api/v1/state` — JSON snapshot per Symphony §13.7.2 example shape. **Each row in `running[]` MUST include `turn_count`** (per Symphony §13.3 / §13.7.2 example). Snapshot error modes `snapshot_timeout` and `snapshot_unavailable` are surfaced via the error envelope.
+- `GET /api/v1/:identifier` — issue detail; 404 with `{error:{code:"issue_not_found", message:"..."}}` if unknown.
 - `POST /api/v1/refresh` — queues an immediate poll+reconcile cycle; coalesces concurrent calls; 202 with operation summary.
+
+**Universal API conventions (Symphony §13.7):**
+- Unsupported HTTP methods on defined routes return `405 Method Not Allowed`.
+- All API errors use the JSON envelope `{error: {code: string, message: string}}`.
+- API endpoints are read-only except for the explicit `POST /api/v1/refresh` operational trigger.
 
 Bind `127.0.0.1` by default. CLI `--port <n>` overrides `server.port`. Port `0` requests an ephemeral port. Restart-required to change `server.port` (acceptable per §13.7).
 
@@ -523,7 +560,7 @@ Categories (Symphony §14.1 + §10.6, renamed):
 
 - **Workflow/config:** `missing_workflow_file`, `workflow_parse_error`, `workflow_front_matter_not_a_map`, `template_parse_error`, `template_render_error`, `unsupported_tracker_kind`, `missing_tracker_api_key`, `missing_repo_config`.
 - **Workspace:** `workspace_create_error`, `worktree_add_failed`, `hook_failure`, `hook_timeout`, `invalid_workspace_cwd`.
-- **Agent session:** `claude_not_found`, `response_timeout`, `turn_timeout`, `turn_failed`, `turn_cancelled`, `turn_input_required`, `subprocess_exit`.
+- **Agent session:** `claude_not_found`, `response_timeout`, `response_error` (mid-stream protocol/transport error distinct from timeout), `turn_timeout`, `turn_failed`, `turn_ended_with_error`, `turn_cancelled`, `turn_input_required`, `subprocess_exit`, `claude_auth_inactive` (subscription auth probe failed at startup).
 - **Tracker:** `tracker_request_error`, `tracker_status_error`, `tracker_malformed_payload`, `tracker_missing_pagination_cursor`.
 - **Observability:** `snapshot_timeout`, `snapshot_unavailable`.
 
@@ -550,7 +587,9 @@ dalang targets **trusted local environments** (operator's own machine, single-us
 
 - Restrict the `wayang` API to a known issue scope.
 - Run dalang under a dedicated OS user with restricted file access.
-- Use `permission_mode: acceptEdits` only with operator approval UI (not in v1; would degrade to failure on shell commands).
+- Use `permission_mode: bypassPermissions` only on isolated test machines.
+
+**`acceptEdits` is rejected at config validation in v1.** The mode auto-accepts edits but prompts on shell commands, and dalang has no operator UI to satisfy those prompts; runs would stall and then fail. The mode will be re-enabled when an operator approval UI ships.
 
 Hooks are arbitrary shell scripts from `WORKFLOW.md` and are fully trusted. Hook output is truncated in logs.
 
@@ -581,6 +620,7 @@ Mapped from Symphony §17.
   - explicit path used when provided; cwd default otherwise
   - hot reload triggers re-apply
   - invalid reload keeps last-good config and emits warning
+  - **defensive reload**: mtime-changed file is re-loaded at the start of a tick even when no chokidar event was observed
   - missing/invalid YAML returns typed errors
   - defaults applied for missing optional fields
   - `tracker.kind` enforces `tok-juara`
@@ -588,6 +628,10 @@ Mapped from Symphony §17.
   - `~` path expansion
   - prompt renders with `issue` and `attempt`
   - prompt rendering fails on unknown variables/filters
+  - **empty prompt body** triggers `workflow_empty_prompt` and blocks dispatch
+  - prompt template can iterate `issue.labels` and `issue.blocked_by`
+  - `claude.permission_mode: acceptEdits` is rejected at validation
+  - startup `claude` auth probe failure surfaces `claude_auth_inactive`
 - **Workspace manager**
   - deterministic workspace path per identifier
   - sanitization rules
@@ -596,37 +640,54 @@ Mapped from Symphony §17.
   - `before_run` failure aborts attempt
   - `after_run` / `before_remove` failure logged-and-ignored
   - hook timeout enforced
+  - **hook start is logged** before script execution; failures and timeouts also logged
+  - **non-directory path collision** at the workspace location is handled safely (fail with typed error rather than silently overwrite)
   - worktree-add path: branch named from prefix; cleanup uses `git worktree remove`
+  - **worktree path reuse**: existing worktree on retry preserves uncommitted changes
   - non-repo path: workspace is plain mkdir
 - **Tracker adapter**
   - candidate fetch shape and pagination
+  - **`fetchIssuesByStates([])` short-circuits and returns empty without an HTTP call**
   - state-refresh-by-ids shape
-  - normalization (labels lowercased, blockers from inverse relations, priority int-only, ISO-8601 timestamps)
-  - error mapping for transport, status, malformed payloads
+  - defensive normalization (labels lowercased and non-strings dropped, priority int-only, ISO-8601 timestamps, blockers without id+identifier dropped, malformed issues skipped with warning)
+  - error mapping for transport, status, malformed payloads, missing pagination cursor
 - **Orchestrator**
-  - dispatch sort order (priority, created_at, identifier)
+  - dispatch sort order (priority asc nulls last, created_at oldest first, identifier lex)
   - `Todo` blocked-by-non-terminal not eligible
   - `Todo` blocked-by-terminal eligible
-  - reconciliation transitions: terminal → terminate+cleanup, non-active → terminate-no-cleanup, active → update snapshot
+  - **reconciliation with no running issues is a no-op** (no tracker call)
+  - reconciliation transitions:
+    - terminal state → terminate worker + cleanup workspace
+    - non-active state → terminate worker **without** cleanup
+    - active state → update in-memory issue snapshot on the running entry
+  - per-state concurrency counted by current state in `running` map
   - normal exit schedules 1 s continuation retry
   - failure exit schedules backoff retry
+  - **scheduling a new retry cancels any existing retry timer for the same issue**
   - retry cap honored
+  - stall detection uses `last_event_at ?? started_at` as the reference timestamp
   - stall detection aborts and schedules retry
   - slot exhaustion requeues with explicit reason
 - **Agent runner**
   - cwd invariant validated before SDK call
   - first turn uses full prompt; continuation uses guidance only
+  - **first turn prepends `# Working on <identifier>: <title>`** for session metadata
   - `thread_id` reused across continuations
-  - SDK message → runtime event mapping
+  - SDK message → runtime event mapping covers all entries in §10.4 (including `turn_ended_with_error`, `approval_auto_approved`, `approval_auto_denied`, `other_message`, `malformed`)
   - abort propagates to SDK
-  - token accounting deltas correctly
+  - **token accounting is additive** (per-turn `result.usage` summed into `claude_totals`); generic non-`result` `usage` maps are not counted
   - `permission_mode: auto` is the SDK default when unspecified
+  - `acceptEdits` rejected at config validation (not at runtime)
+  - `turn_input_required` signal fails the run rather than stalling
 - **HTTP server**
-  - `/api/v1/state` shape
-  - `/api/v1/:identifier` 404 for unknown
-  - `/api/v1/refresh` 202 + coalescing
-  - bind defaults to loopback
+  - `/api/v1/state` shape, **including `turn_count` per running row**
+  - `/api/v1/state` surfaces `snapshot_timeout` / `snapshot_unavailable` via the error envelope
+  - `/api/v1/:identifier` 404 for unknown with `{error:{code,message}}` envelope
+  - `/api/v1/refresh` 202 + coalescing of concurrent requests
+  - **unsupported HTTP methods on defined routes return 405**
+  - bind defaults to loopback (`127.0.0.1`)
   - `--port` overrides front matter
+  - logging sink failure does not crash the orchestrator
 - **CLI**
   - positional arg, default `./WORKFLOW.md`
   - missing file → non-zero exit
@@ -642,15 +703,17 @@ Mapped from Symphony §17.
 
 - [ ] Bun workspace skeleton (`packages/dalang`, `packages/wayang` stub).
 - [ ] `WORKFLOW.md` loader + typed config layer + hot reload.
-- [ ] `chokidar` watcher with last-good-config fallback.
+- [ ] `chokidar` watcher with last-good-config fallback **and** mtime-based defensive reload at tick start.
 - [ ] `liquidjs` strict prompt rendering.
 - [ ] `RestTrackerAdapter` against the wayang contract.
 - [ ] Workspace manager with `repo.*` extension worktree path + plain-dir fallback.
 - [ ] Hook execution with timeouts and env injection.
 - [ ] Orchestrator with single-authority state, dispatch loop, retry queue, reconciliation, stall detection.
-- [ ] Agent runner using `@anthropic-ai/claude-agent-sdk` in subscription-auth mode.
+- [ ] Agent runner using `@anthropic-ai/claude-agent-sdk` in subscription-auth mode, with startup auth probe.
+- [ ] First turn injects `# Working on <identifier>: <title>` for session metadata.
+- [ ] Token accounting uses additive sum from per-turn `result.usage`.
 - [ ] Multi-turn continuation up to `agent.max_turns`.
-- [ ] HTTP server (`/`, `/api/v1/state`, `/api/v1/:identifier`, `/api/v1/refresh`).
+- [ ] HTTP server (`/`, `/api/v1/state`, `/api/v1/:identifier`, `/api/v1/refresh`) with 405 + JSON error envelope universally.
 - [ ] Structured logging via pino.
 - [ ] CLI entry with positional path arg and `--port`.
 - [ ] tsgo type-check passes.
@@ -666,9 +729,11 @@ Concise list for review/audit:
 | - | --------------------------------------------------- | -------------- |
 | 1 | Codex app-server → Claude Agent SDK (in-process)    | Substitution   |
 | 2 | Linear → wayang (REST adapter)                      | Substitution   |
-| 3 | `codex.*` block → `claude.*` block + `claude.model` | Substitution   |
+| 3 | `codex.*` block → `claude.*` block (`executable_path`, `model`, `permission_mode`, timeouts) | Substitution |
 | 4 | `repo.*` extension block (worktree convenience)     | Addition       |
-| 5 | `permission_mode: auto` as committed default        | Tightening     |
+| 5 | `permission_mode: auto` as committed default; `acceptEdits` rejected in v1 | Tightening |
+| 5b | Token accounting is additive (per-turn `result.usage` sum) instead of delta-against-cumulative-totals (Symphony §13.5 model assumes a thread-cumulative source the SDK does not expose) | Substitution |
+| 5c | `tracker.board` reserved as the project_slug analogue; not preflight-validated in v1 | Reduction (v1) |
 | 6 | `max_concurrent_agents` default 10 → 4              | Tightening     |
 | 7 | Default `tracker.endpoint` → `http://localhost:3001`| Tightening     |
 | 8 | HTTP server is shipped in v1 (Symphony marks OPTIONAL) | Tightening |
