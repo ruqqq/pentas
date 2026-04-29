@@ -12,6 +12,7 @@ const issue: NormalizedIssue = {
 const baseDeps = (sdkMessages: unknown[]) => ({
   promptTemplate: "Body for {{ issue.identifier }}",
   workspacePath: "/tmp/X-1",
+  tracker: { endpoint: "http://localhost:3002", api_key: null },
   config: { permissionMode: "auto" as const, model: "claude-opus-4-7", executablePath: "claude",
     turnTimeoutMs: 5000, readTimeoutMs: 1000, stallTimeoutMs: 0, maxTurns: 1 },
   trackerRefresh: async () => issue,

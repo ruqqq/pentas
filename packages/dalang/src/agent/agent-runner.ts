@@ -1,6 +1,6 @@
 // packages/dalang/src/agent/agent-runner.ts
 import type { NormalizedIssue, RuntimeEvent } from "../types";
-import { buildFirstTurnPrompt, buildContinuationPrompt } from "./prompt-builder";
+import { buildFirstTurnPrompt, buildContinuationPrompt, type TrackerPromptContext } from "./prompt-builder";
 import { mapSdkMessage } from "./event-mapper";
 
 export interface AgentConfig {
@@ -31,6 +31,7 @@ export interface RunAttemptDeps {
   promptTemplate: string;
   workspacePath: string;
   config: AgentConfig;
+  tracker: TrackerPromptContext;
   trackerRefresh: (id: string) => Promise<NormalizedIssue | null>;
   isActiveState: (s: string) => boolean;
   runQuery: RunQuery;
@@ -55,7 +56,7 @@ export async function runAttempt(deps: RunAttemptDeps): Promise<RunAttemptResult
   while (true) {
     turnCount += 1;
     const prompt = turnCount === 1
-      ? await buildFirstTurnPrompt(deps.promptTemplate, issue, deps.attempt)
+      ? await buildFirstTurnPrompt(deps.promptTemplate, issue, deps.attempt, deps.tracker)
       : buildContinuationPrompt(issue, turnCount, deps.config.maxTurns);
 
     const turn = await driveOneTurn({

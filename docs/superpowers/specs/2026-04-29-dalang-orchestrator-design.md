@@ -635,7 +635,7 @@ Mapped from Symphony §17.
   - `tracker.kind` enforces `tok-juara`
   - `$VAR` resolution (tracker key, path values)
   - `~` path expansion
-  - prompt renders with `issue` and `attempt`
+  - prompt renders with `issue`, `attempt`, and `tracker` (`tracker.endpoint` and resolved `tracker.api_key`, so the template can build PATCH calls against wayang without hardcoding the URL)
   - prompt rendering fails on unknown variables/filters
   - **empty prompt body** triggers `workflow_empty_prompt` and blocks dispatch
   - prompt template can iterate `issue.labels` and `issue.blocked_by`

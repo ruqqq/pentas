@@ -6,12 +6,18 @@ const liquid = new Liquid({ strictVariables: true, strictFilters: true });
 
 const HEADER = (i: NormalizedIssue) => `# Working on ${i.identifier}: ${i.title}\n\n`;
 
+export interface TrackerPromptContext {
+  endpoint: string;
+  api_key: string | null;
+}
+
 export async function buildFirstTurnPrompt(
   template: string,
   issue: NormalizedIssue,
   attempt: number | null,
+  tracker: TrackerPromptContext,
 ): Promise<string> {
-  const rendered = await liquid.parseAndRender(template, { issue, attempt });
+  const rendered = await liquid.parseAndRender(template, { issue, attempt, tracker });
   return HEADER(issue) + rendered;
 }
 

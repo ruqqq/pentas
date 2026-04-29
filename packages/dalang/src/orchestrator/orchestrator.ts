@@ -176,6 +176,10 @@ export class Orchestrator {
       issue, attempt,
       promptTemplate: this.promptTemplate,
       workspacePath: cwd,
+      tracker: {
+        endpoint: this.cfg.tracker.endpoint,
+        api_key: resolveTrackerApiKey(this.cfg.tracker.api_key ?? null),
+      },
       config: {
         permissionMode: this.cfg.claude.permission_mode,
         model: this.cfg.claude.model,
