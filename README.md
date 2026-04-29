@@ -1,0 +1,128 @@
+# tok-juara
+
+A two-package Bun + TypeScript monorepo:
+
+- **`@tok-juara/dalang`** — orchestrator daemon. Polls a tracker for active issues, dispatches per-issue work to git-worktree workspaces, and runs `claude` (Claude Code CLI) sessions via the Claude Agent SDK. Adapted from the [Symphony](https://github.com/openai/symphony) orchestrator spec.
+- **`@tok-juara/wayang`** — single-user issue tracker and inbox that dalang drives against (REST API + minimal UI).
+
+The names are Malay: *dalang* = puppeteer/mastermind, *wayang* = shadow-puppet show.
+
+## Prerequisites
+
+- [Bun](https://bun.sh/) ≥ 1.3
+- `git` ≥ 2.30
+- [Claude Code CLI](https://docs.claude.com/en/docs/claude-code) (`claude`) on `$PATH`, signed into a Claude Max subscription (`claude /login`)
+- macOS or Linux
+
+## Install
+
+```bash
+git clone <this-repo> tok-juara
+cd tok-juara
+bun install
+```
+
+## Repository layout
+
+```
+tok-juara/
+├── package.json                 # Bun workspaces root, top-level scripts
+├── tsconfig.base.json           # shared TypeScript config (tsgo)
+├── oxlint.json
+├── bunfig.toml
+├── packages/
+│   ├── dalang/                  # orchestrator daemon
+│   └── wayang/                  # tracker
+└── docs/superpowers/
+    ├── specs/                   # design specs
+    └── plans/                   # implementation plans
+```
+
+## Top-level scripts
+
+Run from the repo root:
+
+```bash
+bun run typecheck      # tsgo --noEmit on every workspace
+bun run lint           # oxlint
+bun run format         # oxfmt (writes)
+bun run format:check   # oxfmt --check
+bun test               # bun test on every package
+```
+
+## Running locally
+
+### 1. Start wayang (the tracker)
+
+```bash
+cd packages/wayang
+bun run start
+```
+
+Wayang serves its UI and REST API at `http://localhost:3001` by default. See `packages/wayang/README.md` (if present) or its source for endpoints.
+
+### 2. Configure dalang
+
+Create a `WORKFLOW.md` somewhere — typically the repo root or a project root. It is YAML front matter + a Liquid prompt template:
+
+```yaml
+---
+tracker:
+  endpoint: http://localhost:3001
+  active_states: [Todo, "In Progress"]
+  terminal_states: [Done, Cancelled, Duplicate]
+workspace:
+  root: ~/.dalang/workspaces
+agent:
+  max_concurrent_agents: 1
+  max_turns: 5
+claude:
+  executable_path: claude
+  model: claude-opus-4-7
+  permission_mode: auto
+hooks:
+  before_run: |
+    bun install
+---
+You are picking up issue {{ issue.identifier }}: {{ issue.title }}.
+Read the description, plan briefly, then proceed.
+```
+
+Optional `repo:` block to enable git worktrees:
+
+```yaml
+repo:
+  url: git@github.com:me/myproject.git
+  default_branch: main
+  branch_prefix: juara/
+```
+
+When `repo:` is present, dalang creates a shared bare clone at `<workspace.root>/.repo.git` and per-issue worktrees beneath it.
+
+### 3. Start dalang
+
+```bash
+bun run packages/dalang/src/index.ts ./WORKFLOW.md --port 7474
+```
+
+Then open <http://127.0.0.1:7474/> for the dashboard. JSON state at `/api/v1/state`. Manual reconcile via `POST /api/v1/refresh`.
+
+`WORKFLOW.md` is hot-reloaded — edit and save it, dalang picks up the new config (validation failures keep the last-good config).
+
+Stop with Ctrl+C.
+
+## Running tests
+
+```bash
+bun test                                  # whole repo
+bun test packages/dalang/                 # dalang only
+bun test packages/dalang/tests/orchestrator/  # one directory
+```
+
+Tests are real — no React component rendering, no mocking of the database. Bun-native test runner. Hot-path logic lives in pure modules; UI logic is extracted into hooks/functions and unit-tested.
+
+## Documentation
+
+- Design specs: `docs/superpowers/specs/`
+- Implementation plans: `docs/superpowers/plans/`
+- AI-assistant guide: `CLAUDE.md`

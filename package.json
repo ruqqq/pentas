@@ -9,7 +9,8 @@
     "test": "bun test",
     "typecheck": "bun run --filter='*' typecheck",
     "lint": "oxlint",
-    "format": "oxfmt"
+    "format": "oxfmt .",
+    "format:check": "bunx --bun oxfmt --check ."
   },
   "devDependencies": {
     "@types/bun": "^1.3.13",

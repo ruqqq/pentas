@@ -1,5 +1,7 @@
 node_modules/
 dist/
+.repo.git/
+.dalang/
 *.log
 .DS_Store
 .env
