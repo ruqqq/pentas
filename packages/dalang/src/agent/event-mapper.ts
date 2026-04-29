@@ -27,6 +27,19 @@ function nowIso(): string { return new Date().toISOString(); }
 //   TODO(§10.4): map once SDK emits an unsupported-tool event.
 
 export function mapSdkMessage(raw: unknown): RuntimeEvent | null {
+  const evt = mapSdkMessageInner(raw);
+  if (!evt) return evt;
+  // Every SDKMessage carries session_id. Backfill thread_id on any event that
+  // didn't already set it so callers can recover the session id even when the
+  // first message we see isn't `system/init`.
+  if (!evt.thread_id && raw !== null && typeof raw === "object") {
+    const sid = (raw as Record<string, unknown>).session_id;
+    if (typeof sid === "string" && sid.length > 0) evt.thread_id = sid;
+  }
+  return evt;
+}
+
+function mapSdkMessageInner(raw: unknown): RuntimeEvent | null {
   if (raw === null || raw === undefined || typeof raw !== "object") return null;
   const m = raw as Record<string, unknown>;
   const type = m.type;

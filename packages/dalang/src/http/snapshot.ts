@@ -1,5 +1,6 @@
 // packages/dalang/src/http/snapshot.ts
 import type { OrchestratorState } from "../types";
+import { transcriptPathFor } from "../agent/transcript";
 
 export function buildStateSnapshot(state: OrchestratorState): unknown {
   const running = Array.from(state.running.values()).map((entry) => ({
@@ -12,6 +13,8 @@ export function buildStateSnapshot(state: OrchestratorState): unknown {
     last_message: entry.session?.last_message ?? "",
     started_at: entry.started_at,
     last_event_at: entry.session?.last_event_at ?? null,
+    workspace_path: entry.workspace_path,
+    transcript_path: transcriptPathFor(entry.workspace_path, entry.session?.thread_id),
     tokens: {
       input_tokens: entry.session?.input_tokens ?? 0,
       output_tokens: entry.session?.output_tokens ?? 0,
@@ -43,7 +46,10 @@ export function buildIssueSnapshot(state: OrchestratorState, identifier: string)
         issue_identifier: entry.issue.identifier,
         issue_id: entry.issue.id,
         status: "running",
-        workspace: { path: entry.workspace_path },
+        workspace: {
+          path: entry.workspace_path,
+          transcript_path: transcriptPathFor(entry.workspace_path, entry.session?.thread_id),
+        },
         attempts: { current_retry_attempt: entry.retry_attempt ?? 0 },
         running: {
           session_id: entry.session?.session_id ?? null,

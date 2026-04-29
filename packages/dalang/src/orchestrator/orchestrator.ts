@@ -183,15 +183,24 @@ export class Orchestrator {
       onEvent: (e) => {
         const entry = this.state.running.get(issue.id);
         if (!entry) return;
-        entry.session = entry.session ?? {
-          session_id: `${e.thread_id ?? "?"}-1`,
-          thread_id: e.thread_id ?? "?", turn_id: "1",
-          claude_session_pid: null, last_event: e.event,
-          last_event_at: e.timestamp, last_message: e.message ?? null,
-          input_tokens: 0, output_tokens: 0, total_tokens: 0,
-          last_reported_input_tokens: 0, last_reported_output_tokens: 0, last_reported_total_tokens: 0,
-          turn_count: 1,
-        };
+        if (entry.session === null) {
+          entry.session = {
+            session_id: e.thread_id ? `${e.thread_id}-1` : "?-1",
+            thread_id: e.thread_id ?? "?", turn_id: "1",
+            claude_session_pid: null, last_event: e.event,
+            last_event_at: e.timestamp, last_message: e.message ?? null,
+            input_tokens: 0, output_tokens: 0, total_tokens: 0,
+            last_reported_input_tokens: 0, last_reported_output_tokens: 0, last_reported_total_tokens: 0,
+            turn_count: 1,
+          };
+        }
+        // Once the SDK reveals a real session id (it's on every message but the
+        // very first event we receive may not have been routed through us as a
+        // system/init), upgrade the placeholder.
+        if (e.thread_id && entry.session.thread_id !== e.thread_id) {
+          entry.session.thread_id = e.thread_id;
+          entry.session.session_id = `${e.thread_id}-1`;
+        }
         entry.session.last_event = e.event;
         entry.session.last_event_at = e.timestamp;
         entry.session.last_message = e.message ?? null;
