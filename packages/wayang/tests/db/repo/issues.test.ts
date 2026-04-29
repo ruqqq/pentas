@@ -68,8 +68,8 @@ describe("issues repo", () => {
     const a = createIssue(db, { title: "a", state: "Todo" });
     const before = a.updated_at;
     await new Promise((r) => setTimeout(r, 5));
-    const updated = updateIssue(db, a.id, { state: "In Progress" });
-    expect(updated?.state).toBe("In Progress");
+    const updated = updateIssue(db, a.id, { state: "In Dev" });
+    expect(updated?.state).toBe("In Dev");
     expect(updated?.updated_at).not.toBe(before);
   });
 

@@ -24,7 +24,7 @@ describe.skipIf(!RUN)("full HTTP cycle", () => {
       const patch = await fetch(`${server.url}api/v1/issues/${issue.id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ state: "In Progress", actor: "agent" }),
+        body: JSON.stringify({ state: "In Dev", actor: "agent" }),
       });
       expect(patch.status).toBe(200);
 

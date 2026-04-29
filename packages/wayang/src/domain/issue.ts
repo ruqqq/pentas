@@ -1,13 +1,37 @@
-export type IssueState = "Todo" | "In Progress" | "In Review" | "Done" | "Cancelled";
+export type IssueState =
+  | "Todo"
+  | "Plan"
+  | "Review Plan"
+  | "Ready for Dev"
+  | "In Dev"
+  | "Ready for Review"
+  | "Ready for Human Review"
+  | "Done"
+  | "Cancelled";
 
 export const ALL_STATES = [
   "Todo",
-  "In Progress",
-  "In Review",
+  "Plan",
+  "Review Plan",
+  "Ready for Dev",
+  "In Dev",
+  "Ready for Review",
+  "Ready for Human Review",
   "Done",
   "Cancelled",
 ] as const satisfies readonly IssueState[];
-export const ACTIVE_STATES = ["Todo", "In Progress"] as const satisfies readonly IssueState[];
+
+// "Ready for Human Review" is intentionally excluded so the orchestrator
+// parks tickets there for a human to drive instead of dispatching agents.
+export const ACTIVE_STATES = [
+  "Todo",
+  "Plan",
+  "Review Plan",
+  "Ready for Dev",
+  "In Dev",
+  "Ready for Review",
+] as const satisfies readonly IssueState[];
+
 export const TERMINAL_STATES = ["Done", "Cancelled"] as const satisfies readonly IssueState[];
 
 export function isActive(s: string): boolean {

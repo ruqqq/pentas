@@ -38,7 +38,14 @@ test("applyDefaults fills empty input with all defaults", () => {
   expect(result.agent.max_turns).toBe(20);
   expect(result.claude.permission_mode).toBe("auto");
   expect(result.claude.model).toBe("claude-opus-4-7");
-  expect(result.tracker.active_states).toEqual(["Todo", "In Progress"]);
+  expect(result.tracker.active_states).toEqual([
+    "Todo",
+    "Plan",
+    "Review Plan",
+    "Ready for Dev",
+    "In Dev",
+    "Ready for Review",
+  ]);
   expect(result.server.port).toBe(0);
 });
 

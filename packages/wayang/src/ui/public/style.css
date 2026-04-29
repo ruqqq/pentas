@@ -41,6 +41,10 @@
   --st-canc-bg: #f0e1de;
   --st-canc-rg: #d8b3ad;
 
+  --st-human-fg: #8a4a14;
+  --st-human-bg: #f7e6d3;
+  --st-human-rg: #e0bc8a;
+
   --serif:
     ui-serif, "Iowan Old Style", "Charter", "Source Serif Pro", Georgia, Cambria, "Times New Roman",
     Times, serif;
@@ -93,6 +97,10 @@
     --st-canc-fg: #c79a96;
     --st-canc-bg: #2a1f1e;
     --st-canc-rg: #4a302d;
+
+    --st-human-fg: #e0a878;
+    --st-human-bg: #2c1f15;
+    --st-human-rg: #4a3320;
 
     --shadow-1: 0 1px 0 rgba(0, 0, 0, 0.3);
     --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
@@ -452,21 +460,51 @@ tbody td:nth-child(6) {
   height: 8px;
   margin-top: -4px;
 }
-.state-badge[data-state="In Progress"] {
+.state-badge[data-state="Plan"],
+.state-badge[data-state="In Dev"] {
   color: var(--st-prog-fg);
   background: var(--st-prog-bg);
   border-color: var(--st-prog-rg);
 }
-.state-badge[data-state="In Progress"]::before {
+.state-badge[data-state="Plan"]::before {
+  background: conic-gradient(from 0deg, currentColor 0 25%, transparent 25% 100%);
+}
+.state-badge[data-state="In Dev"]::before {
   background: conic-gradient(from 0deg, currentColor 0 50%, transparent 50% 100%);
 }
-.state-badge[data-state="In Review"] {
+.state-badge[data-state="Review Plan"],
+.state-badge[data-state="Ready for Review"] {
   color: var(--st-rev-fg);
   background: var(--st-rev-bg);
   border-color: var(--st-rev-rg);
 }
-.state-badge[data-state="In Review"]::before {
+.state-badge[data-state="Review Plan"]::before {
   background: conic-gradient(from 0deg, currentColor 0 75%, transparent 75% 100%);
+}
+.state-badge[data-state="Ready for Review"]::before {
+  background: conic-gradient(from 0deg, currentColor 0 90%, transparent 90% 100%);
+}
+.state-badge[data-state="Ready for Dev"] {
+  color: var(--st-todo-fg);
+  background: var(--st-todo-bg);
+  border-color: var(--st-todo-rg);
+}
+.state-badge[data-state="Ready for Dev"]::before {
+  background: currentColor;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
+}
+.state-badge[data-state="Ready for Human Review"] {
+  color: var(--st-human-fg);
+  background: var(--st-human-bg);
+  border-color: var(--st-human-rg);
+}
+.state-badge[data-state="Ready for Human Review"]::before {
+  background: currentColor;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
 }
 .state-badge[data-state="Done"] {
   color: var(--st-done-fg);

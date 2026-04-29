@@ -25,7 +25,7 @@ describe("history repo", () => {
       issue_id: issue.id,
       kind: "state_changed",
       from_value: "Todo",
-      to_value: "In Progress",
+      to_value: "In Dev",
       actor: "agent",
     });
     const list = listHistory(db, issue.id);

@@ -3,9 +3,9 @@ import { renderStateBadge } from "../../src/ui/partials/state-badge";
 
 describe("renderStateBadge", () => {
   test("renders state label inside data-state attribute", () => {
-    const html = renderStateBadge("In Progress");
-    expect(html).toContain('data-state="In Progress"');
-    expect(html).toContain("In Progress");
+    const html = renderStateBadge("In Dev");
+    expect(html).toContain('data-state="In Dev"');
+    expect(html).toContain("In Dev");
   });
 
   test("escapes user-provided values", () => {
