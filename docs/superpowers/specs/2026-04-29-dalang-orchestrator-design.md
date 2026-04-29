@@ -113,6 +113,11 @@ tracker:
   kind: tok-juara                       # only supported value in v1
   endpoint: http://localhost:3001
   api_key: $TOK_JUARA_API_KEY           # optional in v1; localhost may run unauthenticated
+  board: null                           # OPTIONAL scope id (Symphony's project_slug analogue).
+                                        # v1 wayang is single-board; this is reserved for future
+                                        # multi-board support. dalang passes it through to the
+                                        # tracker adapter when set, and skips preflight validation
+                                        # when null.
   active_states: [Todo, "In Progress"]
   terminal_states: [Done, Cancelled, Duplicate]
 
@@ -147,10 +152,16 @@ agent:
   max_concurrent_agents_by_state: {}
 
 claude:
-  command: claude                       # CLI binary the SDK shells to internally
+  executable_path: claude               # binary path; resolved via PATH if unqualified.
+                                        # Maps to SDK option `pathToClaudeCodeExecutable`.
+                                        # Args are NOT supported (SDK takes a path, not a shell
+                                        # command). To pass extra flags, use SDK option fields.
   model: claude-opus-4-7                # NEW vs Symphony — Symphony has no model selector
-  permission_mode: auto                 # canonical Claude Code mode; alternatives:
-                                        # acceptEdits, default, plan, bypassPermissions
+  permission_mode: auto                 # canonical Claude Code mode. Alternative values:
+                                        # default, plan, bypassPermissions.
+                                        # `acceptEdits` is rejected at config validation in v1
+                                        # because it requires an operator UI for shell prompts
+                                        # (see §14.2). Accepted again when that UI ships.
   turn_timeout_ms: 3600000
   read_timeout_ms: 5000
   stall_timeout_ms: 300000
@@ -198,7 +209,15 @@ Watched via `chokidar`. On change:
 3. Valid → atomically swap `effectiveConfig` and `promptTemplate`. Future ticks/dispatches/retries pick up new values.
 4. In-flight workers keep their original prompt and policies until the next attempt.
 
-### 6.4 Repo extension semantics
+**Defensive reload (Symphony §6.2):** at the start of every poll tick, before dispatch preflight, the orchestrator MUST `fs.stat` the workflow path and compare against the mtime captured at last load. If newer, run the reload pipeline above. This guards against missed chokidar events (network filesystems, editor write strategies, brief watcher disconnects).
+
+### 6.4 Empty prompt body
+
+If the workflow prompt body is empty after trimming, the loader MUST emit `workflow_empty_prompt` as a configuration validation error and dispatch is blocked until the prompt is populated (Symphony §5.4 permits a fallback default; dalang chooses **error** for predictability — silent fallback hides a malformed workflow). Workflow file read/parse failures remain configuration/validation errors per Symphony §5.4 and never silently fall back.
+
+Templates MUST preserve nested arrays/maps (`issue.labels`, `issue.blocked_by`) as iterable structures so workflow authors can use `{% for label in issue.labels %}` etc. (Symphony §12.2). Issue object keys are exposed as strings.
+
+### 6.5 Repo extension semantics
 
 When `repo.url` is present:
 1. On first run, dalang clones `repo.url` as a bare repo under `<workspace.root>/.repo.git` — this is the **shared clone**. Subsequent runs reuse it.
@@ -295,9 +314,16 @@ Symphony §7 verbatim:
 Symphony §8 verbatim. Tick sequence:
 
 1. Reconcile running issues:
-   - **Stall check:** if `now - last_event_at > claude.stall_timeout_ms`, abort the worker and queue a retry. Skip if `stall_timeout_ms <= 0`.
+   - **Stall check:** compute `elapsed_ms = now - (last_event_at ?? started_at)` (fall back to `started_at` when no events have been seen yet). If `elapsed_ms > claude.stall_timeout_ms`, abort the worker and queue a retry. Skip stall detection entirely if `stall_timeout_ms <= 0`.
    - **Tracker state refresh:** `fetchIssueStatesByIds(running_ids)`. For each: terminal → terminate + cleanup workspace; active → update in-memory snapshot; neither → terminate without cleanup. State-refresh failure → keep workers running, retry next tick.
-2. Run dispatch preflight validation (workflow loadable, `tracker.kind` supported, `tracker.api_key` resolved if required, `claude.command` non-empty).
+2. Run dispatch preflight validation:
+   - workflow file is loadable, parsed, and front matter is a map
+   - `tracker.kind == "tok-juara"` (only supported value in v1)
+   - `tracker.api_key` is non-empty after `$VAR` resolution if its `$VAR` form is used (literal value or absent → no check)
+   - `tracker.board` is documented but **not** preflight-required in v1 (no project/board scope concept; reserved for future)
+   - `claude.executable_path` is non-empty and the binary is resolvable on PATH
+   - `claude.permission_mode` is one of the accepted v1 values (`auto`, `default`, `plan`, `bypassPermissions`); `acceptEdits` is rejected (see §14.2)
+   - On host start (only): `claude` CLI subscription is active (a non-interactive auth probe; if it fails, log a clear startup error rather than letting the first dispatch fail with a confusing SDK error)
 3. Fetch candidate issues via `fetchCandidateIssues()`.
 4. Sort: `priority` asc (nulls last), `created_at` asc, `identifier` lex.
 5. Dispatch eligible issues until slots are exhausted. Eligibility:
@@ -311,6 +337,7 @@ Symphony §8 verbatim. Tick sequence:
 Retry/backoff:
 - Continuation retry after clean worker exit: 1000 ms fixed.
 - Failure retry: `delay = min(10000 * 2^(attempt - 1), agent.max_retry_backoff_ms)`.
+- **Before scheduling a retry, the orchestrator MUST cancel any existing retry timer for the same `issue_id`** (Symphony §8.4) to prevent stacked timers and double-dispatch.
 - Retry timer fires → re-fetch active candidates; re-dispatch if still eligible and slots available, else requeue with `"no available orchestrator slots"`, else release claim.
 
 Startup terminal cleanup: `fetchIssuesByStates(terminal_states)`, remove each corresponding workspace directory. Failures logged and ignored.
@@ -343,12 +370,14 @@ The orchestrator MUST:
 - Validate `workspace_path` is a subpath of `workspace.root` (normalized absolute).
 - Reject and fail the attempt if either invariant fails.
 
-### 10.2 Session identifiers
+### 10.2 Session identifiers and metadata
 
 - `thread_id` — extracted from the SDK session UUID exposed by the first system/init message.
 - `turn_id` — monotonic counter incremented at each `query()` call within a session lifetime.
 - `session_id = "<thread_id>-<turn_id>"`.
 - Continuation turns reuse `thread_id`.
+
+**Issue metadata injection (Symphony §10.2):** the agent runner MUST inject `<issue.identifier>: <issue.title>` into the SDK session for log/observability legibility. Mechanism in v1: prepend the line `# Working on <identifier>: <title>` to the rendered prompt for the first turn, and include the same identifier in continuation guidance. If the SDK gains first-class session/turn naming options, prefer those over prompt prepending.
 
 ### 10.3 Multi-turn loop
 
@@ -379,19 +408,34 @@ After exit, orchestrator schedules a 1 s continuation retry per Symphony §7.1.
 
 The agent runner translates SDK message types into Symphony-style runtime events forwarded to the orchestrator:
 
-| SDK event                        | Emitted runtime event                |
-| -------------------------------- | ------------------------------------ |
-| First system/init message        | `session_started`                    |
-| `assistant` text chunk           | `notification` (truncated)           |
-| `tool_use`                       | `notification`                       |
-| `tool_result`                    | `notification`                       |
-| `result` (turn end)              | `turn_completed` (with usage)        |
-| Abort due to stall/reconcile     | `turn_cancelled`                     |
-| SDK error / subprocess exit      | `turn_failed` or `startup_failed`    |
-| Permission denial (auto-mode)    | `approval_auto_denied` (notification)|
-| Unsupported tool call            | `unsupported_tool_call`              |
+| SDK event / condition                      | Emitted runtime event                 |
+| ------------------------------------------ | ------------------------------------- |
+| First system/init message                  | `session_started`                     |
+| Session startup error (pre-first-turn)     | `startup_failed`                      |
+| `assistant` text chunk                     | `notification` (truncated)            |
+| `tool_use`                                 | `notification`                        |
+| `tool_result`                              | `notification`                        |
+| `result` (turn end, success)               | `turn_completed` (with usage)         |
+| `result` (turn end, error subtype)         | `turn_ended_with_error`               |
+| Abort due to stall/reconcile               | `turn_cancelled`                      |
+| SDK transport/protocol error mid-turn      | `turn_failed`                         |
+| Subprocess exit before turn end            | `turn_failed` (reason: subprocess_exit) |
+| Permission auto-approved (auto-mode)       | `approval_auto_approved` (notification) |
+| Permission auto-denied (auto-mode)         | `approval_auto_denied` (notification) |
+| User-input-required signal                 | `turn_input_required` → run failed (§10.5) |
+| Unsupported tool call                      | `unsupported_tool_call`               |
+| Other recognized SDK message               | `other_message`                       |
+| Malformed/unparsable SDK message           | `malformed`                           |
 
-Token accounting reads SDK `result.usage` — absolute totals, deltas tracked against `last_reported_*` (Symphony §13.5).
+**Token accounting (Symphony §13.5):** the SDK's per-turn `result.usage` reports usage for that single turn (it is **not** a cumulative thread total). dalang therefore uses **additive accumulation**, not delta-against-last-reported:
+
+```ts
+state.claude_totals.input_tokens  += result.usage.input_tokens  ?? 0;
+state.claude_totals.output_tokens += result.usage.output_tokens ?? 0;
+state.claude_totals.total_tokens  += result.usage.total_tokens  ?? 0;
+```
+
+The `last_reported_*` LiveSession fields from Symphony §4.1.6 are kept in the model for compatibility and future-proofing (e.g., if a future SDK exposes a cumulative-total event), but in v1 they hold the most recent turn's totals only and do not participate in `claude_totals` aggregation. Generic `usage` maps from non-`result` events MUST NOT be treated as cumulative totals.
 
 ### 10.5 Approval policy
 
