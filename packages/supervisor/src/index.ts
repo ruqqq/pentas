@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { randomBytes } from "node:crypto";
+import { dirname, resolve } from "node:path";
 import { Bootstrap, createLogger } from "@tok-juara/dalang";
 import { runWayang } from "@tok-juara/wayang";
 
@@ -75,10 +76,17 @@ process.on("SIGINT", () => { void shutdown(0); });
 process.on("SIGTERM", () => { void shutdown(0); });
 
 try {
+  // Default the db to live next to WORKFLOW.md so a project's state travels
+  // with its config. Explicit --db wins; WAYANG_DB_PATH env is honored next.
+  const resolvedWorkflow = resolve(args.workflowPath);
+  const dbPath = args.dbPath
+    ?? process.env["WAYANG_DB_PATH"]
+    ?? resolve(dirname(resolvedWorkflow), "wayang.db");
+
   // Start wayang first so we know its bound port before configuring dalang.
   wayangHandle = runWayang({
     port: args.wayangPort,
-    ...(args.dbPath !== undefined ? { dbPath: args.dbPath } : {}),
+    dbPath,
     apiToken,
   });
   const wayangPort = wayangHandle.server.port;
@@ -97,7 +105,8 @@ try {
       dalang_port: dalang.serverPort(),
       wayang_port: wayangPort,
       tracker_endpoint: trackerEndpoint,
-      workflow: args.workflowPath,
+      workflow: resolvedWorkflow,
+      db: dbPath,
     },
     "supervisor started",
   );
