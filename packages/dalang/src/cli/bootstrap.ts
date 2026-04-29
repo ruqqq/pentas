@@ -15,6 +15,10 @@ export interface BootstrapOptions {
   skipAuthProbe?: boolean;
   runQueryFactory?: () => RunQuery;
   logger?: Logger;
+  /** If set, overrides workflow's tracker.endpoint (e.g. for in-process wayang). */
+  trackerEndpoint?: string;
+  /** If set, overrides workflow's tracker.api_key. */
+  trackerApiKey?: string | null;
 }
 
 export class Bootstrap {
@@ -43,8 +47,10 @@ export class Bootstrap {
       if (err) throw new ValidationError("claude_auth_inactive", err);
     }
     const tracker = new RestTrackerAdapter({
-      endpoint: wf.config.tracker.endpoint,
-      apiKey: resolveTrackerApiKey(wf.config.tracker.api_key ?? null),
+      endpoint: this.opts.trackerEndpoint ?? wf.config.tracker.endpoint,
+      apiKey: this.opts.trackerApiKey !== undefined
+        ? resolveTrackerApiKey(this.opts.trackerApiKey)
+        : resolveTrackerApiKey(wf.config.tracker.api_key ?? null),
     });
     const runQuery = this.opts.runQueryFactory ? this.opts.runQueryFactory() : sdkRunQuery;
     this.orch = new Orchestrator({

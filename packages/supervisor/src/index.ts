@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { randomBytes } from "node:crypto";
 import { Bootstrap, createLogger } from "@tok-juara/dalang";
 import { runWayang } from "@tok-juara/wayang";
 
@@ -42,8 +43,9 @@ function parseArgs(argv: string[]): ParsedArgs {
   }
   return {
     workflowPath: workflowPath ?? "./WORKFLOW.md",
-    dalangPort,
-    wayangPort,
+    // Default: 0 = auto-pick a free port. CLI overrides honored as-is.
+    dalangPort: dalangPort ?? 0,
+    wayangPort: wayangPort ?? 0,
     dbPath,
   };
 }
@@ -51,15 +53,19 @@ function parseArgs(argv: string[]): ParsedArgs {
 const args = parseArgs(Bun.argv.slice(2));
 const log = createLogger({ name: "supervisor", level: "info" });
 
-const dalang = new Bootstrap({ workflowPath: args.workflowPath, port: args.dalangPort });
+// Shared in-process token so dalang authenticates against wayang without
+// requiring user setup. Caller can still set WAYANG_API_TOKEN to override.
+const apiToken = process.env["WAYANG_API_TOKEN"] ?? randomBytes(24).toString("hex");
+
 let wayangHandle: ReturnType<typeof runWayang> | null = null;
+let dalang: Bootstrap | null = null;
 let shuttingDown = false;
 
 const shutdown = async (code = 0) => {
   if (shuttingDown) return;
   shuttingDown = true;
   log.info("shutting down");
-  try { await dalang.stop(); } catch (err) { log.warn({ err: (err as Error).message }, "dalang stop failed"); }
+  try { await dalang?.stop(); } catch (err) { log.warn({ err: (err as Error).message }, "dalang stop failed"); }
   try { wayangHandle?.server.stop(); } catch (err) { log.warn({ err: (err as Error).message }, "wayang stop failed"); }
   try { wayangHandle?.db.close(); } catch (err) { log.warn({ err: (err as Error).message }, "wayang db close failed"); }
   process.exit(code);
@@ -69,14 +75,30 @@ process.on("SIGINT", () => { void shutdown(0); });
 process.on("SIGTERM", () => { void shutdown(0); });
 
 try {
-  // Wayang first: dalang's tracker config typically points at wayang.
+  // Start wayang first so we know its bound port before configuring dalang.
   wayangHandle = runWayang({
-    ...(args.wayangPort !== undefined ? { port: args.wayangPort } : {}),
+    port: args.wayangPort,
     ...(args.dbPath !== undefined ? { dbPath: args.dbPath } : {}),
+    apiToken,
+  });
+  const wayangPort = wayangHandle.server.port;
+  const trackerEndpoint = `http://127.0.0.1:${wayangPort}`;
+
+  dalang = new Bootstrap({
+    workflowPath: args.workflowPath,
+    port: args.dalangPort,
+    trackerEndpoint,
+    trackerApiKey: apiToken,
   });
   await dalang.start();
+
   log.info(
-    { dalang_port: dalang.serverPort(), wayang_port: wayangHandle.server.port, workflow: args.workflowPath },
+    {
+      dalang_port: dalang.serverPort(),
+      wayang_port: wayangPort,
+      tracker_endpoint: trackerEndpoint,
+      workflow: args.workflowPath,
+    },
     "supervisor started",
   );
 } catch (err) {

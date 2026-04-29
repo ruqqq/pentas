@@ -19,6 +19,7 @@ import { uiListRoute, uiDetailRoute, uiNewRoute, uiCreatePostRoute } from "./ui/
 export interface RunOptions {
   port?: number;
   dbPath?: string;
+  apiToken?: string;
 }
 
 export function defaultDbPath(): string {
@@ -32,7 +33,7 @@ export function runWayang(opts: RunOptions = {}) {
   runMigrations(db);
 
   const port = opts.port ?? Number(process.env["WAYANG_PORT"] ?? 3001);
-  const apiToken = process.env["WAYANG_API_TOKEN"] || undefined;
+  const apiToken = opts.apiToken ?? process.env["WAYANG_API_TOKEN"] ?? undefined;
 
   const server = startServer({ db, apiToken, port }, [
     // Order matters: more specific paths first.
