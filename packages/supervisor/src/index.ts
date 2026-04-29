@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
-import { randomBytes } from "node:crypto";
 import { dirname, resolve } from "node:path";
-import { Bootstrap, createLogger } from "@tok-juara/dalang";
+import { Bootstrap, createLogger, loadWorkflow, resolveTrackerApiKey } from "@tok-juara/dalang";
 import { runWayang } from "@tok-juara/wayang";
 
 interface ParsedArgs {
@@ -28,9 +27,12 @@ Options:
                            or $WAYANG_DB_PATH if set).
   -h, --help               Show this help and exit.
 
+Notes:
+  Wayang's API auth token is read from WORKFLOW.md (tracker.api_key); a value
+  like "$VAR" is resolved from the environment. If null/absent, auth is off
+  on both wayang and dalang.
+
 Environment:
-  WAYANG_API_TOKEN         Shared token between dalang and wayang. Auto-generated
-                           per run if unset.
   WAYANG_DB_PATH           Default db path when --db is not provided.
 `;
 
@@ -80,10 +82,6 @@ function parseArgs(argv: string[]): ParsedArgs {
 const args = parseArgs(Bun.argv.slice(2));
 const log = createLogger({ name: "supervisor", level: "info" });
 
-// Shared in-process token so dalang authenticates against wayang without
-// requiring user setup. Caller can still set WAYANG_API_TOKEN to override.
-const apiToken = process.env["WAYANG_API_TOKEN"] ?? randomBytes(24).toString("hex");
-
 let wayangHandle: ReturnType<typeof runWayang> | null = null;
 let dalang: Bootstrap | null = null;
 let shuttingDown = false;
@@ -109,11 +107,16 @@ try {
     ?? process.env["WAYANG_DB_PATH"]
     ?? resolve(dirname(resolvedWorkflow), "wayang.db");
 
+  // Read tracker.api_key from WORKFLOW.md and use it as the shared token
+  // between dalang and wayang. If null/absent, auth is disabled on both.
+  const wf = await loadWorkflow(resolvedWorkflow);
+  const apiToken = resolveTrackerApiKey(wf.config.tracker.api_key ?? null);
+
   // Start wayang first so we know its bound port before configuring dalang.
   wayangHandle = runWayang({
     port: args.wayangPort,
     dbPath,
-    apiToken,
+    apiToken: apiToken ?? undefined,
   });
   const wayangPort = wayangHandle.server.port;
   const trackerEndpoint = `http://127.0.0.1:${wayangPort}`;
@@ -122,7 +125,6 @@ try {
     workflowPath: args.workflowPath,
     port: args.dalangPort,
     trackerEndpoint,
-    trackerApiKey: apiToken,
   });
   await dalang.start();
 
