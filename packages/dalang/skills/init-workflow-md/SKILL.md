@@ -5,7 +5,7 @@ description: Use when the user wants to create, scaffold, or initialize a WORKFL
 
 # Initialize a dalang WORKFLOW.md
 
-dalang loads a single `WORKFLOW.md` consisting of YAML front matter (config) plus a Liquid prompt body. This skill walks through producing a valid file from scratch.
+dalang loads a root `WORKFLOW.md` consisting of YAML front matter (config) plus a Liquid prompt body. The body may be split into relative markdown imports with `@path/to/file.md`; dalang assembles imports before Liquid rendering. This skill walks through producing a valid workflow from scratch.
 
 Spec source of truth: `docs/superpowers/specs/2026-04-29-dalang-orchestrator-design.md` §6 (with the `Waiting PR Checks` extension in `2026-04-30-pr-checks-wait-design.md`).
 
@@ -51,7 +51,32 @@ Confirm before writing if any of these are non-obvious.
 
 ## Step 3 — write the file
 
-Use this template verbatim, substituting the user's values. Hooks: keep `after_create`/`before_run` populated with sensible bootstrap; set `after_run` and `before_remove` to `null` unless the user asked for cleanup.
+Prefer a split workflow for anything beyond a small prototype. Keep all config in the root file, and put the reusable prompt body under `workflow/`. Hooks: keep `after_create`/`before_run` populated with sensible bootstrap; set `after_run` and `before_remove` to `null` unless the user asked for cleanup.
+
+### Markdown imports
+
+Import syntax is a whole line:
+
+```markdown
+@workflow/preamble.md
+@workflow/states/in-progress.md
+@./workflow/shared.md
+@../workflow/shared.md
+```
+
+Rules enforced by dalang:
+
+- `@foo.md` resolves relative to the importing file's directory, equivalent to `@./foo.md`.
+- Nested imports are allowed.
+- Imports are expanded before Liquid rendering; Liquid variables work normally inside imported files.
+- Dynamic imports like `@workflow/{{ issue.state }}.md` are not supported.
+- Only local `.md` files under the root workflow directory are allowed.
+- Absolute paths, URL-style imports, symlink escapes, front matter in imported files, cycles, and excessive nesting are rejected.
+- Hot reload checks the root file and imported files.
+
+### Recommended split template
+
+Root `WORKFLOW.md`:
 
 ```markdown
 ---
@@ -115,23 +140,51 @@ server:
   port: 0
 ---
 
-# Working on {{ issue.identifier }}: {{ issue.title }}
+@workflow/preamble.md
+@workflow/state-dispatch.md
+```
+
+`workflow/preamble.md`:
+
+```markdown
+You are working on **{{ issue.identifier }}: {{ issue.title }}** in state **`{{ issue.state }}`**.
 
 {% if attempt %}
-This is retry attempt {{ attempt }}. Inspect the workspace state before re-running — uncommitted changes from prior attempts are preserved.
+This is continuation attempt {{ attempt }}. Inspect the workspace state before doing state work.
 {% endif %}
 
 ## Description
 
 {{ issue.description }}
+```
 
-## Workflow
+`workflow/state-dispatch.md`:
+
+```markdown
+## What to do RIGHT NOW (state = `{{ issue.state }}`)
+
+{% case issue.state %}
+@states/todo.md
+@states/in-progress.md
+@states/in-review.md
+{% else %}
+Unknown state `{{ issue.state }}`. Do not modify the workspace. Stop.
+{% endcase %}
+```
+
+`workflow/states/in-progress.md`:
+
+```markdown
+{% when "In Progress" %}
 
 1. Read the issue and confirm requirements.
-2. Implement the change.
-3. Run tests; ensure they pass.
-4. Commit, push, and open a PR via `gh`.
-5. Update the issue state to `In Review` via the wayang API at {{ '{{' }} tracker endpoint configured above {{ '}}' }}/api/v1/issues/{{ issue.id }}.
+2. Implement with tests.
+3. Run relevant verification.
+4. Commit and push.
+5. Update the issue state using the wayang API.
+```
+
+For very small workflows, an inline body is still valid; just put the prompt directly after the front matter instead of using imports.
 ```
 
 ## Liquid variables available
@@ -141,9 +194,10 @@ The prompt body is rendered per-attempt. Available bindings:
 - `issue.id`, `issue.identifier`, `issue.title`, `issue.description`, `issue.state`, `issue.priority`, `issue.url`
 - `issue.labels` — iterable: `{% for label in issue.labels %}{{ label }}{% endfor %}`
 - `issue.blocked_by` — iterable list of blocker identifiers
+- `recent_comments` and `recent_history` — newest-first slices of tracker activity
 - `attempt` — empty on first run, integer on retry/continuation
 
-Continuation turns omit the prompt — only the first turn renders the template, so put all instructions there.
+Within a single agent run, follow-up turns use a short continuation prompt and keep the provider session context. When dalang schedules a later retry/continuation attempt, it renders the full workflow template again with `attempt` set. Keep durable workflow instructions in files, not in one-off agent replies.
 
 ## Hooks env vars
 
@@ -157,6 +211,8 @@ Hooks run as `bash -lc` with `cwd = workspace`. Available env: `WORKSPACE_PATH`,
 | Using `permission_mode: acceptEdits` | Rejected at validation in v1. Use `auto`. |
 | Empty prompt body | Loader emits `workflow_empty_prompt` and blocks dispatch. Always include real instructions. |
 | Putting `WORKFLOW.md` in the dalang repo | It belongs alongside the *target* project (the one being worked on), not the orchestrator's source. |
+| Putting front matter in imported files | Only the root workflow file may have YAML front matter. Imported files are prompt fragments. |
+| Using absolute, URL, or dynamic import paths | Imports must be static relative `.md` files under the root workflow directory. |
 | Forgetting `branch_prefix` | Branches default to `<prefix><sanitized_identifier>`; without a prefix, branch names collide with normal dev branches. |
 | Inlining the api key | Prefer `$TOK_JUARA_API_KEY` so the file is committable. |
 | Setting `agent.max_concurrent_agents: 10` | Claude Max session limits make 4 the practical ceiling. |
@@ -168,4 +224,4 @@ Hooks run as `bash -lc` with `cwd = workspace`. Available env: `WORKSPACE_PATH`,
 
 1. Confirm the path with the user and read it back briefly.
 2. Suggest `dalang --workflow <path> --port <p>` (or whatever the project's invocation is) as the next step.
-3. Note that the file is hot-reloaded via chokidar + mtime defensive reload — edits take effect on the next poll tick without restart.
+3. Note that root and imported markdown files are hot-reloaded via chokidar + mtime defensive reload — edits take effect on the next poll tick without restart.
