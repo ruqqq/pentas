@@ -42,7 +42,34 @@ export function mapCodexEvent(raw: unknown): RuntimeEvent | null {
   }
 
   if (type === "task.completed") {
-    return { event: "turn_completed", timestamp: nowIso() };
+    const u = m.usage as Record<string, unknown> | undefined;
+    let usage: RuntimeEvent["usage"] | undefined;
+    if (u) {
+      const input = typeof u.input_tokens === "number" ? u.input_tokens : 0;
+      const output = typeof u.output_tokens === "number" ? u.output_tokens : 0;
+      const reasoning = typeof u.reasoning_tokens === "number" ? u.reasoning_tokens : 0;
+      const total = typeof u.total_tokens === "number" ? u.total_tokens : input + output + reasoning;
+      usage = {
+        input_tokens: input,
+        output_tokens: output + reasoning,
+        total_tokens: total,
+      };
+    }
+    const out: RuntimeEvent = { event: "turn_completed", timestamp: nowIso() };
+    if (usage) out.usage = usage;
+    return out;
+  }
+
+  if (type === "task.failed") {
+    const out: RuntimeEvent = { event: "turn_ended_with_error", timestamp: nowIso() };
+    if (typeof m.reason === "string") out.reason = m.reason;
+    return out;
+  }
+
+  if (type === "error" && m.phase === "startup") {
+    const out: RuntimeEvent = { event: "startup_failed", timestamp: nowIso() };
+    if (typeof m.message === "string") out.reason = m.message;
+    return out;
   }
 
   if (typeof type === "string") {

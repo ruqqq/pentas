@@ -39,3 +39,34 @@ test("null and non-object inputs return null", () => {
   expect(mapCodexEvent(null)).toBeNull();
   expect(mapCodexEvent(42)).toBeNull();
 });
+
+test("task.failed maps to turn_ended_with_error with reason", () => {
+  const evt = mapCodexEvent({ type: "task.failed", reason: "timeout" });
+  expect(evt?.event).toBe("turn_ended_with_error");
+  expect((evt as { reason?: string }).reason).toBe("timeout");
+});
+
+test("startup error maps to startup_failed", () => {
+  const evt = mapCodexEvent({ type: "error", phase: "startup", message: "auth_failed" });
+  expect(evt?.event).toBe("startup_failed");
+  expect((evt as { reason?: string }).reason).toBe("auth_failed");
+});
+
+test("task.completed propagates token usage with reasoning rolled into output", () => {
+  const evt = mapCodexEvent({
+    type: "task.completed",
+    usage: { input_tokens: 100, output_tokens: 50, reasoning_tokens: 30 },
+  });
+  expect(evt?.event).toBe("turn_completed");
+  expect(evt?.usage?.input_tokens).toBe(100);
+  expect(evt?.usage?.output_tokens).toBe(80);
+  expect(evt?.usage?.total_tokens).toBe(180);
+});
+
+test("task.completed prefers usage.total_tokens when provided", () => {
+  const evt = mapCodexEvent({
+    type: "task.completed",
+    usage: { input_tokens: 10, output_tokens: 5, total_tokens: 99 },
+  });
+  expect(evt?.usage?.total_tokens).toBe(99);
+});
