@@ -25,19 +25,29 @@ export interface CodexAgentConfig extends CommonAgentConfig {
 
 export type AgentConfig = ClaudeAgentConfig | CodexAgentConfig;
 
-export interface RunQueryOptions {
+interface CommonRunQueryOptions {
   prompt: string;
   cwd: string;
   model: string;
   executablePath: string;
   abortSignal?: AbortSignal;
   resumeSessionId?: string;
-  claude?: { permissionMode: ClaudeAgentConfig["permissionMode"] };
-  codex?: {
+}
+
+export type ClaudeRunQueryOptions = CommonRunQueryOptions & {
+  claude: { permissionMode: ClaudeAgentConfig["permissionMode"] };
+  codex?: never;
+};
+
+export type CodexRunQueryOptions = CommonRunQueryOptions & {
+  codex: {
     sandboxMode: CodexAgentConfig["sandboxMode"];
     approvalPolicy: CodexAgentConfig["approvalPolicy"];
   };
-}
+  claude?: never;
+};
+
+export type RunQueryOptions = ClaudeRunQueryOptions | CodexRunQueryOptions;
 
 export type RunQuery = (opts: RunQueryOptions) => AsyncIterable<unknown>;
 
@@ -138,25 +148,25 @@ async function driveOneTurn(opts: DriveOneTurnOptions): Promise<DriveOneTurnResu
   const turnTimeout = setTimeout(() => turnAbort.abort(), opts.config.turnTimeoutMs);
 
   try {
-    const iter = opts.runQuery({
+    const baseOpts = {
       prompt: opts.prompt,
       cwd: opts.workspacePath,
       model: opts.config.model,
       executablePath: opts.config.executablePath,
       abortSignal: turnAbort.signal,
-      resumeSessionId: opts.resumeSessionId,
-      claude:
-        opts.config.provider === "claude"
-          ? { permissionMode: opts.config.permissionMode }
-          : undefined,
-      codex:
-        opts.config.provider === "codex"
-          ? {
+      ...(opts.resumeSessionId !== undefined ? { resumeSessionId: opts.resumeSessionId } : {}),
+    };
+    const queryOpts: RunQueryOptions =
+      opts.config.provider === "claude"
+        ? { ...baseOpts, claude: { permissionMode: opts.config.permissionMode } }
+        : {
+            ...baseOpts,
+            codex: {
               sandboxMode: opts.config.sandboxMode,
               approvalPolicy: opts.config.approvalPolicy,
-            }
-          : undefined,
-    });
+            },
+          };
+    const iter = opts.runQuery(queryOpts);
 
     for await (const raw of iter) {
       if (turnAbort.signal.aborted) {
