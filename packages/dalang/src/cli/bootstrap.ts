@@ -67,7 +67,15 @@ export class Bootstrap {
       tracker, config: wf.config, promptTemplate: wf.promptTemplate,
       runQuery, logger: this.log,
     });
+    const initialProvider = wf.config.agent_provider;
     this.reloader.onReload((next) => {
+      if (next.config.agent_provider !== initialProvider) {
+        this.log.warn(
+          { from: initialProvider, to: next.config.agent_provider },
+          "workflow reload changed agent_provider; ignoring (restart dalang to switch providers)",
+        );
+        return;
+      }
       try { validateForDispatch(next.config); }
       catch (err) {
         this.log.warn({ err: (err as Error).message }, "workflow reload failed validation");
