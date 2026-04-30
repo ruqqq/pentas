@@ -81,3 +81,26 @@ describe("pr_checks config", () => {
     expect(cfg.pr_checks.gh_executable).toBe("gh");
   });
 });
+
+test("applyDefaults fills codex block and defaults agent_provider to claude", () => {
+  const result = applyDefaults({});
+  expect(result.agent_provider).toBe("claude");
+  expect(result.codex?.executable_path).toBe("codex");
+  expect(result.codex?.model).toBe("gpt-5.5");
+  expect(result.codex?.sandbox_mode).toBe("workspace-write");
+  expect(result.codex?.approval_policy).toBe("never");
+});
+
+test("accepts agent_provider=codex with a codex block", () => {
+  const cfg = applyDefaults({ agent_provider: "codex" });
+  const parsed = WorkflowFrontMatterSchema.parse(cfg);
+  expect(parsed.agent_provider).toBe("codex");
+  expect(parsed.codex?.model).toBe("gpt-5.5");
+});
+
+test("rejects unknown codex.sandbox_mode", () => {
+  const bad = applyDefaults({});
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (bad.codex as any).sandbox_mode = "kitchen-sink";
+  expect(() => WorkflowFrontMatterSchema.parse(bad)).toThrow();
+});

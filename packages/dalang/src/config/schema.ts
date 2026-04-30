@@ -39,6 +39,31 @@ export const AgentSchema = z.object({
   max_concurrent_agents_by_state: z.record(z.string(), z.number().int().positive()),
 });
 
+export const AgentProvider = z.enum(["claude", "codex"]);
+
+export const CodexSandboxMode = z.enum([
+  "read-only",
+  "workspace-write",
+  "danger-full-access",
+]);
+
+export const CodexApprovalPolicy = z.enum([
+  "untrusted",
+  "on-failure",
+  "on-request",
+  "never",
+]);
+
+export const CodexSchema = z.object({
+  executable_path: z.string().min(1),
+  model: z.string().min(1),
+  sandbox_mode: CodexSandboxMode,
+  approval_policy: CodexApprovalPolicy,
+  turn_timeout_ms: z.number().int().positive(),
+  read_timeout_ms: z.number().int().positive(),
+  stall_timeout_ms: z.number().int(),
+});
+
 export const ClaudePermissionMode = z.enum(["auto", "default", "plan", "bypassPermissions"]);
 
 export const ClaudeSchema = z.object({
@@ -69,7 +94,9 @@ export const WorkflowFrontMatterSchema = z.object({
   workspace: WorkspaceSchema,
   hooks: HooksSchema,
   agent: AgentSchema,
+  agent_provider: AgentProvider.default("claude"),
   claude: ClaudeSchema,
+  codex: CodexSchema.optional(),
   server: ServerSchema,
   pr_checks: PrChecksSchema,
 });
@@ -108,10 +135,20 @@ const DEFAULTS = {
     max_retry_backoff_ms: 300000,
     max_concurrent_agents_by_state: {},
   },
+  agent_provider: "claude",
   claude: {
     executable_path: "claude",
     model: "claude-opus-4-7",
     permission_mode: "auto",
+    turn_timeout_ms: 3600000,
+    read_timeout_ms: 5000,
+    stall_timeout_ms: 300000,
+  },
+  codex: {
+    executable_path: "codex",
+    model: "gpt-5.5",
+    sandbox_mode: "workspace-write",
+    approval_policy: "never",
     turn_timeout_ms: 3600000,
     read_timeout_ms: 5000,
     stall_timeout_ms: 300000,
