@@ -68,6 +68,9 @@ export function mapCodexEvent(raw: unknown): RuntimeEvent | null {
       const u = e.usage;
       const out: RuntimeEvent = { event: "turn_completed", timestamp: nowIso() };
       if (u && typeof u === "object") {
+        // OpenAI's input_tokens already includes cached_input_tokens; do not
+        // double-count. reasoning_output_tokens is folded into output_tokens
+        // because RuntimeEvent.usage has no separate reasoning bucket.
         const input = typeof u.input_tokens === "number" ? u.input_tokens : 0;
         const output = typeof u.output_tokens === "number" ? u.output_tokens : 0;
         const reasoning =
