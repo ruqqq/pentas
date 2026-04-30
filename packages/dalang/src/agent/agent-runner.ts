@@ -2,6 +2,7 @@
 import type { NormalizedIssue, RuntimeEvent } from "../types";
 import { buildFirstTurnPrompt, buildContinuationPrompt, type TrackerPromptContext, type RecentActivity } from "./prompt-builder";
 import { mapSdkMessage } from "./event-mapper";
+import { mapCodexEvent } from "./codex-event-mapper";
 
 export interface CommonAgentConfig {
   model: string;
@@ -172,7 +173,8 @@ async function driveOneTurn(opts: DriveOneTurnOptions): Promise<DriveOneTurnResu
       if (turnAbort.signal.aborted) {
         return { success: false, reason: "turn_cancelled", thread_id: threadId, tokens };
       }
-      const evt = mapSdkMessage(raw);
+      const evt =
+        opts.config.provider === "codex" ? mapCodexEvent(raw) : mapSdkMessage(raw);
       if (!evt) continue;
       if (evt.event === "session_started" && evt.thread_id) threadId = evt.thread_id;
       if (evt.event === "turn_completed" && evt.usage) {
