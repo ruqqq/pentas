@@ -2,7 +2,7 @@
 import { test, expect } from "bun:test";
 import { mkdtempSync, writeFileSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { applyDefaults } from "../../src/config/schema";
 import {
   validateForDispatch,
@@ -17,6 +17,14 @@ function makeFakeBin(script: string): string {
   writeFileSync(path, `#!/bin/sh\n${script}\n`, { mode: 0o755 });
   chmodSync(path, 0o755);
   return path;
+}
+
+function prependFakeGh(script: string): void {
+  const dir = mkdtempSync(join(tmpdir(), "gh-bin-"));
+  const path = join(dir, "gh");
+  writeFileSync(path, `#!/bin/sh\n${script}\n`, { mode: 0o755 });
+  chmodSync(path, 0o755);
+  process.env.PATH = `${dir}${delimiter}${process.env.PATH ?? ""}`;
 }
 
 const baseConfig = () =>
@@ -174,7 +182,79 @@ test("allows explicit unowned github-projects dispatch", () => {
   expect(() => validateForDispatch(cfg)).not.toThrow();
 });
 
+test("allows github-projects control plane with omitted token when GITHUB_TOKEN is set", () => {
+  process.env.GITHUB_TOKEN = "env-token";
+  const cfg = applyDefaults({
+    control_plane: {
+      kind: "github-projects",
+      owner_type: "organization",
+      owner: "acme",
+      project_number: 1,
+      repository: "acme/app",
+      status_field: "Status",
+      active_states: ["Todo"],
+      terminal_states: ["Done"],
+      ownership: { mode: "label", value: "dalang" },
+    },
+  });
+
+  expect(() => validateForDispatch(cfg)).not.toThrow();
+  delete process.env.GITHUB_TOKEN;
+});
+
+test("allows github-projects control plane with omitted token when gh auth token works", () => {
+  delete process.env.GITHUB_TOKEN;
+  prependFakeGh(`
+if [ "$1" = auth ] && [ "$2" = token ]; then
+  echo gh-token
+  exit 0
+fi
+exit 1
+`);
+  const cfg = applyDefaults({
+    control_plane: {
+      kind: "github-projects",
+      owner_type: "organization",
+      owner: "acme",
+      project_number: 1,
+      repository: "acme/app",
+      status_field: "Status",
+      active_states: ["Todo"],
+      terminal_states: ["Done"],
+      ownership: { mode: "label", value: "dalang" },
+    },
+  });
+
+  expect(() => validateForDispatch(cfg)).not.toThrow();
+});
+
+test("rejects github-projects control plane when no token source exists", () => {
+  delete process.env.GITHUB_TOKEN;
+  prependFakeGh("exit 1");
+  const cfg = applyDefaults({
+    control_plane: {
+      kind: "github-projects",
+      owner_type: "organization",
+      owner: "acme",
+      project_number: 1,
+      repository: "acme/app",
+      status_field: "Status",
+      active_states: ["Todo"],
+      terminal_states: ["Done"],
+      ownership: { mode: "label", value: "dalang" },
+    },
+  });
+
+  expect(() => validateForDispatch(cfg)).toThrow(ValidationError);
+  try {
+    validateForDispatch(cfg);
+  } catch (err) {
+    expect((err as ValidationError).code).toBe("missing_control_plane_api_key");
+  }
+});
+
 test("rejects github-projects control plane when token env var is missing", () => {
+  prependFakeGh("exit 1");
   const cfg = applyDefaults({
     control_plane: {
       kind: "github-projects",

@@ -104,7 +104,6 @@ control_plane:
   owner: ruqqq
   project_number: 1
   repository: ruqqq/pentas
-  token: $GITHUB_TOKEN
   status_field: Status
   branch_field: Branch
   active_states:
@@ -122,6 +121,8 @@ control_plane:
 ```
 
 `tracker:` remains accepted as a temporary compatibility alias for Papan workflows.
+
+For `github-projects`, `control_plane.token` is optional. If it is omitted, dalang uses `GITHUB_TOKEN` when set and otherwise falls back to `gh auth token`. Set `token: $SOME_ENV_VAR` or a literal token only when the workflow should override the default credential source.
 
 Optional `repo:` block to enable git worktrees:
 

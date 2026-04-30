@@ -1,6 +1,6 @@
 // packages/dalang/src/config/validate.ts
 import { getAliasProvenance, type WorkflowFrontMatter } from "./schema";
-import { resolveEnvValue } from "./env-resolver";
+import { resolveEnvValue, resolveGithubToken } from "./env-resolver";
 
 export type ValidationCode =
   | "conflicting_control_plane_tracker_config"
@@ -71,11 +71,15 @@ export function validateForDispatch(cfg: WorkflowFrontMatter): void {
       }
     }
   } else if (cp.kind === "github-projects") {
-    const resolved = resolveEnvValue(cp.token);
-    if (resolved === null && cp.token.startsWith("$")) {
+    const resolved = resolveGithubToken(cp.token);
+    if (resolved === null) {
+      const suffix =
+        cp.token && cp.token.startsWith("$")
+          ? `: control_plane.token resolves to empty: ${cp.token}`
+          : ": set control_plane.token, GITHUB_TOKEN, or authenticate gh";
       throw new ValidationError(
         "missing_control_plane_api_key",
-        `control_plane.token resolves to empty: ${cp.token}`,
+        `missing github-projects token${suffix}`,
       );
     }
     if (cp.ownership.mode === "none" && cp.ownership.allow_unowned_dispatch !== true) {

@@ -1,5 +1,5 @@
 import type { WorkflowFrontMatter } from "../config/schema";
-import { resolveEnvValue, resolveTrackerApiKey } from "../config/env-resolver";
+import { resolveGithubToken, resolveTrackerApiKey } from "../config/env-resolver";
 import type { ControlPlaneAdapter } from "./adapter";
 import { GithubProjectsControlPlaneAdapter } from "./github/adapter";
 import { PapanControlPlaneAdapter } from "./papan-adapter";
@@ -22,7 +22,10 @@ export function createControlPlaneAdapter(args: CreateControlPlaneArgs): Control
     });
   }
 
-  const token = resolveEnvValue(cp.token) ?? cp.token;
+  const token = resolveGithubToken(cp.token);
+  if (!token) {
+    throw new Error("missing github-projects token");
+  }
   return new GithubProjectsControlPlaneAdapter({
     ownerType: cp.owner_type,
     owner: cp.owner,

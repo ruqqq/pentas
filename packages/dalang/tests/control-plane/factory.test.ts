@@ -64,6 +64,33 @@ test("factory resolves GitHub token environment references", () => {
   expect((adapter as GithubProjectsControlPlaneAdapter).cfg.token).toBe("resolved-token");
 });
 
+test("factory falls back to GITHUB_TOKEN for GitHub Projects", () => {
+  process.env.GITHUB_TOKEN = "env-token";
+  const cfg = applyDefaults({
+    control_plane: {
+      kind: "github-projects",
+      owner_type: "organization",
+      owner: "acme",
+      project_number: 4,
+      repository: "acme/app",
+      status_field: "Status",
+      active_states: ["Todo"],
+      terminal_states: ["Done"],
+      ownership: { mode: "label", value: "dalang" },
+    },
+  });
+
+  const adapter = createControlPlaneAdapter({
+    config: cfg,
+    trackerEndpoint: null,
+    trackerApiKey: undefined,
+  });
+
+  expect(adapter).toBeInstanceOf(GithubProjectsControlPlaneAdapter);
+  expect((adapter as GithubProjectsControlPlaneAdapter).cfg.token).toBe("env-token");
+  delete process.env.GITHUB_TOKEN;
+});
+
 test("github adapter does not advertise pr checks when disabled", () => {
   const cfg = applyDefaults({
     control_plane: {

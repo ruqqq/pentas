@@ -5,7 +5,6 @@ control_plane:
   owner: ruqqq
   project_number: 1
   repository: ruqqq/pentas
-  token: $GITHUB_TOKEN
   status_field: Status
   branch_field: Branch
   active_states:

@@ -57,7 +57,7 @@ export const GithubProjectsControlPlaneSchema = z.object({
   owner: z.string().min(1),
   project_number: z.number().int().positive(),
   repository: z.string().regex(/^[^/]+\/[^/]+$/, "repository must be owner/name"),
-  token: z.string().min(1),
+  token: z.string().min(1).nullable().optional(),
   status_field: z.string().min(1),
   branch_field: z.string().min(1).nullable().optional(),
   active_states: z.array(z.string()).min(1),

@@ -220,6 +220,27 @@ test("accepts github-projects control plane with label ownership", () => {
   expect(parsed.control_plane.kind).toBe("github-projects");
 });
 
+test("accepts github-projects control plane with omitted token", () => {
+  const cfg = applyDefaults({
+    control_plane: {
+      kind: "github-projects",
+      owner_type: "organization",
+      owner: "acme",
+      project_number: 7,
+      repository: "acme/app",
+      status_field: "Status",
+      active_states: ["Todo", "In Dev"],
+      terminal_states: ["Done"],
+      ownership: { mode: "label", value: "dalang" },
+    },
+  });
+  const parsed = WorkflowFrontMatterSchema.parse(cfg);
+  expect(parsed.control_plane.kind).toBe("github-projects");
+  if (parsed.control_plane.kind !== "github-projects")
+    throw new Error("expected github-projects control plane");
+  expect(parsed.control_plane.token).toBeUndefined();
+});
+
 test("defaults omitted github-projects pr_checks fields", () => {
   const cfg = applyDefaults({
     control_plane: {
