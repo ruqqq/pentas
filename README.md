@@ -12,6 +12,11 @@ The names are Malay/Indonesian: _pentas_ = stage, _dalang_ = puppeteer/mastermin
 - [Bun](https://bun.sh/) ≥ 1.3
 - `git` ≥ 2.30
 - [Claude Code CLI](https://docs.claude.com/en/docs/claude-code) (`claude`) on `$PATH`, signed into a Claude Max subscription (`claude /login`)
+- [Codex CLI](https://github.com/openai/codex) (`codex`) on `$PATH`, signed in with `codex login` when using `agent_provider: codex`
+- [GitHub CLI](https://cli.github.com/) (`gh`) on `$PATH`, authenticated with `repo` and `project` scopes when using GitHub Projects:
+  ```bash
+  gh auth login -h github.com -s repo,project
+  ```
 - macOS or Linux
 
 ## Install
@@ -95,16 +100,24 @@ For GitHub Projects v2, use `control_plane.kind: github-projects` and set explic
 ```yaml
 control_plane:
   kind: github-projects
-  owner_type: organization
-  owner: my-org
-  project_number: 12
-  repository: my-org/my-repo
+  owner_type: user
+  owner: ruqqq
+  project_number: 1
+  repository: ruqqq/pentas
   token: $GITHUB_TOKEN
   status_field: Status
-  active_states: [Todo, "In Dev"]
-  terminal_states: [Done, Cancelled]
+  branch_field: Branch
+  active_states:
+    - "Ready for Planning"
+    - "Planning"
+    - "Plan Review"
+    - "Ready for Dev"
+    - "In Dev"
+    - "Ready for Review"
+  terminal_states: [Done, Cancelled, Duplicate]
   ownership:
-    mode: label
+    mode: project_field
+    field: Agent
     value: dalang
 ```
 
@@ -120,6 +133,114 @@ repo:
 ```
 
 When `repo:` is present, dalang creates a shared bare clone at `<workspace.root>/.repo.git` and per-issue worktrees beneath it.
+
+#### GitHub Projects setup with `gh`
+
+This repo's root `WORKFLOW.md` is set up for a GitHub Projects v2 board called `Pentas`, owned by `ruqqq`, with Codex as the agent provider. To recreate that board from a fresh account:
+
+```bash
+gh auth login -h github.com -s repo,project
+gh project create --owner ruqqq --title Pentas --format json
+gh project link 1 --owner ruqqq --repo pentas
+```
+
+Add the custom fields:
+
+```bash
+gh project field-create 1 --owner ruqqq --name Agent \
+  --data-type SINGLE_SELECT \
+  --single-select-options dalang,human,paused
+
+gh project field-create 1 --owner ruqqq --name Branch \
+  --data-type TEXT
+
+gh project field-create 1 --owner ruqqq --name Priority \
+  --data-type SINGLE_SELECT \
+  --single-select-options P0,P1,P2,P3
+
+gh project field-create 1 --owner ruqqq --name Area \
+  --data-type SINGLE_SELECT \
+  --single-select-options dalang,papan,docs,tooling,repo
+```
+
+GitHub creates a built-in `Status` field automatically. Keep that field and update its options rather than creating a separate status field. The plain `gh project` commands do not expose option editing for an existing single-select field, so use GraphQL:
+
+```bash
+STATUS_FIELD_ID="$(gh project field-list 1 --owner ruqqq --format json \
+  --jq '.fields[] | select(.name == "Status") | .id')"
+
+gh api graphql -f query="mutation {
+  updateProjectV2Field(input: {
+    fieldId: \"$STATUS_FIELD_ID\",
+    singleSelectOptions: [
+      { name: \"Inbox\", color: GRAY, description: \"Newly captured work, not dispatched yet.\" },
+      { name: \"Ready for Planning\", color: BLUE, description: \"Ready for an agent to clarify requirements and produce a plan.\" },
+      { name: \"Planning\", color: BLUE, description: \"Plan creation is in progress.\" },
+      { name: \"Plan Review\", color: PURPLE, description: \"Plan quality review is in progress.\" },
+      { name: \"Ready for Dev\", color: YELLOW, description: \"Approved plan, ready for implementation.\" },
+      { name: \"In Dev\", color: ORANGE, description: \"Implementation is in progress.\" },
+      { name: \"Ready for Review\", color: PINK, description: \"Implementation is complete and should be reviewed by an agent before handoff.\" },
+      { name: \"Waiting PR Checks\", color: YELLOW, description: \"PR exists and dalang is reconciling CI.\" },
+      { name: \"Ready for Human Review\", color: PURPLE, description: \"CI passed or automated review has escalated to a human.\" },
+      { name: \"Blocked\", color: RED, description: \"Waiting on external input; not dispatched.\" },
+      { name: \"Done\", color: GREEN, description: \"Terminal complete state.\" },
+      { name: \"Cancelled\", color: GRAY, description: \"Terminal abandoned state.\" },
+      { name: \"Duplicate\", color: GRAY, description: \"Terminal duplicate state.\" }
+    ]
+  }) { projectV2Field { ... on ProjectV2SingleSelectField { name options { name } } } }
+}"
+```
+
+Verify the final board:
+
+```bash
+gh project view 1 --owner ruqqq --format json
+gh project field-list 1 --owner ruqqq --format json
+```
+
+Every issue that dalang should pick up must be added to the project, have `Agent = dalang`, and be in one of the configured active `Status` values. `Blocked`, `Inbox`, `Waiting PR Checks`, `Ready for Human Review`, and terminal states are intentionally not directly dispatched by the normal poll loop.
+
+#### Codex agent provider
+
+For Codex-driven runs, use:
+
+```yaml
+agent_provider: codex
+codex:
+  executable_path: codex
+  model: gpt-5.5
+  sandbox_mode: workspace-write
+  approval_policy: never
+  turn_timeout_ms: 3600000
+  read_timeout_ms: 5000
+  stall_timeout_ms: 300000
+```
+
+`approval_policy: never` is the headless setting. Interactive approval prompts would deadlock an unattended dalang worker.
+
+#### Workflow prompt and agent skills
+
+For anything beyond a prototype, keep the root `WORKFLOW.md` small and import prompt fragments from `workflow/`:
+
+```markdown
+@workflow/preamble.md
+@workflow/project-board.md
+@workflow/superpowers.md
+@workflow/state-dispatch.md
+```
+
+The `workflow/superpowers.md` fragment tells the agent when to use installed skills during the state machine:
+
+- `prd` for product requirements and acceptance criteria during planning.
+- `create-architectural-decision-record` for durable architecture choices.
+- `architecture-blueprint-generator` for broad architecture mapping.
+- `code-review` during `Plan Review` and `Ready for Review`.
+- `github:yeet` to push branches and open draft PRs.
+- `github:gh-fix-ci` when PR checks fail.
+- `github:gh-address-comments` when human PR review comments need changes.
+- `ruqqq-voice` for PR descriptions, review comments, and project comments.
+
+Each state fragment under `workflow/states/` should do one job: explain the current `Status`, required evidence, verification expectations, comments to leave, and the next `Status` transition.
 
 ### 3. Start dalang
 
