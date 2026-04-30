@@ -82,9 +82,16 @@ describe("pr_checks config", () => {
   });
 });
 
-test("applyDefaults fills codex block and defaults agent_provider to claude", () => {
+test("applyDefaults defaults agent_provider to claude and omits inactive codex block", () => {
   const result = applyDefaults({});
   expect(result.agent_provider).toBe("claude");
+  expect(result.codex).toBeUndefined();
+});
+
+test("applyDefaults fills codex block when agent_provider=codex and omits claude block", () => {
+  const result = applyDefaults({ agent_provider: "codex" });
+  expect(result.agent_provider).toBe("codex");
+  expect(result.claude).toBeUndefined();
   expect(result.codex?.executable_path).toBe("codex");
   expect(result.codex?.model).toBe("gpt-5.5");
   expect(result.codex?.sandbox_mode).toBe("workspace-write");
@@ -99,15 +106,14 @@ test("accepts agent_provider=codex with a codex block", () => {
 });
 
 test("rejects unknown codex.sandbox_mode", () => {
-  const bad = applyDefaults({});
+  const bad = applyDefaults({ agent_provider: "codex" });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (bad.codex as any).sandbox_mode = "kitchen-sink";
   expect(() => WorkflowFrontMatterSchema.parse(bad)).toThrow();
 });
 
 test("rejects agent_provider=codex without a codex block", () => {
-  const cfg = applyDefaults({}) as Record<string, unknown>;
-  cfg.agent_provider = "codex";
+  const cfg = applyDefaults({ agent_provider: "codex" }) as Record<string, unknown>;
   delete cfg.codex;
   expect(() => WorkflowFrontMatterSchema.parse(cfg)).toThrow(/codex/i);
 });

@@ -49,8 +49,8 @@ test("validateForDispatch with codex provider rejects empty executable_path", ()
 test("validateForDispatch with claude provider does not require codex block fields", () => {
   const cfg = applyDefaults({});
   expect(cfg.agent_provider).toBe("claude");
-  // Should not throw even if we corrupt codex (it's the inactive block).
-  cfg.codex!.executable_path = "";
+  // The inactive codex block is omitted entirely; validation must still pass.
+  expect(cfg.codex).toBeUndefined();
   expect(() => validateForDispatch(cfg)).not.toThrow();
 });
 

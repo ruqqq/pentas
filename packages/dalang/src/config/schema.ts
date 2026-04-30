@@ -206,7 +206,20 @@ function deepMerge<T>(base: T, override: unknown): T {
   return out as T;
 }
 
+// Contract: applyDefaults fills the ACTIVE provider's block from defaults
+// (resolving `agent_provider` from the raw input, falling back to "claude").
+// The inactive provider's block is omitted, so `superRefine`'s active-block
+// presence rule fires for genuinely malformed inputs through the loader path
+// rather than being shadowed by always-present defaults.
 export function applyDefaults(raw: unknown): WorkflowFrontMatter {
-  const merged = deepMerge(DEFAULTS, raw ?? {}) as WorkflowFrontMatter;
+  const provider = ((raw as { agent_provider?: string } | null | undefined)?.agent_provider
+    ?? DEFAULTS.agent_provider) as "claude" | "codex";
+  const base = deepClone(DEFAULTS) as Record<string, unknown>;
+  if (provider === "codex") {
+    delete base.claude;
+  } else {
+    delete base.codex;
+  }
+  const merged = deepMerge(base as typeof DEFAULTS, raw ?? {}) as WorkflowFrontMatter;
   return merged;
 }
