@@ -48,10 +48,17 @@ export async function probeClaudeAuth(executablePath: string): Promise<string | 
   return `claude probe exited with code ${exitCode}`;
 }
 
-/** Probes `codex` CLI availability. Resolves `null` on success, error message on failure. */
+/**
+ * Probes `codex` CLI auth state via `codex login status`. Resolves `null` on success,
+ * error message on failure (binary missing, not logged in, etc.).
+ */
 export async function probeCodexAuth(executablePath: string): Promise<string | null> {
-  const proc = Bun.spawn([executablePath, "--version"], { stdout: "pipe", stderr: "pipe" });
+  const proc = Bun.spawn([executablePath, "login", "status"], { stdout: "pipe", stderr: "pipe" });
   const exitCode = await proc.exited;
   if (exitCode === 0) return null;
-  return `codex probe exited with code ${exitCode}`;
+  // Surface stderr so the operator can see what's wrong without re-running the probe.
+  const stderr = await new Response(proc.stderr).text();
+  const stdout = await new Response(proc.stdout).text();
+  const msg = stderr.trim() || stdout.trim() || `exit code ${exitCode}`;
+  return `codex auth probe failed: ${msg}`;
 }
