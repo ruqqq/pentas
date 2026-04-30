@@ -17,6 +17,7 @@ export function layout(title: string, body: string): string {
 <link rel="stylesheet" href="/static/style.css">
 <script src="/static/htmx.min.js" defer></script>
 <script src="/static/sse.js" defer></script>
+<script src="/static/json-enc.js" defer></script>
 </head>
 <body>
 <header>
