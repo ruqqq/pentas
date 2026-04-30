@@ -55,6 +55,7 @@ export function normalizeIssue(raw: unknown): NormalizedIssue | null {
     branch_name: isString(r.branch_name) ? r.branch_name : null,
     url: isString(r.url) ? r.url : null,
     external_ref: isString(r.external_ref) ? r.external_ref : null,
+    internal_ref: isString(r.internal_ref) ? r.internal_ref : null,
     labels: coerceLabels(r.labels),
     blocked_by: coerceBlockers(r.blocked_by),
     created_at: coerceTimestamp(r.created_at),

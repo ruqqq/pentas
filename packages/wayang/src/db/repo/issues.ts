@@ -47,20 +47,25 @@ function hydrateLabels(db: Database, issueId: string): string[] {
 function hydrateBlockers(db: Database, issueId: string): NormalizedIssue["blocked_by"] {
   return db
     .query<{ id: string; identifier: string; state: string }, [string]>(
-      `SELECT i.id, i.identifier, i.state
+      `SELECT i.id,
+              COALESCE(NULLIF(i.external_ref, ''), i.identifier) AS identifier,
+              i.state
          FROM issue_blockers b
          JOIN issues i ON i.id = b.blocker_id
         WHERE b.issue_id = ?
-        ORDER BY i.identifier`,
+        ORDER BY identifier`,
     )
     .all(issueId)
     .map((r) => ({ id: r.id, identifier: r.identifier, state: r.state }));
 }
 
 function rowToNormalized(db: Database, row: IssueRow): NormalizedIssue {
+  // Public identifier prefers the upstream tracker ref (e.g. "ENG-123" from Linear).
+  // The auto-allocated wayang sequence ("JUARA-N") is demoted to internal_ref.
+  const publicIdentifier = row.external_ref && row.external_ref.trim() !== "" ? row.external_ref : row.identifier;
   return {
     id: row.id,
-    identifier: row.identifier,
+    identifier: publicIdentifier,
     title: row.title,
     description: row.description,
     priority: row.priority,
@@ -68,6 +73,7 @@ function rowToNormalized(db: Database, row: IssueRow): NormalizedIssue {
     branch_name: row.branch_name,
     url: row.external_url,
     external_ref: row.external_ref,
+    internal_ref: row.identifier,
     labels: hydrateLabels(db, row.id),
     blocked_by: hydrateBlockers(db, row.id),
     created_at: row.created_at,

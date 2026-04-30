@@ -5,7 +5,7 @@ import type { NormalizedIssue } from "../../src/types";
 
 const issue: NormalizedIssue = {
   id: "i_1", identifier: "JUARA-1", title: "Fix bug", description: "details",
-  priority: 1, state: "Todo", branch_name: null, url: null, external_ref: null,
+  priority: 1, state: "Todo", branch_name: null, url: null, external_ref: null, internal_ref: null,
   labels: ["bug", "p1"], blocked_by: [],
   created_at: null, updated_at: null,
 };

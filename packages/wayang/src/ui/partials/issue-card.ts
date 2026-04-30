@@ -13,10 +13,15 @@ export function renderIssueCard(issue: NormalizedIssue): string {
     issue.priority != null
       ? `<span class="card-prio" title="Priority ${escapeHtml(String(issue.priority))}">P${escapeHtml(String(issue.priority))}</span>`
       : "";
+  const internalChip =
+    issue.internal_ref && issue.internal_ref !== issue.identifier
+      ? `<span class="card-internal" title="Internal ID">${escapeHtml(issue.internal_ref)}</span>`
+      : "";
   const labelStrip = labels ? `<div class="card-labels">${labels}</div>` : "";
   return `<article class="card" id="card-${escapeHtml(issue.id)}" data-state="${escapeHtml(issue.state)}">
   <div class="card-head">
     <a class="card-id" href="/issues/${escapeHtml(issue.id)}">${escapeHtml(issue.identifier)}</a>
+    ${internalChip}
     ${prio}
   </div>
   <a class="card-title" href="/issues/${escapeHtml(issue.id)}">${escapeHtml(issue.title)}</a>

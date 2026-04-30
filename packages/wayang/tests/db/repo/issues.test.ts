@@ -21,10 +21,26 @@ describe("issues repo", () => {
     const db = freshDb();
     const issue = createIssue(db, { title: "first", state: "Todo" });
     expect(issue.identifier).toBe("JUARA-1");
+    expect(issue.internal_ref).toBe("JUARA-1");
+    expect(issue.external_ref).toBeNull();
     expect(issue.title).toBe("first");
     expect(issue.state).toBe("Todo");
     expect(issue.labels).toEqual([]);
     expect(issue.blocked_by).toEqual([]);
+  });
+
+  test("identifier is the external_ref when set; internal_ref keeps the JUARA-N", () => {
+    const db = freshDb();
+    const issue = createIssue(db, {
+      title: "linear-linked",
+      state: "Todo",
+      external_ref: "ENG-123",
+      external_url: "https://linear.app/x/issue/ENG-123",
+    });
+    expect(issue.identifier).toBe("ENG-123");
+    expect(issue.internal_ref).toBe("JUARA-1");
+    expect(issue.external_ref).toBe("ENG-123");
+    expect(issue.url).toBe("https://linear.app/x/issue/ENG-123");
   });
 
   test("createIssue normalizes labels to lowercase", () => {

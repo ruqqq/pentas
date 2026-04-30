@@ -16,6 +16,7 @@ export interface NormalizedIssue {
   branch_name: string | null;
   url: string | null;
   external_ref: string | null;
+  internal_ref: string | null;
   labels: string[];
   blocked_by: BlockerRef[];
   created_at: string | null;

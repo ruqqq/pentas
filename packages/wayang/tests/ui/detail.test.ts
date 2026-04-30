@@ -12,6 +12,7 @@ const issue: NormalizedIssue = {
   branch_name: null,
   url: null,
   external_ref: null,
+  internal_ref: "JUARA-1",
   labels: [],
   blocked_by: [],
   created_at: "",

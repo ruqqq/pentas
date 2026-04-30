@@ -1036,6 +1036,16 @@ form[action="/new"] > button {
   line-height: 1.5;
 }
 
+.card-internal {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--ink-4);
+  border: 1px dashed var(--rule);
+  border-radius: var(--r-sm);
+  padding: 0 5px;
+  line-height: 1.5;
+}
+
 .card-title {
   font-family: var(--serif);
   font-size: 0.95rem;

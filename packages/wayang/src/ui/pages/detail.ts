@@ -36,6 +36,11 @@ export function renderDetailPage({ issue, comments, history }: DetailPageInput):
          hx-target="this">
   <header>
     <h1>${escapeHtml(issue.identifier)} ${escapeHtml(issue.title)}</h1>
+    ${
+      issue.internal_ref && issue.internal_ref !== issue.identifier
+        ? `<span class="card-internal" title="Internal ID">${escapeHtml(issue.internal_ref)}</span>`
+        : ""
+    }
     ${renderStateBadge(issue.state)}
     <select hx-patch="/api/v1/issues/${escapeHtml(issue.id)}"
             hx-trigger="change"

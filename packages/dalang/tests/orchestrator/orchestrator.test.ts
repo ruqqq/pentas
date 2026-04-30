@@ -10,7 +10,7 @@ import { join } from "node:path";
 
 const issue = (id: string, state = "Todo"): NormalizedIssue => ({
   id, identifier: `X-${id}`, title: "t", description: null, priority: 1,
-  state, branch_name: null, url: null, external_ref: null, labels: [], blocked_by: [],
+  state, branch_name: null, url: null, external_ref: null, internal_ref: null, labels: [], blocked_by: [],
   created_at: "2026-01-01", updated_at: null,
 });
 
