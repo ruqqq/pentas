@@ -13,7 +13,8 @@
     "format:check": "bunx --bun oxfmt --check .",
     "build": "bun run build:dalang && bun run build:papan",
     "build:dalang": "bun build packages/dalang/src/index.ts --compile --target=bun --outfile=dist/dalang",
-    "build:papan": "bun build packages/papan/src/index.ts --compile --target=bun --outfile=dist/papan"
+    "build:papan": "bun build packages/papan/src/index.ts --compile --target=bun --outfile=dist/papan",
+    "build:install": "bun run build && mkdir -p ~/.local/bin && cp dist/dalang dist/papan ~/.local/bin/"
   },
   "devDependencies": {
     "@types/bun": "^1.3.13",
