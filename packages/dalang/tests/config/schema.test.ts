@@ -37,8 +37,8 @@ test("applyDefaults fills empty input with all defaults", () => {
   expect(result.polling.interval_ms).toBe(30000);
   expect(result.agent.max_concurrent_agents).toBe(4);
   expect(result.agent.max_turns).toBe(20);
-  expect(result.claude.permission_mode).toBe("auto");
-  expect(result.claude.model).toBe("claude-opus-4-7");
+  expect(result.claude!.permission_mode).toBe("auto");
+  expect(result.claude!.model).toBe("claude-opus-4-7");
   expect(result.tracker.active_states).toEqual([
     "Todo",
     "Plan",

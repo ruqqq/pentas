@@ -3,8 +3,7 @@ import type { NormalizedIssue, RuntimeEvent } from "../types";
 import { buildFirstTurnPrompt, buildContinuationPrompt, type TrackerPromptContext, type RecentActivity } from "./prompt-builder";
 import { mapSdkMessage } from "./event-mapper";
 
-export interface AgentConfig {
-  permissionMode: "auto" | "default" | "plan" | "bypassPermissions";
+export interface CommonAgentConfig {
   model: string;
   executablePath: string;
   turnTimeoutMs: number;
@@ -13,14 +12,31 @@ export interface AgentConfig {
   maxTurns: number;
 }
 
+export interface ClaudeAgentConfig extends CommonAgentConfig {
+  provider: "claude";
+  permissionMode: "auto" | "default" | "plan" | "bypassPermissions";
+}
+
+export interface CodexAgentConfig extends CommonAgentConfig {
+  provider: "codex";
+  sandboxMode: "read-only" | "workspace-write" | "danger-full-access";
+  approvalPolicy: "untrusted" | "on-failure" | "on-request" | "never";
+}
+
+export type AgentConfig = ClaudeAgentConfig | CodexAgentConfig;
+
 export interface RunQueryOptions {
   prompt: string;
   cwd: string;
-  permissionMode: AgentConfig["permissionMode"];
   model: string;
   executablePath: string;
   abortSignal?: AbortSignal;
   resumeSessionId?: string;
+  claude?: { permissionMode: ClaudeAgentConfig["permissionMode"] };
+  codex?: {
+    sandboxMode: CodexAgentConfig["sandboxMode"];
+    approvalPolicy: CodexAgentConfig["approvalPolicy"];
+  };
 }
 
 export type RunQuery = (opts: RunQueryOptions) => AsyncIterable<unknown>;
@@ -125,11 +141,21 @@ async function driveOneTurn(opts: DriveOneTurnOptions): Promise<DriveOneTurnResu
     const iter = opts.runQuery({
       prompt: opts.prompt,
       cwd: opts.workspacePath,
-      permissionMode: opts.config.permissionMode,
       model: opts.config.model,
       executablePath: opts.config.executablePath,
       abortSignal: turnAbort.signal,
       resumeSessionId: opts.resumeSessionId,
+      claude:
+        opts.config.provider === "claude"
+          ? { permissionMode: opts.config.permissionMode }
+          : undefined,
+      codex:
+        opts.config.provider === "codex"
+          ? {
+              sandboxMode: opts.config.sandboxMode,
+              approvalPolicy: opts.config.approvalPolicy,
+            }
+          : undefined,
     });
 
     for await (const raw of iter) {

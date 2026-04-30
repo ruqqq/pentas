@@ -11,7 +11,7 @@ import { runPrChecksReconciler } from "./pr-checks-runner";
 import { WorkspaceManager } from "../workspace/workspace-manager";
 import { GitWorktreeManager } from "../workspace/git-worktree";
 import { runHook, truncateLogged } from "../workspace/hooks";
-import { runAttempt, type RunQuery } from "../agent/agent-runner";
+import { runAttempt, type RunQuery, type AgentConfig } from "../agent/agent-runner";
 import { transcriptPathFor } from "../agent/transcript";
 import { expandPath } from "../config/env-resolver";
 import { resolveEnvValue } from "../config/env-resolver";
@@ -108,7 +108,11 @@ export class Orchestrator {
   }
 
   private async reconcile(): Promise<void> {
-    const stalls = detectStalls(this.state, this.cfg.claude.stall_timeout_ms);
+    const stallTimeoutMs =
+      this.cfg.agent_provider === "codex"
+        ? this.cfg.codex!.stall_timeout_ms
+        : this.cfg.claude!.stall_timeout_ms;
+    const stalls = detectStalls(this.state, stallTimeoutMs);
     for (const id of stalls) {
       const entry = this.state.running.get(id);
       if (entry) {
@@ -208,15 +212,7 @@ export class Orchestrator {
         endpoint: this.cfg.tracker.endpoint,
         api_key: resolveTrackerApiKey(this.cfg.tracker.api_key ?? null),
       },
-      config: {
-        permissionMode: this.cfg.claude.permission_mode,
-        model: this.cfg.claude.model,
-        executablePath: this.cfg.claude.executable_path,
-        turnTimeoutMs: this.cfg.claude.turn_timeout_ms,
-        readTimeoutMs: this.cfg.claude.read_timeout_ms,
-        stallTimeoutMs: this.cfg.claude.stall_timeout_ms,
-        maxTurns: this.cfg.agent.max_turns,
-      },
+      config: this.buildAgentConfig(),
       trackerRefresh: async (id) => {
         const r = await this.tracker.fetchIssueStatesByIds([id]).catch(() => []);
         return r[0] ?? null;
@@ -352,6 +348,37 @@ export class Orchestrator {
       return;
     }
     this.dispatch(issue, this.state.retry_attempts.get(issueId)?.attempt ?? null);
+  }
+
+  private buildAgentConfig(): AgentConfig {
+    const common = {
+      maxTurns: this.cfg.agent.max_turns,
+    };
+    if (this.cfg.agent_provider === "codex") {
+      if (!this.cfg.codex) throw new Error("codex block missing despite agent_provider=codex");
+      return {
+        provider: "codex",
+        ...common,
+        model: this.cfg.codex.model,
+        executablePath: this.cfg.codex.executable_path,
+        turnTimeoutMs: this.cfg.codex.turn_timeout_ms,
+        readTimeoutMs: this.cfg.codex.read_timeout_ms,
+        stallTimeoutMs: this.cfg.codex.stall_timeout_ms,
+        sandboxMode: this.cfg.codex.sandbox_mode,
+        approvalPolicy: this.cfg.codex.approval_policy,
+      };
+    }
+    if (!this.cfg.claude) throw new Error("claude block missing despite agent_provider=claude");
+    return {
+      provider: "claude",
+      ...common,
+      model: this.cfg.claude.model,
+      executablePath: this.cfg.claude.executable_path,
+      turnTimeoutMs: this.cfg.claude.turn_timeout_ms,
+      readTimeoutMs: this.cfg.claude.read_timeout_ms,
+      stallTimeoutMs: this.cfg.claude.stall_timeout_ms,
+      permissionMode: this.cfg.claude.permission_mode,
+    };
   }
 
   private async cleanupWorkspace(entry: RunningEntry): Promise<void> {

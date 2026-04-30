@@ -31,6 +31,6 @@ test("accepts when $VAR api_key resolves", () => {
 
 test("rejects empty claude.executable_path", () => {
   const cfg = baseConfig();
-  cfg.claude.executable_path = "";
+  cfg.claude!.executable_path = "";
   expect(() => validateForDispatch(cfg)).toThrow(/executable_path/);
 });

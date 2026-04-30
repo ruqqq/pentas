@@ -43,7 +43,7 @@ export class Bootstrap {
     const wf = this.reloader.current();
     validateForDispatch(wf.config);
     if (!this.opts.skipAuthProbe) {
-      const err = await probeClaudeAuth(wf.config.claude.executable_path);
+      const err = await probeClaudeAuth(wf.config.claude!.executable_path);
       if (err) throw new ValidationError("claude_auth_inactive", err);
     }
     const tracker = new RestTrackerAdapter({

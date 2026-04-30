@@ -13,7 +13,7 @@ const baseDeps = (sdkMessages: unknown[]) => ({
   promptTemplate: "Body for {{ issue.identifier }}",
   workspacePath: "/tmp/X-1",
   tracker: { endpoint: "http://localhost:3002", api_key: null },
-  config: { permissionMode: "auto" as const, model: "claude-opus-4-7", executablePath: "claude",
+  config: { provider: "claude" as const, permissionMode: "auto" as const, model: "claude-opus-4-7", executablePath: "claude",
     turnTimeoutMs: 5000, readTimeoutMs: 1000, stallTimeoutMs: 0, maxTurns: 1 },
   trackerRefresh: async () => issue,
   isActiveState: (s: string) => s === "Todo",
@@ -56,7 +56,7 @@ test("multi-turn loop continues when issue stays active and turn budget allows",
   let turn = 0;
   const result = await runAttempt({
     ...baseDeps([]),
-    config: { ...baseDeps([]).config, permissionMode: "auto" as const, maxTurns: 2 },
+    config: { ...baseDeps([]).config, provider: "claude" as const, permissionMode: "auto" as const, maxTurns: 2 },
     issue, attempt: null, onEvent: (e) => events.push(e),
     runQuery: async function* () {
       turn += 1;
