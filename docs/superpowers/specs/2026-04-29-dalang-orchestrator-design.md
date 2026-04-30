@@ -6,7 +6,7 @@ Author: ruqqq
 
 ## 1. Purpose
 
-`dalang` is a long-running daemon that orchestrates Claude Code agents to work issues from a custom in-house issue tracker (`wayang`). It is a tok-juara-flavored implementation of the [Symphony Service Specification](https://github.com/openai/symphony/blob/main/SPEC.md), with three substitutions:
+`dalang` is a long-running daemon that orchestrates coding agents to work items from a control plane. Wayang is the original local control-plane implementation; GitHub Projects v2 is also supported through the control-plane adapter boundary. It is a tok-juara-flavored implementation of the [Symphony Service Specification](https://github.com/openai/symphony/blob/main/SPEC.md), with three substitutions:
 
 - Codex app-server → **Claude Agent SDK** (subscription-auth, model `claude-opus-4-7`, permission mode `auto`).
 - Linear → **wayang** (custom tracker; REST adapter; designed in a separate spec).

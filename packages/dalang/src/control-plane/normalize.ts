@@ -1,5 +1,4 @@
-// packages/dalang/src/tracker/normalize.ts
-import type { BlockerRef, NormalizedIssue } from "../types";
+import type { BlockerRef, WorkItem } from "../types";
 
 function isString(v: unknown): v is string { return typeof v === "string"; }
 
@@ -36,8 +35,7 @@ function coerceBlockers(input: unknown): BlockerRef[] {
   return out;
 }
 
-/** Returns null if the issue is malformed (caller logs `tracker_malformed_payload`). */
-export function normalizeIssue(raw: unknown): NormalizedIssue | null {
+export function normalizeWorkItem(raw: unknown): WorkItem | null {
   if (raw === null || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
   const id = isString(r.id) ? r.id : null;
@@ -62,3 +60,5 @@ export function normalizeIssue(raw: unknown): NormalizedIssue | null {
     updated_at: coerceTimestamp(r.updated_at),
   };
 }
+
+export const normalizeIssue = normalizeWorkItem;

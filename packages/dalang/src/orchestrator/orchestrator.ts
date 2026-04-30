@@ -1,24 +1,23 @@
 // packages/dalang/src/orchestrator/orchestrator.ts
 import { resolve } from "node:path";
-import type { TrackerAdapter } from "../tracker/adapter";
+import type { ControlPlaneAdapter } from "../control-plane/adapter";
 import type { NormalizedIssue, OrchestratorState, RunningEntry } from "../types";
 import type { WorkflowFrontMatter } from "../config/schema";
 import { createInitialState, addRunning, removeRunning, accumulateTokens } from "./state";
 import { sortForDispatch, isEligible } from "./eligibility";
 import { scheduleRetry, computeBackoffMs, releaseClaim, CONTINUATION_RETRY_MS } from "./retry";
 import { detectStalls, classifyTrackerRefresh } from "./reconcile";
-import { runPrChecksReconciler } from "./pr-checks-runner";
 import { WorkspaceManager } from "../workspace/workspace-manager";
 import { GitWorktreeManager } from "../workspace/git-worktree";
 import { runHook, truncateLogged } from "../workspace/hooks";
 import { runAttempt, type RunQuery, type AgentConfig } from "../agent/agent-runner";
 import { transcriptPathFor } from "../agent/transcript";
-import { expandPath } from "../config/env-resolver";
-import { resolveEnvValue } from "../config/env-resolver";
+import { expandPath, resolveTrackerApiKey } from "../config/env-resolver";
+import { ValidationError } from "../config/validate";
 import { createLogger, type Logger } from "../logging/logger";
 
 export interface OrchestratorOptions {
-  tracker: TrackerAdapter;
+  controlPlane: ControlPlaneAdapter;
   config: WorkflowFrontMatter;
   promptTemplate: string;
   runQuery: RunQuery;
@@ -27,7 +26,7 @@ export interface OrchestratorOptions {
 
 export class Orchestrator {
   state: OrchestratorState;
-  private readonly tracker: TrackerAdapter;
+  private readonly controlPlane: ControlPlaneAdapter;
   private cfg: WorkflowFrontMatter;
   private promptTemplate: string;
   private readonly runQuery: RunQuery;
@@ -37,7 +36,7 @@ export class Orchestrator {
   private inflight: Promise<void>[] = [];
 
   constructor(opts: OrchestratorOptions) {
-    this.tracker = opts.tracker;
+    this.controlPlane = opts.controlPlane;
     this.cfg = opts.config;
     this.promptTemplate = opts.promptTemplate;
     this.runQuery = opts.runQuery;
@@ -56,9 +55,11 @@ export class Orchestrator {
       poll_interval_ms: opts.config.polling.interval_ms,
       max_concurrent_agents: opts.config.agent.max_concurrent_agents,
     });
+    this.validateControlPlaneCapabilities();
   }
 
   updateConfig(next: WorkflowFrontMatter, promptTemplate: string): void {
+    this.validateControlPlaneCapabilities(next);
     this.cfg = next;
     this.promptTemplate = promptTemplate;
     this.state.poll_interval_ms = next.polling.interval_ms;
@@ -68,19 +69,23 @@ export class Orchestrator {
   async tick(): Promise<void> {
     await this.reconcile();
 
-    if (this.cfg.pr_checks.enabled) {
+    const prChecksConfig = this.buildPrChecksConfig();
+    if (prChecksConfig.enabled) {
       let waiting: NormalizedIssue[] = [];
+      const waitState = prChecksConfig.wait_state ?? "Waiting PR Checks";
       try {
-        waiting = await this.tracker.fetchIssuesByStates(["Waiting PR Checks"]);
+        waiting = await this.controlPlane.fetchDispatchableWork({
+          activeStates: [waitState],
+          ownership: this.cfg.control_plane.ownership,
+        });
       } catch (err) {
         this.log.warn({ err: (err as Error).message }, "pr_checks fetch failed; skipping");
       }
-      await runPrChecksReconciler({
-        issues: waiting,
-        state: this.state,
-        tracker: this.tracker,
-        cfg: this.cfg.pr_checks,
-        cwd: process.cwd(),
+      await this.controlPlane.reconcilePrChecks!({
+        work: waiting,
+        polls: this.state.pr_checks_polls,
+        config: prChecksConfig,
+        repoCwd: process.cwd(),
         now: () => new Date(),
       }).catch((err) => {
         this.log.warn({ err: (err as Error).message }, "pr_checks reconcile failed");
@@ -89,7 +94,10 @@ export class Orchestrator {
 
     let candidates: NormalizedIssue[] = [];
     try {
-      candidates = await this.tracker.fetchCandidateIssues(this.cfg.tracker.active_states);
+      candidates = await this.controlPlane.fetchDispatchableWork({
+        activeStates: this.cfg.control_plane.active_states,
+        ownership: this.cfg.control_plane.ownership,
+      });
     } catch (err) {
       this.log.warn({ err: (err as Error).message }, "candidate fetch failed; skipping dispatch");
       return;
@@ -98,13 +106,48 @@ export class Orchestrator {
     for (const issue of sorted) {
       if (
         !isEligible(issue, this.state, {
-          active: this.cfg.tracker.active_states,
-          terminal: this.cfg.tracker.terminal_states,
+          active: this.cfg.control_plane.active_states,
+          terminal: this.cfg.control_plane.terminal_states,
           byState: this.cfg.agent.max_concurrent_agents_by_state,
         })
       ) continue;
       this.dispatch(issue, null);
     }
+  }
+
+  private buildPrChecksConfig(cfg: WorkflowFrontMatter = this.cfg): {
+    enabled: boolean;
+    poll_interval_ms: number;
+    failure_budget: number;
+    rerun_flakes: boolean;
+    gh_executable?: string | undefined;
+    wait_state?: string | undefined;
+    pass_state?: string | undefined;
+    fail_state?: string | undefined;
+    escalation_state?: string | undefined;
+  } {
+    if (cfg.control_plane.kind === "github-projects" && cfg.control_plane.pr_checks) {
+      return {
+        enabled: cfg.control_plane.pr_checks.enabled,
+        poll_interval_ms: cfg.control_plane.pr_checks.poll_interval_ms,
+        failure_budget: cfg.control_plane.pr_checks.failure_budget,
+        rerun_flakes: cfg.control_plane.pr_checks.rerun_flakes,
+        wait_state: cfg.control_plane.pr_checks.wait_state,
+        pass_state: cfg.control_plane.pr_checks.pass_state,
+        fail_state: cfg.control_plane.pr_checks.fail_state,
+        escalation_state: cfg.control_plane.pr_checks.escalation_state,
+      };
+    }
+    return cfg.pr_checks;
+  }
+
+  private validateControlPlaneCapabilities(cfg: WorkflowFrontMatter = this.cfg): void {
+    if (!this.buildPrChecksConfig(cfg).enabled) return;
+    if (this.controlPlane.capabilities.prChecks && this.controlPlane.reconcilePrChecks) return;
+    throw new ValidationError(
+      "unsupported_control_plane_kind",
+      `control plane ${cfg.control_plane.kind} does not support pr_checks`,
+    );
   }
 
   private async reconcile(): Promise<void> {
@@ -124,7 +167,7 @@ export class Orchestrator {
     if (ids.length === 0) return;
     let refreshed: NormalizedIssue[] = [];
     try {
-      refreshed = await this.tracker.fetchIssueStatesByIds(ids);
+      refreshed = await this.controlPlane.refreshWork(ids);
     } catch (err) {
       this.log.warn({ err: (err as Error).message }, "state refresh failed; keeping workers");
       return;
@@ -133,8 +176,8 @@ export class Orchestrator {
       const entry = this.state.running.get(next.id);
       if (!entry) continue;
       const cls = classifyTrackerRefresh(next, {
-        active: this.cfg.tracker.active_states,
-        terminal: this.cfg.tracker.terminal_states,
+        active: this.cfg.control_plane.active_states,
+        terminal: this.cfg.control_plane.terminal_states,
       });
       if (cls.kind === "update_snapshot") entry.issue = next;
       else if (cls.kind === "terminate_with_cleanup") {
@@ -180,7 +223,7 @@ export class Orchestrator {
     const cwd = this.workspaces.pathFor(issue.identifier);
     const ws = await this.workspaces.ensureWorkspace(issue.identifier);
     if (this.worktrees) {
-      const branch = this.worktrees.branchName({
+      const branch = issue.branch_name ?? this.worktrees.branchName({
         externalRef: issue.external_ref,
         title: issue.title,
       });
@@ -208,23 +251,27 @@ export class Orchestrator {
       issue, attempt,
       promptTemplate: this.promptTemplate,
       workspacePath: cwd,
-      tracker: {
-        endpoint: this.cfg.tracker.endpoint,
-        api_key: resolveTrackerApiKey(this.cfg.tracker.api_key ?? null),
-      },
+      controlPlane: this.buildControlPlanePromptContext(),
       config: this.buildAgentConfig(),
       trackerRefresh: async (id) => {
-        const r = await this.tracker.fetchIssueStatesByIds([id]).catch(() => []);
+        const r = await this.controlPlane.refreshWork([id]).catch(() => []);
         return r[0] ?? null;
       },
       fetchRecentActivity: async (iss) => {
-        const [comments, history] = await Promise.all([
-          this.tracker.listComments(iss.id).catch(() => []),
-          this.tracker.listHistory(iss.id).catch(() => []),
-        ]);
+        const comments = await this.controlPlane.listComments(iss.id).catch((err) => {
+          this.log.warn({ issue_id: iss.id, err: (err as Error).message }, "control-plane comments fetch failed");
+          return [];
+        });
+        let history: Awaited<ReturnType<NonNullable<typeof this.controlPlane.listHistory>>> = [];
+        if (this.controlPlane.capabilities.history && this.controlPlane.listHistory) {
+          history = await this.controlPlane.listHistory(iss.id).catch((err) => {
+            this.log.warn({ issue_id: iss.id, err: (err as Error).message }, "control-plane history fetch failed");
+            return [];
+          });
+        }
         return { comments, history };
       },
-      isActiveState: (s) => this.cfg.tracker.active_states.some((x) => x.toLowerCase() === s.toLowerCase()),
+      isActiveState: (s) => this.cfg.control_plane.active_states.some((x) => x.toLowerCase() === s.toLowerCase()),
       runQuery: this.runQuery,
       onEvent: (e) => {
         const entry = this.state.running.get(issue.id);
@@ -309,7 +356,10 @@ export class Orchestrator {
   private async handleRetryFire(issueId: string, identifier: string): Promise<void> {
     let candidates: NormalizedIssue[] = [];
     try {
-      candidates = await this.tracker.fetchCandidateIssues(this.cfg.tracker.active_states);
+      candidates = await this.controlPlane.fetchDispatchableWork({
+        activeStates: this.cfg.control_plane.active_states,
+        ownership: this.cfg.control_plane.ownership,
+      });
     } catch {
       const e = this.state.retry_attempts.get(issueId);
       const next = (e?.attempt ?? 1) + 1;
@@ -333,8 +383,8 @@ export class Orchestrator {
       return;
     }
     if (!isEligible(issue, this.state, {
-      active: this.cfg.tracker.active_states,
-      terminal: this.cfg.tracker.terminal_states,
+      active: this.cfg.control_plane.active_states,
+      terminal: this.cfg.control_plane.terminal_states,
       byState: this.cfg.agent.max_concurrent_agents_by_state,
     })) {
       const e = this.state.retry_attempts.get(issueId);
@@ -391,6 +441,22 @@ export class Orchestrator {
       readTimeoutMs: this.cfg.claude.read_timeout_ms,
       stallTimeoutMs: this.cfg.claude.stall_timeout_ms,
       permissionMode: this.cfg.claude.permission_mode,
+    };
+  }
+
+  private buildControlPlanePromptContext(): { kind: string; endpoint: string; api_key: string | null } {
+    const cp = this.cfg.control_plane;
+    if (cp.kind === "wayang") {
+      return {
+        kind: "wayang",
+        endpoint: cp.endpoint,
+        api_key: resolveTrackerApiKey(cp.api_key ?? null),
+      };
+    }
+    return {
+      kind: cp.kind,
+      endpoint: "",
+      api_key: null,
     };
   }
 
@@ -468,9 +534,4 @@ export class Orchestrator {
   }
 }
 
-// Helper export so callers can resolve env-backed api_key
-export function resolveTrackerApiKey(value: string | null | undefined): string | null {
-  if (!value) return null;
-  if (value.startsWith("$")) return resolveEnvValue(value);
-  return value;
-}
+export { resolveTrackerApiKey } from "../config/env-resolver";

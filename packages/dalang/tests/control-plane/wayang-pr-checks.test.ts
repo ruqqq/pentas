@@ -1,12 +1,11 @@
-// packages/dalang/tests/orchestrator/pr-checks-runner.test.ts
+// packages/dalang/tests/control-plane/wayang-pr-checks.test.ts
 import { describe, expect, test } from "bun:test";
 import { mkdtemp, writeFile, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runPrChecksReconciler } from "../../src/orchestrator/pr-checks-runner";
-import type { TrackerAdapter } from "../../src/tracker/adapter";
+import { runPrChecksReconciler } from "../../src/control-plane/wayang-pr-checks";
+import type { ControlPlaneAdapter, PrChecksPollEntry } from "../../src/control-plane/adapter";
 import type { NormalizedIssue, TrackerComment } from "../../src/types";
-import { createInitialState } from "../../src/orchestrator/state";
 
 async function ghStub(scriptBody: string): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "gh-"));
@@ -16,12 +15,13 @@ async function ghStub(scriptBody: string): Promise<string> {
   return path;
 }
 
-function fakeTracker(state: { comments: TrackerComment[]; states: Record<string, string> }): TrackerAdapter {
+function fakeTracker(state: { comments: TrackerComment[]; states: Record<string, string> }): ControlPlaneAdapter {
   return {
-    fetchCandidateIssues: async () => [],
-    fetchIssuesByStates: async () => [],
-    fetchIssueStatesByIds: async () => [],
-    fetchIssue: async () => null,
+    capabilities: { history: true },
+    fetchDispatchableWork: async () => [],
+    fetchWorkByStates: async () => [],
+    refreshWork: async () => [],
+    fetchWorkItem: async () => null,
     listComments: async () => state.comments,
     listHistory: async () => [],
     addComment: async (_id, body) => {
@@ -36,6 +36,10 @@ function fakeTracker(state: { comments: TrackerComment[]; states: Record<string,
       state.states[id] = s;
     },
   };
+}
+
+function polls(): Map<string, PrChecksPollEntry> {
+  return new Map();
 }
 
 const issue: NormalizedIssue = {
@@ -67,12 +71,11 @@ describe("runPrChecksReconciler", () => {
       esac`);
     const tracker = { comments: [] as TrackerComment[], states: { i1: "Waiting PR Checks" } };
     const adapter = fakeTracker(tracker);
-    const state = createInitialState({ poll_interval_ms: 1000, max_concurrent_agents: 1 });
 
     await runPrChecksReconciler({
       issues: [issue],
-      state,
-      tracker: adapter,
+      polls: polls(),
+      controlPlane: adapter,
       cfg: { enabled: true, poll_interval_ms: 1000, failure_budget: 3, rerun_flakes: false, gh_executable: stub },
       cwd: process.cwd(),
       now: () => new Date("2026-01-01T00:00:00Z"),
@@ -98,12 +101,11 @@ describe("runPrChecksReconciler", () => {
       esac`);
     const tracker = { comments: [] as TrackerComment[], states: { i1: "Waiting PR Checks" } };
     const adapter = fakeTracker(tracker);
-    const state = createInitialState({ poll_interval_ms: 1000, max_concurrent_agents: 1 });
 
     await runPrChecksReconciler({
       issues: [issue],
-      state,
-      tracker: adapter,
+      polls: polls(),
+      controlPlane: adapter,
       cfg: { enabled: true, poll_interval_ms: 1000, failure_budget: 3, rerun_flakes: false, gh_executable: stub },
       cwd: process.cwd(),
       now: () => new Date("2026-01-01T00:00:00Z"),
@@ -131,8 +133,8 @@ describe("runPrChecksReconciler", () => {
 
     await runPrChecksReconciler({
       issues: [issue],
-      state: createInitialState({ poll_interval_ms: 1000, max_concurrent_agents: 1 }),
-      tracker: fakeTracker(tracker),
+      polls: polls(),
+      controlPlane: fakeTracker(tracker),
       cfg: { enabled: true, poll_interval_ms: 1000, failure_budget: 3, rerun_flakes: false, gh_executable: stub },
       cwd: process.cwd(),
       now: () => new Date("2026-01-01T00:00:02Z"),
@@ -145,13 +147,13 @@ describe("runPrChecksReconciler", () => {
   test("throttle: skips if last poll within poll_interval_ms", async () => {
     const stub = await ghStub(`exit 99`); // would fail if invoked
     const tracker = { comments: [] as TrackerComment[], states: { i1: "Waiting PR Checks" } };
-    const state = createInitialState({ poll_interval_ms: 60000, max_concurrent_agents: 1 });
-    state.pr_checks_polls.set("i1", { last_polled_at: "2026-01-01T00:00:00Z", last_seen_sha: null, last_action: "pending" });
+    const pollEntries = polls();
+    pollEntries.set("i1", { last_polled_at: "2026-01-01T00:00:00Z", last_seen_sha: null, last_action: "pending" });
 
     await runPrChecksReconciler({
       issues: [issue],
-      state,
-      tracker: fakeTracker(tracker),
+      polls: pollEntries,
+      controlPlane: fakeTracker(tracker),
       cfg: { enabled: true, poll_interval_ms: 60000, failure_budget: 3, rerun_flakes: false, gh_executable: stub },
       cwd: process.cwd(),
       now: () => new Date("2026-01-01T00:00:30Z"),
@@ -167,8 +169,8 @@ describe("runPrChecksReconciler", () => {
 
     await runPrChecksReconciler({
       issues: [issue],
-      state: createInitialState({ poll_interval_ms: 1000, max_concurrent_agents: 1 }),
-      tracker: fakeTracker(tracker),
+      polls: polls(),
+      controlPlane: fakeTracker(tracker),
       cfg: { enabled: false, poll_interval_ms: 1000, failure_budget: 3, rerun_flakes: false, gh_executable: stub },
       cwd: process.cwd(),
       now: () => new Date(),
@@ -187,8 +189,8 @@ describe("runPrChecksReconciler", () => {
 
     await runPrChecksReconciler({
       issues: [issue],
-      state: createInitialState({ poll_interval_ms: 1000, max_concurrent_agents: 1 }),
-      tracker: fakeTracker(tracker),
+      polls: polls(),
+      controlPlane: fakeTracker(tracker),
       cfg: { enabled: true, poll_interval_ms: 1000, failure_budget: 3, rerun_flakes: false, gh_executable: stub },
       cwd: process.cwd(),
       now: () => new Date(),
@@ -196,6 +198,31 @@ describe("runPrChecksReconciler", () => {
 
     expect(tracker.states.i1).toBe("In Dev");
     expect(tracker.comments[0]!.body).toContain("[pr_checks_no_pr]");
+  });
+
+  test("custom wait and fail states are honored", async () => {
+    const tracker = { comments: [] as TrackerComment[], states: { i1: "Reviewing CI" } };
+    const stub = await ghStub(`
+      case "$1 $2" in
+        "pr list") echo '[]' ;;
+      esac`);
+    await runPrChecksReconciler({
+      issues: [{ ...issue, state: "Reviewing CI" }],
+      polls: polls(),
+      controlPlane: fakeTracker(tracker),
+      cfg: {
+        enabled: true,
+        poll_interval_ms: 1,
+        failure_budget: 3,
+        rerun_flakes: false,
+        gh_executable: stub,
+        wait_state: "Reviewing CI",
+        fail_state: "Needs Work",
+      },
+      cwd: "/tmp",
+      now: () => new Date(),
+    });
+    expect(tracker.states.i1).toBe("Needs Work");
   });
 
   test("rerun_flakes=true and red checks → posts [pr_checks_rerun] without changing state", async () => {
@@ -207,8 +234,8 @@ describe("runPrChecksReconciler", () => {
     const tracker = { comments: [] as TrackerComment[], states: { i1: "Waiting PR Checks" } };
     await runPrChecksReconciler({
       issues: [issue],
-      state: createInitialState({ poll_interval_ms: 1000, max_concurrent_agents: 1 }),
-      tracker: fakeTracker(tracker),
+      polls: polls(),
+      controlPlane: fakeTracker(tracker),
       cfg: { enabled: true, poll_interval_ms: 1000, failure_budget: 3, rerun_flakes: true, gh_executable: stub },
       cwd: process.cwd(),
       now: () => new Date("2026-01-01T00:00:00Z"),
@@ -225,11 +252,11 @@ describe("runPrChecksReconciler", () => {
     await writeFile(stub, "#!/bin/sh\nexit 127\n");
     await chmod(stub, 0o755);
     const tracker = { comments: [] as TrackerComment[], states: { i1: "Waiting PR Checks" } };
-    const state = createInitialState({ poll_interval_ms: 1000, max_concurrent_agents: 1 });
+    const pollEntries = polls();
     await runPrChecksReconciler({
       issues: [issue],
-      state,
-      tracker: fakeTracker(tracker),
+      polls: pollEntries,
+      controlPlane: fakeTracker(tracker),
       cfg: { enabled: true, poll_interval_ms: 1000, failure_budget: 3, rerun_flakes: false, gh_executable: stub },
       cwd: process.cwd(),
       now: () => new Date("2026-01-01T00:00:00Z"),
@@ -238,6 +265,6 @@ describe("runPrChecksReconciler", () => {
     expect(tracker.states.i1).toBe("Waiting PR Checks");
     expect(tracker.comments).toHaveLength(0);
     // But the throttle entry exists so we don't hammer.
-    expect(state.pr_checks_polls.has("i1")).toBe(true);
+    expect(pollEntries.has("i1")).toBe(true);
   });
 });

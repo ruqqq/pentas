@@ -2,8 +2,8 @@
 import { resolve } from "node:path";
 import { WorkflowReloader } from "../config/reload";
 import { validateForDispatch, probeClaudeAuth, probeCodexAuth, probeOpencodeAuth, ValidationError } from "../config/validate";
-import { resolveTrackerApiKey, Orchestrator } from "../orchestrator/orchestrator";
-import { RestTrackerAdapter } from "../tracker/rest-adapter";
+import { Orchestrator } from "../orchestrator/orchestrator";
+import { createControlPlaneAdapter } from "../control-plane/factory";
 import { sdkRunQuery } from "../agent/sdk-runner";
 import { codexRunQuery } from "../agent/codex-runner";
 import { opencodeRunQuery } from "../agent/opencode-runner";
@@ -18,9 +18,9 @@ export interface BootstrapOptions {
   skipAuthProbe?: boolean;
   runQueryFactory?: () => RunQuery;
   logger?: Logger;
-  /** If set, overrides workflow's tracker.endpoint (e.g. for in-process wayang). */
+  /** If set, overrides workflow's Wayang control-plane endpoint (e.g. for in-process wayang). */
   trackerEndpoint?: string;
-  /** If set, overrides workflow's tracker.api_key. */
+  /** If set, overrides workflow's Wayang control-plane api_key. */
   trackerApiKey?: string | null;
 }
 
@@ -40,6 +40,10 @@ export class Bootstrap {
   }
 
   serverPort(): number { return this.server?.port ?? 0; }
+
+  async checkWorkflowReload(): Promise<void> {
+    await this.reloader.checkMtimeReload();
+  }
 
   async start(): Promise<void> {
     await this.reloader.start();
@@ -64,12 +68,12 @@ export class Bootstrap {
         if (err) throw new ValidationError("claude_auth_inactive", err);
       }
     }
-    const tracker = new RestTrackerAdapter({
-      endpoint: this.opts.trackerEndpoint ?? wf.config.tracker.endpoint,
-      apiKey: this.opts.trackerApiKey !== undefined
-        ? resolveTrackerApiKey(this.opts.trackerApiKey)
-        : resolveTrackerApiKey(wf.config.tracker.api_key ?? null),
+    const controlPlane = createControlPlaneAdapter({
+      config: wf.config,
+      trackerEndpoint: this.opts.trackerEndpoint ?? null,
+      trackerApiKey: this.opts.trackerApiKey,
     });
+    await controlPlane.validateConnection?.();
     const runQuery = this.opts.runQueryFactory
       ? this.opts.runQueryFactory()
       : wf.config.agent_provider === "codex"
@@ -78,15 +82,31 @@ export class Bootstrap {
           ? opencodeRunQuery
           : sdkRunQuery;
     this.orch = new Orchestrator({
-      tracker, config: wf.config, promptTemplate: wf.promptTemplate,
+      controlPlane, config: wf.config, promptTemplate: wf.promptTemplate,
       runQuery, logger: this.log,
     });
     const initialProvider = wf.config.agent_provider;
+    const initialControlPlaneKind = wf.config.control_plane.kind;
+    const initialControlPlaneSignature = JSON.stringify(wf.config.control_plane);
     this.reloader.onReload((next) => {
       if (next.config.agent_provider !== initialProvider) {
         this.log.warn(
           { from: initialProvider, to: next.config.agent_provider },
           "workflow reload changed agent_provider; ignoring (restart dalang to switch providers)",
+        );
+        return;
+      }
+      if (next.config.control_plane.kind !== initialControlPlaneKind) {
+        this.log.warn(
+          { from: initialControlPlaneKind, to: next.config.control_plane.kind },
+          "workflow reload changed control_plane kind; ignoring (restart dalang to switch control planes)",
+        );
+        return;
+      }
+      if (JSON.stringify(next.config.control_plane) !== initialControlPlaneSignature) {
+        this.log.warn(
+          { kind: initialControlPlaneKind },
+          "workflow reload changed control_plane config; ignoring (restart dalang to switch control-plane settings)",
         );
         return;
       }
@@ -112,7 +132,7 @@ export class Bootstrap {
     this.tickTimer = setTimeout(async () => {
       this.tickTimer = null;
       try {
-        await this.reloader.checkMtimeReload();
+        await this.checkWorkflowReload();
         await this.orch?.tick();
       } catch (err) {
         this.log.error({ err: (err as Error).message }, "tick failed");

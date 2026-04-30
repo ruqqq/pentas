@@ -1,10 +1,14 @@
 // packages/dalang/src/config/validate.ts
-import type { WorkflowFrontMatter } from "./schema";
+import { getAliasProvenance, type WorkflowFrontMatter } from "./schema";
 import { resolveEnvValue } from "./env-resolver";
 
 export type ValidationCode =
+  | "conflicting_control_plane_tracker_config"
+  | "unsupported_control_plane_kind"
   | "unsupported_tracker_kind"
+  | "missing_control_plane_api_key"
   | "missing_tracker_api_key"
+  | "missing_control_plane_ownership"
   | "missing_claude_executable_path"
   | "missing_codex_executable_path"
   | "missing_opencode_executable_path"
@@ -26,12 +30,64 @@ export function validateForDispatch(cfg: WorkflowFrontMatter): void {
   if (cfg.tracker.kind !== "tok-juara") {
     throw new ValidationError("unsupported_tracker_kind", `unsupported tracker kind: ${cfg.tracker.kind}`);
   }
-  if (cfg.tracker.api_key !== null && cfg.tracker.api_key !== undefined) {
-    const resolved = resolveEnvValue(cfg.tracker.api_key);
-    if (resolved === null && cfg.tracker.api_key.startsWith("$")) {
-      throw new ValidationError("missing_tracker_api_key", `tracker.api_key resolves to empty: ${cfg.tracker.api_key}`);
+
+  const provenance = getAliasProvenance(cfg);
+  const controlPlaneFromTracker = provenance.controlPlaneFromTracker;
+  const trackerFromControlPlane = provenance.trackerFromControlPlane;
+  if (!trackerFromControlPlane) {
+    validateLegacyTrackerApiKey(cfg);
+  }
+
+  const conflict = provenance.conflict;
+  if (conflict) {
+    throw new ValidationError(
+      "conflicting_control_plane_tracker_config",
+      `control_plane and tracker differ for ${conflict}`,
+    );
+  }
+
+  const cp = cfg.control_plane;
+  if (cp.kind === "wayang" && !controlPlaneFromTracker && !trackerFromControlPlane) {
+    const conflict = wayangTrackerConflict(cp, cfg.tracker);
+    if (conflict) {
+      throw new ValidationError(
+        "conflicting_control_plane_tracker_config",
+        `control_plane and tracker differ for ${conflict}`,
+      );
     }
   }
+
+  if (cp.kind === "wayang") {
+    if (!controlPlaneFromTracker && cp.api_key !== null && cp.api_key !== undefined) {
+      const resolved = resolveEnvValue(cp.api_key);
+      if (resolved === null && cp.api_key.startsWith("$")) {
+        throw new ValidationError(
+          "missing_control_plane_api_key",
+          `control_plane.api_key resolves to empty: ${cp.api_key}`,
+        );
+      }
+    }
+  } else if (cp.kind === "github-projects") {
+    const resolved = resolveEnvValue(cp.token);
+    if (resolved === null && cp.token.startsWith("$")) {
+      throw new ValidationError(
+        "missing_control_plane_api_key",
+        `control_plane.token resolves to empty: ${cp.token}`,
+      );
+    }
+    if (cp.ownership.mode === "none" && cp.ownership.allow_unowned_dispatch !== true) {
+      throw new ValidationError(
+        "missing_control_plane_ownership",
+        "github-projects requires ownership or allow_unowned_dispatch=true",
+      );
+    }
+  } else {
+    throw new ValidationError(
+      "unsupported_control_plane_kind",
+      `unsupported control plane kind: ${(cp as { kind?: string }).kind}`,
+    );
+  }
+
   if (cfg.agent_provider === "claude") {
     if (!cfg.claude || cfg.claude.executable_path.trim().length === 0) {
       throw new ValidationError("missing_claude_executable_path", "claude.executable_path is required");
@@ -45,6 +101,35 @@ export function validateForDispatch(cfg: WorkflowFrontMatter): void {
       throw new ValidationError("missing_opencode_executable_path", "opencode.executable_path is required");
     }
   }
+}
+
+function validateLegacyTrackerApiKey(cfg: WorkflowFrontMatter): void {
+  if (cfg.tracker.api_key !== null && cfg.tracker.api_key !== undefined) {
+    const resolved = resolveEnvValue(cfg.tracker.api_key);
+    if (resolved === null && cfg.tracker.api_key.startsWith("$")) {
+      throw new ValidationError("missing_tracker_api_key", `tracker.api_key resolves to empty: ${cfg.tracker.api_key}`);
+    }
+  }
+}
+
+function nullableValue(val: unknown): unknown {
+  return val ?? null;
+}
+
+function stringArraysMatch(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
+function wayangTrackerConflict(
+  controlPlane: Extract<WorkflowFrontMatter["control_plane"], { kind: "wayang" }>,
+  tracker: WorkflowFrontMatter["tracker"],
+): string | null {
+  if (controlPlane.endpoint !== tracker.endpoint) return "endpoint";
+  if (nullableValue(controlPlane.api_key) !== nullableValue(tracker.api_key)) return "api_key";
+  if (nullableValue(controlPlane.board) !== nullableValue(tracker.board)) return "board";
+  if (!stringArraysMatch(controlPlane.active_states, tracker.active_states)) return "active_states";
+  if (!stringArraysMatch(controlPlane.terminal_states, tracker.terminal_states)) return "terminal_states";
+  return null;
 }
 
 /** Probes `claude` CLI subscription status. Resolves `null` on success, error message on failure. */

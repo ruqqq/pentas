@@ -10,6 +10,67 @@ export const TrackerSchema = z.object({
   terminal_states: z.array(z.string()).min(1),
 });
 
+export const OwnershipSchema = z.discriminatedUnion("mode", [
+  z.object({
+    mode: z.literal("none"),
+    allow_unowned_dispatch: z.boolean().optional(),
+  }),
+  z.object({
+    mode: z.literal("label"),
+    value: z.string().min(1),
+  }),
+  z.object({
+    mode: z.literal("assignee"),
+    value: z.string().min(1),
+  }),
+  z.object({
+    mode: z.literal("project_field"),
+    field: z.string().min(1),
+    value: z.string().min(1),
+  }),
+]);
+
+export const WayangControlPlaneSchema = z.object({
+  kind: z.literal("wayang"),
+  endpoint: z.string().url(),
+  api_key: z.string().nullable().optional(),
+  board: z.string().nullable().optional(),
+  active_states: z.array(z.string()).min(1),
+  terminal_states: z.array(z.string()).min(1),
+  ownership: OwnershipSchema.default({ mode: "none" }),
+});
+
+export const GithubPrChecksSchema = z.object({
+  enabled: z.boolean(),
+  poll_interval_ms: z.number().int().positive().default(60000),
+  failure_budget: z.number().int().positive().default(3),
+  rerun_flakes: z.boolean().default(true),
+  wait_state: z.string().min(1).default("Waiting PR Checks"),
+  pass_state: z.string().min(1).default("Ready for Human Review"),
+  fail_state: z.string().min(1).default("In Dev"),
+  escalation_state: z.string().min(1).default("Ready for Human Review"),
+});
+
+export const GithubProjectsControlPlaneSchema = z.object({
+  kind: z.literal("github-projects"),
+  owner_type: z.enum(["organization", "user"]),
+  owner: z.string().min(1),
+  project_number: z.number().int().positive(),
+  repository: z.string().regex(/^[^/]+\/[^/]+$/, "repository must be owner/name"),
+  token: z.string().min(1),
+  status_field: z.string().min(1),
+  branch_field: z.string().min(1).nullable().optional(),
+  active_states: z.array(z.string()).min(1),
+  terminal_states: z.array(z.string()).min(1),
+  ownership: OwnershipSchema,
+  pr_checks: GithubPrChecksSchema.optional(),
+});
+
+export const ControlPlaneSchema = z.discriminatedUnion("kind", [
+  WayangControlPlaneSchema,
+  GithubProjectsControlPlaneSchema,
+]);
+
 export const RepoSchema = z.object({
   url: z.string().min(1),
   default_branch: z.string().min(1),
@@ -95,8 +156,182 @@ export const PrChecksSchema = z.object({
   gh_executable: z.string().min(1),
 });
 
-const RawWorkflowFrontMatterSchema = z.object({
-  tracker: TrackerSchema,
+const DEFAULT_ACTIVE_STATES = [
+  "Todo",
+  "Plan",
+  "Review Plan",
+  "Ready for Dev",
+  "In Dev",
+  "Ready for Review",
+];
+
+const DEFAULT_TERMINAL_STATES = ["Done", "Cancelled"];
+
+const DEFAULT_WAYANG_CONTROL_PLANE = {
+  kind: "wayang" as const,
+  endpoint: "http://localhost:3001",
+  api_key: null,
+  board: null,
+  active_states: [...DEFAULT_ACTIVE_STATES],
+  terminal_states: [...DEFAULT_TERMINAL_STATES],
+  ownership: { mode: "none" as const },
+};
+
+const DEFAULT_TRACKER = {
+  kind: "tok-juara" as const,
+  endpoint: "http://localhost:3001",
+  api_key: null,
+  board: null,
+  active_states: [...DEFAULT_ACTIVE_STATES],
+  terminal_states: [...DEFAULT_TERMINAL_STATES],
+};
+
+const CONTROL_PLANE_TRACKER_CONFLICT_KEY = "__control_plane_tracker_conflict";
+const CONTROL_PLANE_FROM_TRACKER_KEY = "__control_plane_from_tracker";
+const TRACKER_FROM_CONTROL_PLANE_KEY = "__tracker_from_control_plane";
+
+interface AliasProvenance {
+  controlPlaneFromTracker: boolean;
+  trackerFromControlPlane: boolean;
+  conflict: string | null;
+}
+
+const ALIAS_PROVENANCE = Symbol("dalang.control_plane.alias_provenance");
+const aliasProvenance = new WeakMap<object, AliasProvenance>();
+
+export function getAliasProvenance(cfg: object): AliasProvenance {
+  return (cfg as { [ALIAS_PROVENANCE]?: AliasProvenance })[ALIAS_PROVENANCE]
+    ?? aliasProvenance.get(cfg)
+    ?? {
+      controlPlaneFromTracker: false,
+      trackerFromControlPlane: false,
+      conflict: null,
+    };
+}
+
+function setAliasProvenance(cfg: object, provenance: AliasProvenance): void {
+  Object.defineProperty(cfg, ALIAS_PROVENANCE, {
+    value: provenance,
+    enumerable: true,
+    configurable: true,
+    writable: false,
+  });
+  aliasProvenance.set(cfg, provenance);
+}
+
+function deepClone<T>(val: T): T {
+  if (val === null || val === undefined) return val;
+  if (typeof val !== "object" || Array.isArray(val)) return val;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+    out[k] = deepClone(v);
+  }
+  return out as T;
+}
+
+function deepMerge<T>(base: T, override: unknown): T {
+  if (override === undefined) return deepClone(base);
+  if (override === null) return null as T;
+  if (typeof override !== "object" || Array.isArray(override)) return override as T;
+  if (typeof base !== "object" || base === null || Array.isArray(base)) {
+    return override as T;
+  }
+  const baseObj = base as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(baseObj)) {
+    out[k] = deepClone(v);
+  }
+  for (const [k, v] of Object.entries(override as Record<string, unknown>)) {
+    out[k] = deepMerge(baseObj[k], v);
+  }
+  return out as T;
+}
+
+interface AliasNormalizationResult {
+  raw: unknown;
+  controlPlaneFromTracker: boolean;
+  trackerFromControlPlane: boolean;
+}
+
+function normalizeControlPlaneAliases(raw: unknown): AliasNormalizationResult {
+  if (raw === null || typeof raw !== "object") {
+    return { raw, controlPlaneFromTracker: false, trackerFromControlPlane: false };
+  }
+  const priorProvenance = (raw as { [ALIAS_PROVENANCE]?: AliasProvenance })[ALIAS_PROVENANCE]
+    ?? aliasProvenance.get(raw);
+  const {
+    [CONTROL_PLANE_FROM_TRACKER_KEY]: _ignoredControlPlaneFromTracker,
+    [TRACKER_FROM_CONTROL_PLANE_KEY]: _ignoredTrackerFromControlPlane,
+    [CONTROL_PLANE_TRACKER_CONFLICT_KEY]: _ignoredConflict,
+    ...r
+  } = raw as Record<string, unknown>;
+  if (priorProvenance) {
+    return {
+      raw: {
+        ...r,
+        ...(priorProvenance.controlPlaneFromTracker ? { [CONTROL_PLANE_FROM_TRACKER_KEY]: true } : {}),
+        ...(priorProvenance.trackerFromControlPlane ? { [TRACKER_FROM_CONTROL_PLANE_KEY]: true } : {}),
+        ...(priorProvenance.conflict ? { [CONTROL_PLANE_TRACKER_CONFLICT_KEY]: priorProvenance.conflict } : {}),
+      },
+      controlPlaneFromTracker: priorProvenance.controlPlaneFromTracker,
+      trackerFromControlPlane: priorProvenance.trackerFromControlPlane,
+    };
+  }
+  const unchanged = { raw: r, controlPlaneFromTracker: false, trackerFromControlPlane: false };
+  const controlPlane = r.control_plane;
+  const tracker = r.tracker;
+
+  if (tracker === undefined && controlPlane !== null && typeof controlPlane === "object") {
+    const cp = controlPlane as Record<string, unknown>;
+    if (cp.kind === "wayang") {
+      return {
+        raw: {
+          ...r,
+          tracker: {
+            kind: "tok-juara",
+            endpoint: cp.endpoint,
+            api_key: cp.api_key ?? null,
+            board: cp.board ?? null,
+            active_states: cp.active_states,
+            terminal_states: cp.terminal_states,
+          },
+          [TRACKER_FROM_CONTROL_PLANE_KEY]: true,
+        },
+        controlPlaneFromTracker: false,
+        trackerFromControlPlane: true,
+      };
+    }
+  }
+
+  if ("control_plane" in r) return unchanged;
+  if (tracker === null || typeof tracker !== "object") return unchanged;
+  const t = tracker as Record<string, unknown>;
+  if (t.kind !== undefined && t.kind !== "tok-juara") return unchanged;
+  return {
+    raw: {
+      ...r,
+      control_plane: {
+        kind: "wayang",
+        endpoint: t.endpoint,
+        api_key: t.api_key ?? null,
+        board: t.board ?? null,
+        active_states: t.active_states,
+        terminal_states: t.terminal_states,
+        ownership: { mode: "none" },
+      },
+      [CONTROL_PLANE_FROM_TRACKER_KEY]: true,
+    },
+    controlPlaneFromTracker: true,
+    trackerFromControlPlane: false,
+  };
+}
+
+const RawWorkflowFrontMatterSchema = z.preprocess((raw) => normalizeControlPlaneAliases(raw).raw, z.object({
+  [CONTROL_PLANE_TRACKER_CONFLICT_KEY]: z.string().optional(),
+  [CONTROL_PLANE_FROM_TRACKER_KEY]: z.boolean().optional(),
+  [TRACKER_FROM_CONTROL_PLANE_KEY]: z.boolean().optional(),
+  control_plane: ControlPlaneSchema.default(DEFAULT_WAYANG_CONTROL_PLANE),
+  tracker: TrackerSchema.default(DEFAULT_TRACKER),
   repo: RepoSchema,
   polling: PollingSchema,
   workspace: WorkspaceSchema,
@@ -108,7 +343,20 @@ const RawWorkflowFrontMatterSchema = z.object({
   opencode: OpencodeSchema.optional(),
   server: ServerSchema,
   pr_checks: PrChecksSchema,
-});
+}).transform((cfg) => {
+  const {
+    [CONTROL_PLANE_TRACKER_CONFLICT_KEY]: conflict,
+    [CONTROL_PLANE_FROM_TRACKER_KEY]: controlPlaneFromTracker,
+    [TRACKER_FROM_CONTROL_PLANE_KEY]: trackerFromControlPlane,
+    ...clean
+  } = cfg;
+  setAliasProvenance(clean, {
+    controlPlaneFromTracker: controlPlaneFromTracker === true,
+    trackerFromControlPlane: trackerFromControlPlane === true,
+    conflict: conflict ?? null,
+  });
+  return clean;
+}));
 
 export const WorkflowFrontMatterSchema = RawWorkflowFrontMatterSchema.superRefine((cfg, ctx) => {
   if (cfg.agent_provider === "claude" && !cfg.claude) {
@@ -134,24 +382,15 @@ export const WorkflowFrontMatterSchema = RawWorkflowFrontMatterSchema.superRefin
   }
 });
 
-export type WorkflowFrontMatter = z.infer<typeof WorkflowFrontMatterSchema>;
+type ParsedWorkflowFrontMatter = z.infer<typeof WorkflowFrontMatterSchema>;
+export type WorkflowFrontMatter = ParsedWorkflowFrontMatter & {
+  control_plane: z.infer<typeof ControlPlaneSchema>;
+  tracker: z.infer<typeof TrackerSchema>;
+};
 
 const DEFAULTS = {
-  tracker: {
-    kind: "tok-juara",
-    endpoint: "http://localhost:3001",
-    api_key: null,
-    board: null,
-    active_states: [
-      "Todo",
-      "Plan",
-      "Review Plan",
-      "Ready for Dev",
-      "In Dev",
-      "Ready for Review",
-    ],
-    terminal_states: ["Done", "Cancelled"],
-  },
+  control_plane: DEFAULT_WAYANG_CONTROL_PLANE,
+  tracker: DEFAULT_TRACKER,
   repo: null,
   polling: { interval_ms: 30000 },
   workspace: { root: "~/.dalang/workspaces" },
@@ -202,32 +441,6 @@ const DEFAULTS = {
   },
 };
 
-function deepClone<T>(val: T): T {
-  if (val === null || val === undefined) return val;
-  if (typeof val !== "object" || Array.isArray(val)) return val;
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
-    out[k] = deepClone(v);
-  }
-  return out as T;
-}
-
-function deepMerge<T>(base: T, override: unknown): T {
-  if (override === null || override === undefined) return deepClone(base);
-  if (typeof base !== "object" || base === null || Array.isArray(base)) {
-    return override as T;
-  }
-  const baseObj = base as Record<string, unknown>;
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(baseObj)) {
-    out[k] = deepClone(v);
-  }
-  for (const [k, v] of Object.entries(override as Record<string, unknown>)) {
-    out[k] = deepMerge(baseObj[k], v);
-  }
-  return out as T;
-}
-
 // Contract: applyDefaults fills the ACTIVE provider's block from defaults
 // (resolving `agent_provider` from the raw input, falling back to "claude").
 // The inactive providers' blocks are omitted, so `superRefine`'s active-block
@@ -235,7 +448,9 @@ function deepMerge<T>(base: T, override: unknown): T {
 // rather than being shadowed by always-present defaults.
 // Supported providers: "claude", "codex", "opencode".
 export function applyDefaults(raw: unknown): WorkflowFrontMatter {
-  const provider = ((raw as { agent_provider?: string } | null | undefined)?.agent_provider
+  const normalized = normalizeControlPlaneAliases(raw);
+  const normalizedRaw = normalized.raw;
+  const provider = ((normalizedRaw as { agent_provider?: string } | null | undefined)?.agent_provider
     ?? DEFAULTS.agent_provider) as "claude" | "codex" | "opencode";
   const base = deepClone(DEFAULTS) as Record<string, unknown>;
   if (provider === "codex") {
@@ -248,6 +463,11 @@ export function applyDefaults(raw: unknown): WorkflowFrontMatter {
     delete base.codex;
     delete base.opencode;
   }
-  const merged = deepMerge(base as typeof DEFAULTS, raw ?? {}) as WorkflowFrontMatter;
+  const merged = deepMerge(base as typeof DEFAULTS, normalizedRaw ?? {}) as WorkflowFrontMatter;
+  setAliasProvenance(merged, {
+    controlPlaneFromTracker: normalized.controlPlaneFromTracker,
+    trackerFromControlPlane: normalized.trackerFromControlPlane,
+    conflict: null,
+  });
   return merged;
 }

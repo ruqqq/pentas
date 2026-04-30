@@ -42,7 +42,7 @@ test("runAttempt drives an opencode-shaped event stream end-to-end", async () =>
       stallTimeoutMs: 30000,
       maxTurns: 1,
     },
-    tracker: { endpoint: "http://localhost", api_key: null },
+    controlPlane: { kind: "wayang", endpoint: "http://localhost", api_key: null },
     trackerRefresh: async () => null,
     isActiveState: () => false,
     runQuery: async function* () {

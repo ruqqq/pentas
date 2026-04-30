@@ -1,9 +1,10 @@
 // packages/dalang/tests/orchestrator/orchestrator.test.ts
 import { test, expect } from "bun:test";
 import { Orchestrator } from "../../src/orchestrator/orchestrator";
-import type { TrackerAdapter } from "../../src/tracker/adapter";
-import type { NormalizedIssue, TrackerComment, TrackerHistoryEntry } from "../../src/types";
+import type { ControlPlaneAdapter, DispatchQuery, PrChecksReconcileArgs } from "../../src/control-plane/adapter";
+import type { NormalizedIssue, ControlPlaneComment, ControlPlaneHistoryEntry } from "../../src/types";
 import { applyDefaults } from "../../src/config/schema";
+import { ValidationError } from "../../src/config/validate";
 import { mkdtemp, writeFile, chmod } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,19 +16,21 @@ const issue = (id: string, state = "Todo"): NormalizedIssue => ({
   created_at: "2026-01-01", updated_at: null,
 });
 
-class FakeTracker implements TrackerAdapter {
+class FakeControlPlane implements ControlPlaneAdapter {
   candidates: NormalizedIssue[] = [];
   byIds: Record<string, NormalizedIssue> = {};
-  async fetchCandidateIssues(): Promise<NormalizedIssue[]> { return this.candidates; }
-  async fetchIssuesByStates(_states: string[]): Promise<NormalizedIssue[]> { return []; }
-  async fetchIssueStatesByIds(ids: string[]): Promise<NormalizedIssue[]> {
+  readonly capabilities: ControlPlaneAdapter["capabilities"] = { history: true, prChecks: true };
+  async fetchDispatchableWork(_query: DispatchQuery): Promise<NormalizedIssue[]> { return this.candidates; }
+  async fetchWorkByStates(_states: string[]): Promise<NormalizedIssue[]> { return []; }
+  async refreshWork(ids: string[]): Promise<NormalizedIssue[]> {
     return ids.map((id) => this.byIds[id]).filter((x): x is NormalizedIssue => Boolean(x));
   }
-  async fetchIssue(id: string): Promise<NormalizedIssue | null> { return this.byIds[id] ?? null; }
-  async listComments(_issueId: string): Promise<TrackerComment[]> { return []; }
-  async listHistory(_issueId: string): Promise<TrackerHistoryEntry[]> { return []; }
+  async fetchWorkItem(id: string): Promise<NormalizedIssue | null> { return this.byIds[id] ?? null; }
+  async listComments(_issueId: string): Promise<ControlPlaneComment[]> { return []; }
+  async listHistory(_issueId: string): Promise<ControlPlaneHistoryEntry[]> { return []; }
   async addComment(_issueId: string, _body: string, _author?: "user" | "agent"): Promise<void> { /* noop */ }
   async updateState(_issueId: string, _state: string): Promise<void> { /* noop */ }
+  async reconcilePrChecks(_args: PrChecksReconcileArgs): Promise<void> { /* noop */ }
 }
 
 async function tmpRoot(): Promise<string> {
@@ -36,7 +39,7 @@ async function tmpRoot(): Promise<string> {
 
 test("tick dispatches eligible issue and runs an attempt to completion", async () => {
   const root = await tmpRoot();
-  const tracker = new FakeTracker();
+  const tracker = new FakeControlPlane();
   tracker.candidates = [issue("i1")];
   tracker.byIds["i1"] = issue("i1");
 
@@ -48,7 +51,7 @@ test("tick dispatches eligible issue and runs an attempt to completion", async (
   });
 
   const orch = new Orchestrator({
-    tracker,
+    controlPlane: tracker,
     config: cfg,
     promptTemplate: "Body for {{ issue.identifier }}",
     runQuery: async function* () {
@@ -67,7 +70,7 @@ test("tick dispatches eligible issue and runs an attempt to completion", async (
 
 test("workspace is removed when issue disappears between completion and continuation retry", async () => {
   const root = await tmpRoot();
-  const tracker = new FakeTracker();
+  const tracker = new FakeControlPlane();
   tracker.candidates = [issue("i1")];
   tracker.byIds["i1"] = issue("i1");
 
@@ -79,7 +82,7 @@ test("workspace is removed when issue disappears between completion and continua
   });
 
   const orch = new Orchestrator({
-    tracker, config: cfg, promptTemplate: "x",
+    controlPlane: tracker, config: cfg, promptTemplate: "x",
     runQuery: async function* () {
       yield { type: "system", subtype: "init", session_id: "s-1" };
       yield { type: "result", subtype: "success", usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } };
@@ -106,7 +109,7 @@ test("workspace is removed when issue disappears between completion and continua
 
 test("tick respects max_concurrent_agents and queues the rest", async () => {
   const root = await tmpRoot();
-  const tracker = new FakeTracker();
+  const tracker = new FakeControlPlane();
   tracker.candidates = [issue("i1"), issue("i2")];
   tracker.byIds["i1"] = issue("i1");
   tracker.byIds["i2"] = issue("i2");
@@ -120,7 +123,7 @@ test("tick respects max_concurrent_agents and queues the rest", async () => {
 
   let dispatched = 0;
   const orch = new Orchestrator({
-    tracker, config: cfg, promptTemplate: "x",
+    controlPlane: tracker, config: cfg, promptTemplate: "x",
     runQuery: async function* () {
       dispatched += 1;
       yield { type: "system", subtype: "init", session_id: `s-${dispatched}` };
@@ -155,19 +158,26 @@ test("tick runs pr_checks reconciler when enabled, bouncing red checks to In Dev
     created_at: "2026-01-01", updated_at: null,
   };
 
-  class WriteRecordingTracker extends FakeTracker {
+  class WriteRecordingTracker extends FakeControlPlane {
     comments: { id: string; body: string }[] = [];
     states: Record<string, string> = { i1: "Waiting PR Checks" };
-    override async fetchIssuesByStates(states: string[]): Promise<NormalizedIssue[]> {
-      if (states.includes("Waiting PR Checks")) return [waiting];
-      return [];
+    reconcileArgs: PrChecksReconcileArgs | null = null;
+    queries: DispatchQuery[] = [];
+    override async fetchDispatchableWork(query: DispatchQuery): Promise<NormalizedIssue[]> {
+      this.queries.push(query);
+      return query.activeStates.includes("Waiting PR Checks") ? [waiting] : [];
     }
-    override async listComments(_id: string): Promise<TrackerComment[]> { return []; }
+    override async listComments(_id: string): Promise<ControlPlaneComment[]> { return []; }
     override async addComment(id: string, body: string): Promise<void> {
       this.comments.push({ id, body });
     }
     override async updateState(id: string, s: string): Promise<void> {
       this.states[id] = s;
+    }
+    override async reconcilePrChecks(args: PrChecksReconcileArgs): Promise<void> {
+      this.reconcileArgs = args;
+      await this.addComment("i1", "[pr_checks_failed] sha=abc1234");
+      await this.updateState("i1", "In Dev");
     }
   }
 
@@ -187,7 +197,7 @@ test("tick runs pr_checks reconciler when enabled, bouncing red checks to In Dev
   });
 
   const orch = new Orchestrator({
-    tracker, config: cfg, promptTemplate: "x",
+    controlPlane: tracker, config: cfg, promptTemplate: "x",
     runQuery: async function* () {
       yield { type: "system", subtype: "init", session_id: "s" };
       yield { type: "result", subtype: "success", usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 } };
@@ -195,18 +205,124 @@ test("tick runs pr_checks reconciler when enabled, bouncing red checks to In Dev
   });
 
   await orch.tick();
+  expect(tracker.queries[0]).toEqual({
+    activeStates: ["Waiting PR Checks"],
+    ownership: { mode: "none" },
+  });
+  expect(tracker.reconcileArgs?.work).toEqual([waiting]);
+  expect(tracker.reconcileArgs?.polls).toBe(orch.state.pr_checks_polls);
+  expect(tracker.reconcileArgs?.config).toMatchObject({
+    enabled: true,
+    poll_interval_ms: 1,
+    failure_budget: 3,
+    rerun_flakes: false,
+    gh_executable: stub,
+  });
+  expect(typeof tracker.reconcileArgs?.repoCwd).toBe("string");
+  expect(tracker.reconcileArgs?.now()).toBeInstanceOf(Date);
   expect(tracker.states.i1).toBe("In Dev");
   expect(tracker.comments).toHaveLength(1);
   expect(tracker.comments[0]!.body).toContain("[pr_checks_failed] sha=abc1234");
 });
 
+test("constructor rejects enabled pr_checks when control plane lacks capability", async () => {
+  const root = await tmpRoot();
+  class NoPrChecksControlPlane extends FakeControlPlane {
+    override readonly capabilities = { history: true } as const;
+  }
+  const cfg = applyDefaults({
+    tracker: { endpoint: "http://localhost:1", active_states: ["Todo"], terminal_states: ["Done"] },
+    workspace: { root },
+    pr_checks: {
+      enabled: true,
+      poll_interval_ms: 1,
+      failure_budget: 3,
+      rerun_flakes: false,
+      gh_executable: "gh",
+    },
+  });
+
+  expect(() => new Orchestrator({
+    controlPlane: new NoPrChecksControlPlane(),
+    config: cfg,
+    promptTemplate: "x",
+    runQuery: async function* () {},
+  })).toThrow(ValidationError);
+});
+
+test("github control_plane pr_checks config drives delegation", async () => {
+  const root = await tmpRoot();
+  const waiting = issue("waiting", "Reviewing CI");
+  class GithubControlPlane extends FakeControlPlane {
+    seenQueries: DispatchQuery[] = [];
+    seenConfig: PrChecksReconcileArgs["config"] | null = null;
+    override async fetchDispatchableWork(query: DispatchQuery): Promise<NormalizedIssue[]> {
+      this.seenQueries.push(query);
+      return query.activeStates.includes("Reviewing CI") ? [waiting] : [];
+    }
+    override async reconcilePrChecks(args: PrChecksReconcileArgs): Promise<void> {
+      this.seenConfig = args.config;
+    }
+  }
+  const controlPlane = new GithubControlPlane();
+  const cfg = applyDefaults({
+    control_plane: {
+      kind: "github-projects",
+      owner_type: "organization",
+      owner: "acme",
+      project_number: 1,
+      repository: "acme/app",
+      token: "token-1",
+      status_field: "Status",
+      active_states: ["Todo"],
+      terminal_states: ["Done"],
+      ownership: { mode: "label", value: "dalang" },
+      pr_checks: {
+        enabled: true,
+        poll_interval_ms: 7,
+        failure_budget: 5,
+        rerun_flakes: true,
+        wait_state: "Reviewing CI",
+        pass_state: "Ready",
+        fail_state: "Fixing",
+        escalation_state: "Escalate",
+      },
+    },
+    workspace: { root },
+    pr_checks: { enabled: false },
+  });
+
+  const orch = new Orchestrator({
+    controlPlane,
+    config: cfg,
+    promptTemplate: "x",
+    runQuery: async function* () {},
+  });
+  await orch.tick();
+
+  expect(controlPlane.seenQueries[0]).toEqual({
+    activeStates: ["Reviewing CI"],
+    ownership: { mode: "label", value: "dalang" },
+  });
+  expect(controlPlane.seenConfig).toMatchObject({
+    enabled: true,
+    poll_interval_ms: 7,
+    failure_budget: 5,
+    rerun_flakes: true,
+    wait_state: "Reviewing CI",
+    pass_state: "Ready",
+    fail_state: "Fixing",
+    escalation_state: "Escalate",
+  });
+});
+
 test("tick skips pr_checks reconciler when disabled", async () => {
   const root = await tmpRoot();
   const stub = await ghStub(`exit 99`);
-  class T extends FakeTracker {
-    waitingFetched = false;
-    override async fetchIssuesByStates(_states: string[]): Promise<NormalizedIssue[]> {
-      this.waitingFetched = true; return [];
+  class T extends FakeControlPlane {
+    prChecksCalled = false;
+    override async reconcilePrChecks(_args: PrChecksReconcileArgs): Promise<void> {
+      this.prChecksCalled = true;
     }
   }
   const tracker = new T();
@@ -225,12 +341,12 @@ test("tick skips pr_checks reconciler when disabled", async () => {
   });
 
   const orch = new Orchestrator({
-    tracker, config: cfg, promptTemplate: "x",
+    controlPlane: tracker, config: cfg, promptTemplate: "x",
     runQuery: async function* () {
       yield { type: "system", subtype: "init", session_id: "s" };
       yield { type: "result", subtype: "success", usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 } };
     },
   });
   await orch.tick();
-  expect(tracker.waitingFetched).toBe(false);
+  expect(tracker.prChecksCalled).toBe(false);
 });

@@ -6,7 +6,7 @@ export interface BlockerRef {
   state: string | null;
 }
 
-export interface NormalizedIssue {
+export interface WorkItem {
   id: string;
   identifier: string;
   title: string;
@@ -23,29 +23,37 @@ export interface NormalizedIssue {
   updated_at: string | null;
 }
 
-export interface TrackerComment {
+export type NormalizedIssue = WorkItem;
+
+export interface ControlPlaneComment {
   id: string;
   author: string | null;
   body: string;
   created_at: string;
 }
 
-export type TrackerHistoryKind =
+export type TrackerComment = ControlPlaneComment;
+
+export type ControlPlaneHistoryKind =
   | "created"
   | "state_changed"
   | "edited"
   | "comment_added"
   | "deleted";
 
-export interface TrackerHistoryEntry {
+export type TrackerHistoryKind = ControlPlaneHistoryKind;
+
+export interface ControlPlaneHistoryEntry {
   id: string;
   issue_id: string;
-  kind: TrackerHistoryKind;
+  kind: ControlPlaneHistoryKind;
   from_value: string | null;
   to_value: string | null;
   actor: "user" | "agent";
   at: string;
 }
+
+export type TrackerHistoryEntry = ControlPlaneHistoryEntry;
 
 export interface WorkspaceMeta {
   path: string;

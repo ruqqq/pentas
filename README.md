@@ -2,8 +2,8 @@
 
 A two-package Bun + TypeScript monorepo:
 
-- **`@tok-juara/dalang`** — orchestrator daemon. Polls a tracker for active issues, dispatches per-issue work to git-worktree workspaces, and runs `claude` (Claude Code CLI) sessions via the Claude Agent SDK. Adapted from the [Symphony](https://github.com/openai/symphony) orchestrator spec.
-- **`@tok-juara/wayang`** — single-user issue tracker and inbox that dalang drives against (REST API + minimal UI).
+- **`@tok-juara/dalang`** — orchestrator daemon. Polls a control plane for owned work, dispatches per-item work to git-worktree workspaces, and runs Claude/Codex/opencode agent sessions.
+- **`@tok-juara/wayang`** — single-user issue control plane and inbox that dalang can drive against (REST API + minimal UI). Dalang can also use GitHub Projects v2 as a control plane.
 
 The names are Malay: *dalang* = puppeteer/mastermind, *wayang* = shadow-puppet show.
 
@@ -32,7 +32,7 @@ tok-juara/
 ├── bunfig.toml
 ├── packages/
 │   ├── dalang/                  # orchestrator daemon
-│   └── wayang/                  # tracker
+│   └── wayang/                  # local control plane
 └── docs/superpowers/
     ├── specs/                   # design specs
     └── plans/                   # implementation plans
@@ -52,7 +52,7 @@ bun test               # bun test on every package
 
 ## Running locally
 
-### 1. Start wayang (the tracker)
+### 1. Start wayang (optional local control plane)
 
 ```bash
 cd packages/wayang
@@ -67,7 +67,8 @@ Create a `WORKFLOW.md` somewhere — typically the repo root or a project root. 
 
 ```yaml
 ---
-tracker:
+control_plane:
+  kind: wayang
   endpoint: http://localhost:3001
   active_states: [Todo, "In Progress"]
   terminal_states: [Done, Cancelled, Duplicate]
@@ -87,6 +88,26 @@ hooks:
 You are picking up issue {{ issue.identifier }}: {{ issue.title }}.
 Read the description, plan briefly, then proceed.
 ```
+
+For GitHub Projects v2, use `control_plane.kind: github-projects` and set explicit ownership so dalang only picks up work intended for it:
+
+```yaml
+control_plane:
+  kind: github-projects
+  owner_type: organization
+  owner: my-org
+  project_number: 12
+  repository: my-org/my-repo
+  token: $GITHUB_TOKEN
+  status_field: Status
+  active_states: [Todo, "In Dev"]
+  terminal_states: [Done, Cancelled]
+  ownership:
+    mode: label
+    value: dalang
+```
+
+`tracker:` remains accepted as a temporary compatibility alias for Wayang workflows.
 
 Optional `repo:` block to enable git worktrees:
 

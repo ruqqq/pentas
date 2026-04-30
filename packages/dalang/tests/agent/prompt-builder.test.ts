@@ -10,7 +10,7 @@ const issue: NormalizedIssue = {
   created_at: null, updated_at: null,
 };
 
-const tracker = { endpoint: "http://localhost:3002", api_key: null };
+const tracker = { kind: "wayang", endpoint: "http://localhost:3002", api_key: null };
 
 test("first turn prepends issue metadata header", async () => {
   const out = await buildFirstTurnPrompt("Body for {{ issue.identifier }}", issue, null, tracker);
@@ -25,8 +25,22 @@ test("first turn renders attempt variable", async () => {
 
 test("first turn renders tracker endpoint and api_key", async () => {
   const tpl = "PATCH {{ tracker.endpoint }}/api/v1/issues/{{ issue.id }}{% if tracker.api_key %} bearer={{ tracker.api_key }}{% endif %}";
-  const out = await buildFirstTurnPrompt(tpl, issue, null, { endpoint: "http://localhost:3002", api_key: "secret" });
+  const out = await buildFirstTurnPrompt(tpl, issue, null, {
+    kind: "wayang",
+    endpoint: "http://localhost:3002",
+    api_key: "secret",
+  });
   expect(out).toContain("PATCH http://localhost:3002/api/v1/issues/i_1 bearer=secret");
+});
+
+test("first turn exposes control_plane context", async () => {
+  const tpl = "{{ control_plane.kind }} {{ control_plane.endpoint }}";
+  const out = await buildFirstTurnPrompt(tpl, issue, null, {
+    kind: "github-projects",
+    endpoint: "",
+    api_key: null,
+  });
+  expect(out).toContain("github-projects");
 });
 
 test("first turn fails on unknown variable", async () => {

@@ -2,6 +2,8 @@
 
 dalang is the orchestrator daemon in the tok-juara monorepo. See the root [README](../../README.md) for project overview, prerequisites, install, and running instructions. This document is for operators who need to wire up or switch agent providers.
 
+Dalang reads work through a control-plane adapter. `control_plane.kind: wayang` preserves the local Wayang workflow; `control_plane.kind: github-projects` uses a GitHub Projects v2 board and requires explicit ownership (`label`, `assignee`, or `project_field`) unless `allow_unowned_dispatch: true` is set.
+
 ## `agent_provider`
 
 Set in the YAML front matter of your `WORKFLOW.md`:

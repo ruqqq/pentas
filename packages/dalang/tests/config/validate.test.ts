@@ -25,16 +25,30 @@ test("accepts a complete valid config", () => {
   expect(() => validateForDispatch(cfg)).not.toThrow();
 });
 
-test("rejects when $VAR api_key is unresolved", () => {
-  const cfg = baseConfig();
-  cfg.tracker.api_key = "$NEVER_DEFINED_KEY_XYZ";
+test("rejects when control_plane $VAR api_key is unresolved", () => {
+  const cfg = applyDefaults({
+    control_plane: {
+      kind: "wayang",
+      endpoint: "http://localhost:3001",
+      api_key: "$NEVER_DEFINED_KEY_XYZ",
+      active_states: ["Todo"],
+      terminal_states: ["Done"],
+      ownership: { mode: "none" },
+    },
+  });
   delete process.env.NEVER_DEFINED_KEY_XYZ;
   expect(() => validateForDispatch(cfg)).toThrow(ValidationError);
+  try {
+    validateForDispatch(cfg);
+  } catch (err) {
+    expect((err as ValidationError).code).toBe("missing_control_plane_api_key");
+  }
 });
 
-test("accepts when $VAR api_key resolves", () => {
+test("accepts when control_plane $VAR api_key resolves", () => {
   const cfg = baseConfig();
-  cfg.tracker.api_key = "$EXISTS_KEY_XYZ";
+  if (cfg.control_plane.kind !== "wayang") throw new Error("expected wayang control plane");
+  cfg.control_plane.api_key = "$EXISTS_KEY_XYZ";
   process.env.EXISTS_KEY_XYZ = "abc";
   expect(() => validateForDispatch(cfg)).not.toThrow();
   delete process.env.EXISTS_KEY_XYZ;
@@ -112,4 +126,292 @@ test("validateForDispatch fails when agent_provider=opencode but block missing",
   const cfg = applyDefaults({ agent_provider: "opencode" });
   delete (cfg as Record<string, unknown>).opencode;
   expect(() => validateForDispatch(cfg)).toThrow(ValidationError);
+});
+
+test("rejects github-projects control plane without ownership", () => {
+  const cfg = applyDefaults({
+    control_plane: {
+      kind: "github-projects",
+      owner_type: "organization",
+      owner: "acme",
+      project_number: 1,
+      repository: "acme/app",
+      token: "literal-token",
+      status_field: "Status",
+      active_states: ["Todo"],
+      terminal_states: ["Done"],
+      ownership: { mode: "none" },
+    },
+  });
+  expect(() => validateForDispatch(cfg)).toThrow(/ownership/i);
+});
+
+test("allows explicit unowned github-projects dispatch", () => {
+  const cfg = applyDefaults({
+    control_plane: {
+      kind: "github-projects",
+      owner_type: "organization",
+      owner: "acme",
+      project_number: 1,
+      repository: "acme/app",
+      token: "literal-token",
+      status_field: "Status",
+      active_states: ["Todo"],
+      terminal_states: ["Done"],
+      ownership: { mode: "none", allow_unowned_dispatch: true },
+    },
+  });
+  expect(() => validateForDispatch(cfg)).not.toThrow();
+});
+
+test("rejects github-projects control plane when token env var is missing", () => {
+  const cfg = applyDefaults({
+    control_plane: {
+      kind: "github-projects",
+      owner_type: "organization",
+      owner: "acme",
+      project_number: 1,
+      repository: "acme/app",
+      token: "$MISSING_GITHUB_TOKEN_FOR_TEST",
+      status_field: "Status",
+      active_states: ["Todo"],
+      terminal_states: ["Done"],
+      ownership: { mode: "label", value: "dalang" },
+    },
+  });
+  delete process.env.MISSING_GITHUB_TOKEN_FOR_TEST;
+
+  expect(() => validateForDispatch(cfg)).toThrow(ValidationError);
+  try {
+    validateForDispatch(cfg);
+  } catch (err) {
+    expect((err as ValidationError).code).toBe("missing_control_plane_api_key");
+  }
+});
+
+test("rejects explicit legacy tracker api_key when env var is missing", () => {
+  const cfg = applyDefaults({
+    control_plane: {
+      kind: "wayang",
+      endpoint: "http://localhost:3001",
+      api_key: null,
+      active_states: ["Todo"],
+      terminal_states: ["Done"],
+      ownership: { mode: "none" },
+    },
+    tracker: {
+      kind: "tok-juara",
+      endpoint: "http://localhost:3001",
+      api_key: "$MISSING_TRACKER_TOKEN_FOR_TEST",
+      active_states: ["Todo"],
+      terminal_states: ["Done"],
+    },
+  });
+  delete process.env.MISSING_TRACKER_TOKEN_FOR_TEST;
+
+  expect(() => validateForDispatch(cfg)).toThrow(ValidationError);
+  try {
+    validateForDispatch(cfg);
+  } catch (err) {
+    expect((err as ValidationError).code).toBe("missing_tracker_api_key");
+  }
+});
+
+test("rejects matching mixed wayang api_key env var with legacy tracker error code", () => {
+  const cfg = applyDefaults({
+    control_plane: {
+      kind: "wayang",
+      endpoint: "http://localhost:3001",
+      api_key: "$MISSING_SHARED_TRACKER_TOKEN_FOR_TEST",
+      active_states: ["Todo"],
+      terminal_states: ["Done"],
+      ownership: { mode: "none" },
+    },
+    tracker: {
+      kind: "tok-juara",
+      endpoint: "http://localhost:3001",
+      api_key: "$MISSING_SHARED_TRACKER_TOKEN_FOR_TEST",
+      active_states: ["Todo"],
+      terminal_states: ["Done"],
+    },
+  });
+  delete process.env.MISSING_SHARED_TRACKER_TOKEN_FOR_TEST;
+
+  expect(() => validateForDispatch(cfg)).toThrow(ValidationError);
+  try {
+    validateForDispatch(cfg);
+  } catch (err) {
+    expect((err as ValidationError).code).toBe("missing_tracker_api_key");
+  }
+});
+
+test("rejects tracker-only legacy api_key with legacy error code when env var is missing", () => {
+  const cfg = applyDefaults({
+    tracker: {
+      kind: "tok-juara",
+      endpoint: "http://localhost:3001",
+      api_key: "$MISSING_LEGACY_TRACKER_TOKEN_FOR_TEST",
+      active_states: ["Todo"],
+      terminal_states: ["Done"],
+    },
+  });
+  delete process.env.MISSING_LEGACY_TRACKER_TOKEN_FOR_TEST;
+
+  expect(() => validateForDispatch(cfg)).toThrow(ValidationError);
+  try {
+    validateForDispatch(cfg);
+  } catch (err) {
+    expect((err as ValidationError).code).toBe("missing_tracker_api_key");
+  }
+});
+
+test("rejects divergent mixed wayang control_plane and tracker config", () => {
+  const cfg = applyDefaults({
+    control_plane: {
+      kind: "wayang",
+      endpoint: "http://localhost:3001",
+      api_key: "same-key",
+      board: "main",
+      active_states: ["Todo", "In Dev"],
+      terminal_states: ["Done"],
+      ownership: { mode: "none" },
+    },
+    tracker: {
+      kind: "tok-juara",
+      endpoint: "http://localhost:3002",
+      api_key: "same-key",
+      board: "main",
+      active_states: ["Todo", "In Dev"],
+      terminal_states: ["Done"],
+    },
+  });
+
+  expect(() => validateForDispatch(cfg)).toThrow(ValidationError);
+  try {
+    validateForDispatch(cfg);
+  } catch (err) {
+    expect((err as ValidationError).code).toBe("conflicting_control_plane_tracker_config");
+  }
+});
+
+test("rejects divergent mixed config even if raw input spoofs internal alias marker", () => {
+  const cfg = applyDefaults({
+    __control_plane_from_tracker: true,
+    control_plane: {
+      kind: "wayang",
+      endpoint: "http://localhost:3001",
+      api_key: "same-key",
+      board: "main",
+      active_states: ["Todo"],
+      terminal_states: ["Done"],
+      ownership: { mode: "none" },
+    },
+    tracker: {
+      kind: "tok-juara",
+      endpoint: "http://localhost:3002",
+      api_key: "same-key",
+      board: "main",
+      active_states: ["Todo"],
+      terminal_states: ["Done"],
+    },
+  });
+
+  expect(() => validateForDispatch(cfg)).toThrow(ValidationError);
+  try {
+    validateForDispatch(cfg);
+  } catch (err) {
+    expect((err as ValidationError).code).toBe("conflicting_control_plane_tracker_config");
+  }
+});
+
+test("raw internal alias marker cannot suppress explicit tracker api_key validation", () => {
+  const cfg = applyDefaults({
+    __tracker_from_control_plane: true,
+    control_plane: {
+      kind: "wayang",
+      endpoint: "http://localhost:3001",
+      api_key: null,
+      active_states: ["Todo"],
+      terminal_states: ["Done"],
+      ownership: { mode: "none" },
+    },
+    tracker: {
+      kind: "tok-juara",
+      endpoint: "http://localhost:3001",
+      api_key: "$MISSING_SPOOFED_TRACKER_TOKEN_FOR_TEST",
+      active_states: ["Todo"],
+      terminal_states: ["Done"],
+    },
+  });
+  delete process.env.MISSING_SPOOFED_TRACKER_TOKEN_FOR_TEST;
+
+  expect(() => validateForDispatch(cfg)).toThrow(ValidationError);
+  try {
+    validateForDispatch(cfg);
+  } catch (err) {
+    expect((err as ValidationError).code).toBe("missing_tracker_api_key");
+  }
+});
+
+test("control_plane alias provenance survives object spread cloning", () => {
+  const cfg = {
+    ...applyDefaults({
+      control_plane: {
+        kind: "wayang",
+        endpoint: "http://localhost:3001",
+        api_key: "$MISSING_SPREAD_CONTROL_PLANE_TOKEN_FOR_TEST",
+        active_states: ["Todo"],
+        terminal_states: ["Done"],
+        ownership: { mode: "none" },
+      },
+    }),
+  };
+  delete process.env.MISSING_SPREAD_CONTROL_PLANE_TOKEN_FOR_TEST;
+
+  expect(() => validateForDispatch(cfg)).toThrow(ValidationError);
+  try {
+    validateForDispatch(cfg);
+  } catch (err) {
+    expect((err as ValidationError).code).toBe("missing_control_plane_api_key");
+  }
+});
+
+test("accepts matching mixed wayang control_plane and tracker config", () => {
+  const cfg = applyDefaults({
+    control_plane: {
+      kind: "wayang",
+      endpoint: "http://localhost:3001",
+      api_key: "same-key",
+      board: "main",
+      active_states: ["Todo", "In Dev"],
+      terminal_states: ["Done"],
+      ownership: { mode: "none" },
+    },
+    tracker: {
+      kind: "tok-juara",
+      endpoint: "http://localhost:3001",
+      api_key: "same-key",
+      board: "main",
+      active_states: ["Todo", "In Dev"],
+      terminal_states: ["Done"],
+    },
+  });
+
+  expect(() => validateForDispatch(cfg)).not.toThrow();
+});
+
+test("accepts matching mixed wayang config when both sides rely on default states", () => {
+  const cfg = applyDefaults({
+    control_plane: {
+      kind: "wayang",
+      endpoint: "http://localhost:3001",
+      ownership: { mode: "none" },
+    },
+    tracker: {
+      kind: "tok-juara",
+      endpoint: "http://localhost:3001",
+    },
+  });
+
+  expect(() => validateForDispatch(cfg)).not.toThrow();
 });

@@ -4,7 +4,7 @@ import { mkdtemp, writeFile, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Orchestrator } from "../../src/orchestrator/orchestrator";
-import { RestTrackerAdapter } from "../../src/tracker/rest-adapter";
+import { WayangControlPlaneAdapter } from "../../src/control-plane/wayang-adapter";
 import { applyDefaults } from "../../src/config/schema";
 import { runWayang } from "../../../wayang/src/main";
 import type { NormalizedIssue } from "../../src/types";
@@ -48,9 +48,9 @@ test("e2e: pr_checks reconciler bounces an issue back to In Dev with a comment",
       "pr checks") echo '[{"name":"build","state":"FAILURE","bucket":"fail","link":"https://x/run/9"}]' ;;
     esac`);
 
-    // Strip trailing slash for RestTrackerAdapter — it adds its own
+    // Strip trailing slash for WayangControlPlaneAdapter - it adds its own.
     const endpointNoSlash = baseUrl.replace(/\/$/, "");
-    const tracker = new RestTrackerAdapter({ endpoint: endpointNoSlash, apiKey: null });
+    const controlPlane = new WayangControlPlaneAdapter({ endpoint: endpointNoSlash, apiKey: null });
 
     const cfg = applyDefaults({
       tracker: {
@@ -71,7 +71,7 @@ test("e2e: pr_checks reconciler bounces an issue back to In Dev with a comment",
     });
 
     const orch = new Orchestrator({
-      tracker,
+      controlPlane,
       config: cfg,
       promptTemplate: "x",
       runQuery: async function* () {

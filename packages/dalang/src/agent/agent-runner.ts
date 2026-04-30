@@ -1,6 +1,11 @@
 // packages/dalang/src/agent/agent-runner.ts
 import type { NormalizedIssue, RuntimeEvent } from "../types";
-import { buildFirstTurnPrompt, buildContinuationPrompt, type TrackerPromptContext, type RecentActivity } from "./prompt-builder";
+import {
+  buildFirstTurnPrompt,
+  buildContinuationPrompt,
+  type ControlPlanePromptContext,
+  type RecentActivity,
+} from "./prompt-builder";
 import { mapSdkMessage } from "./event-mapper";
 import { mapCodexEvent } from "./codex-event-mapper";
 import { mapOpencodeEvent } from "./opencode-event-mapper";
@@ -71,7 +76,7 @@ export interface RunAttemptDeps {
   promptTemplate: string;
   workspacePath: string;
   config: AgentConfig;
-  tracker: TrackerPromptContext;
+  controlPlane: ControlPlanePromptContext;
   trackerRefresh: (id: string) => Promise<NormalizedIssue | null>;
   fetchRecentActivity?: (issue: NormalizedIssue) => Promise<RecentActivity>;
   isActiveState: (s: string) => boolean;
@@ -101,7 +106,7 @@ export async function runAttempt(deps: RunAttemptDeps): Promise<RunAttemptResult
       const activity = deps.fetchRecentActivity
         ? await deps.fetchRecentActivity(issue).catch(() => ({ comments: [], history: [] }))
         : { comments: [], history: [] };
-      prompt = await buildFirstTurnPrompt(deps.promptTemplate, issue, deps.attempt, deps.tracker, activity);
+      prompt = await buildFirstTurnPrompt(deps.promptTemplate, issue, deps.attempt, deps.controlPlane, activity);
     } else {
       prompt = buildContinuationPrompt(issue, turnCount, deps.config.maxTurns);
     }

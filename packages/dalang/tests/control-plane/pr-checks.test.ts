@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { parseChecks, summarise } from "../../src/orchestrator/pr-checks";
+import { parseChecks, summarise } from "../../src/control-plane/pr-checks";
 import {
   countFailureComments, latestActionForSha,
   formatFailureComment, formatPassedComment, formatEscalatedComment,
   formatNoPrComment, formatRerunComment,
-} from "../../src/orchestrator/pr-checks";
+} from "../../src/control-plane/pr-checks";
 import type { TrackerComment } from "../../src/types";
 
 describe("parseChecks", () => {
@@ -143,7 +143,7 @@ describe("comment formatters", () => {
   });
 });
 
-import { decideAction } from "../../src/orchestrator/pr-checks";
+import { decideAction } from "../../src/control-plane/pr-checks";
 
 describe("decideAction", () => {
   const base = { budget: 3, rerunFlakes: true };

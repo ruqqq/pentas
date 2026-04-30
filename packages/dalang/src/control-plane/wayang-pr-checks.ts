@@ -1,5 +1,5 @@
-import type { TrackerAdapter } from "../tracker/adapter";
-import type { NormalizedIssue, OrchestratorState } from "../types";
+import type { ControlPlaneAdapter, PrChecksPollEntry } from "./adapter";
+import type { NormalizedIssue } from "../types";
 import { runGh } from "../lib/gh";
 import {
   parseChecks,
@@ -18,12 +18,16 @@ export interface PrChecksConfig {
   failure_budget: number;
   rerun_flakes: boolean;
   gh_executable: string;
+  wait_state?: string | undefined;
+  pass_state?: string | undefined;
+  fail_state?: string | undefined;
+  escalation_state?: string | undefined;
 }
 
 export interface ReconcilerArgs {
   issues: NormalizedIssue[];
-  state: OrchestratorState;
-  tracker: TrackerAdapter;
+  polls: Map<string, PrChecksPollEntry>;
+  controlPlane: ControlPlaneAdapter;
   cfg: PrChecksConfig;
   cwd: string;
   now: () => Date;
@@ -70,11 +74,15 @@ async function fetchChecks(gh: string, prNumber: number, cwd: string): Promise<s
 
 export async function runPrChecksReconciler(args: ReconcilerArgs): Promise<void> {
   if (!args.cfg.enabled) return;
+  const waitState = args.cfg.wait_state ?? "Waiting PR Checks";
+  const passState = args.cfg.pass_state ?? "Ready for Human Review";
+  const failState = args.cfg.fail_state ?? "In Dev";
+  const escalationState = args.cfg.escalation_state ?? "Ready for Human Review";
 
   for (const issue of args.issues) {
-    if (issue.state !== "Waiting PR Checks") continue;
+    if (issue.state !== waitState) continue;
 
-    const cached = args.state.pr_checks_polls.get(issue.id);
+    const cached = args.polls.get(issue.id);
     const nowMs = args.now().getTime();
     if (cached) {
       const lastMs = Date.parse(cached.last_polled_at);
@@ -96,7 +104,7 @@ export async function runPrChecksReconciler(args: ReconcilerArgs): Promise<void>
         const checksJson = await fetchChecks(args.cfg.gh_executable, pr.number, args.cwd);
         const checks = parseChecks(checksJson);
         const summary = summarise(checks);
-        const comments = await args.tracker.listComments(issue.id);
+        const comments = await args.controlPlane.listComments(issue.id);
         action = decideAction({
           budget: args.cfg.failure_budget,
           rerunFlakes: args.cfg.rerun_flakes,
@@ -111,17 +119,17 @@ export async function runPrChecksReconciler(args: ReconcilerArgs): Promise<void>
           lastAction = "pending";
           break;
         case "no_pr_bounce":
-          await args.tracker.addComment(issue.id, formatNoPrComment(branch));
-          await args.tracker.updateState(issue.id, "In Dev");
+          await args.controlPlane.addComment(issue.id, formatNoPrComment(branch));
+          await args.controlPlane.updateState(issue.id, failState);
           lastAction = "no_pr";
           break;
         case "rerun":
           // TODO(v2): invoke `gh run rerun --failed <run-id>` for each failing check before posting this comment.
-          await args.tracker.addComment(issue.id, formatRerunComment(action.sha, 1));
+          await args.controlPlane.addComment(issue.id, formatRerunComment(action.sha, 1));
           lastAction = "rerun";
           break;
         case "failed_bounce":
-          await args.tracker.addComment(
+          await args.controlPlane.addComment(
             issue.id,
             formatFailureComment({
               sha: action.sha,
@@ -130,11 +138,11 @@ export async function runPrChecksReconciler(args: ReconcilerArgs): Promise<void>
               failures: action.failures,
             }),
           );
-          await args.tracker.updateState(issue.id, "In Dev");
+          await args.controlPlane.updateState(issue.id, failState);
           lastAction = "failed";
           break;
         case "escalate":
-          await args.tracker.addComment(
+          await args.controlPlane.addComment(
             issue.id,
             formatEscalatedComment({
               sha: action.sha,
@@ -143,7 +151,7 @@ export async function runPrChecksReconciler(args: ReconcilerArgs): Promise<void>
               failures: action.failures,
             }),
           );
-          await args.tracker.updateState(issue.id, "Ready for Human Review");
+          await args.controlPlane.updateState(issue.id, escalationState);
           lastAction = "escalated";
           break;
         case "passed": {
@@ -156,8 +164,8 @@ export async function runPrChecksReconciler(args: ReconcilerArgs): Promise<void>
               console.warn(`[pr-checks] gh pr ready ${pr.number} failed: ${ready.stderr}`);
             }
           }
-          await args.tracker.addComment(issue.id, formatPassedComment(action.sha));
-          await args.tracker.updateState(issue.id, "Ready for Human Review");
+          await args.controlPlane.addComment(issue.id, formatPassedComment(action.sha));
+          await args.controlPlane.updateState(issue.id, passState);
           lastAction = "passed";
           break;
         }
@@ -165,7 +173,7 @@ export async function runPrChecksReconciler(args: ReconcilerArgs): Promise<void>
     } catch (err) {
       console.warn(`[pr-checks] error polling issue ${issue.id}:`, err);
       // Record the throttle entry with null action so we don't hammer on repeated failures.
-      args.state.pr_checks_polls.set(issue.id, {
+      args.polls.set(issue.id, {
         last_polled_at: args.now().toISOString(),
         last_seen_sha: null,
         last_action: null,
@@ -173,7 +181,7 @@ export async function runPrChecksReconciler(args: ReconcilerArgs): Promise<void>
       continue;
     }
 
-    args.state.pr_checks_polls.set(issue.id, {
+    args.polls.set(issue.id, {
       last_polled_at: args.now().toISOString(),
       last_seen_sha: lastSeenSha,
       last_action: lastAction,

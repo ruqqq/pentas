@@ -157,3 +157,182 @@ test("opencode.model must be in provider/model form", () => {
   const parsed = WorkflowFrontMatterSchema.safeParse(cfg);
   expect(parsed.success).toBe(false);
 });
+
+test("applyDefaults exposes control_plane and tracker compatibility alias", () => {
+  const cfg = applyDefaults({});
+  expect(cfg.control_plane.kind).toBe("wayang");
+  expect(cfg.control_plane.active_states).toContain("In Dev");
+  expect(cfg.control_plane.ownership).toEqual({ mode: "none" });
+  expect(cfg.tracker.kind).toBe("tok-juara");
+});
+
+test("accepts github-projects control plane with label ownership", () => {
+  const cfg = applyDefaults({
+    control_plane: {
+      kind: "github-projects",
+      owner_type: "organization",
+      owner: "acme",
+      project_number: 7,
+      repository: "acme/app",
+      token: "$GITHUB_TOKEN",
+      status_field: "Status",
+      active_states: ["Todo", "In Dev"],
+      terminal_states: ["Done"],
+      ownership: { mode: "label", value: "dalang" },
+      branch_field: "Branch",
+      pr_checks: {
+        enabled: true,
+        poll_interval_ms: 60000,
+        failure_budget: 3,
+        rerun_flakes: true,
+        wait_state: "Waiting PR Checks",
+        pass_state: "Ready for Human Review",
+        fail_state: "In Dev",
+        escalation_state: "Ready for Human Review",
+      },
+    },
+  });
+  const parsed = WorkflowFrontMatterSchema.parse(cfg);
+  expect(parsed.control_plane.kind).toBe("github-projects");
+});
+
+test("defaults omitted github-projects pr_checks fields", () => {
+  const cfg = applyDefaults({
+    control_plane: {
+      kind: "github-projects",
+      owner_type: "organization",
+      owner: "acme",
+      project_number: 7,
+      repository: "acme/app",
+      token: "$GITHUB_TOKEN",
+      status_field: "Status",
+      active_states: ["Todo", "In Dev"],
+      terminal_states: ["Done"],
+      ownership: { mode: "label", value: "dalang" },
+      pr_checks: {
+        enabled: true,
+        wait_state: "Waiting PR Checks",
+        pass_state: "Ready for Human Review",
+        fail_state: "In Dev",
+        escalation_state: "Ready for Human Review",
+        failure_budget: 3,
+        rerun_flakes: true,
+      },
+    },
+  });
+
+  const parsed = WorkflowFrontMatterSchema.parse(cfg);
+  expect(parsed.control_plane.kind).toBe("github-projects");
+  if (parsed.control_plane.kind !== "github-projects") throw new Error("expected github-projects control plane");
+  expect(parsed.control_plane.pr_checks?.poll_interval_ms).toBe(60000);
+});
+
+test("maps legacy tracker input to wayang control_plane", () => {
+  const cfg = applyDefaults({
+    tracker: {
+      kind: "tok-juara",
+      endpoint: "http://localhost:3009",
+      api_key: null,
+      active_states: ["Todo"],
+      terminal_states: ["Done"],
+    },
+  });
+  expect(cfg.control_plane).toMatchObject({
+    kind: "wayang",
+    endpoint: "http://localhost:3009",
+    active_states: ["Todo"],
+    terminal_states: ["Done"],
+  });
+});
+
+test("direct schema parse maps legacy tracker input to wayang control_plane", () => {
+  const parsed = WorkflowFrontMatterSchema.parse({
+    tracker: {
+      kind: "tok-juara",
+      endpoint: "http://localhost:3010",
+      api_key: null,
+      active_states: ["Doing"],
+      terminal_states: ["Done"],
+    },
+    polling: { interval_ms: 5000 },
+    workspace: { root: "/tmp/dalang" },
+    hooks: { timeout_ms: 60000 },
+    agent: {
+      max_concurrent_agents: 2,
+      max_turns: 5,
+      max_retry_backoff_ms: 60000,
+      max_concurrent_agents_by_state: {},
+    },
+    claude: {
+      executable_path: "claude",
+      model: "claude-opus-4-7",
+      permission_mode: "auto",
+      turn_timeout_ms: 60000,
+      read_timeout_ms: 5000,
+      stall_timeout_ms: 30000,
+    },
+    server: { port: 0 },
+    pr_checks: {
+      enabled: false,
+      poll_interval_ms: 60000,
+      failure_budget: 3,
+      rerun_flakes: true,
+      gh_executable: "gh",
+    },
+  });
+
+  expect(parsed.control_plane).toMatchObject({
+    kind: "wayang",
+    endpoint: "http://localhost:3010",
+    active_states: ["Doing"],
+    terminal_states: ["Done"],
+  });
+});
+
+test("rejects explicit invalid control_plane instead of treating it as absent", () => {
+  for (const controlPlane of [null, false, 0, "", []]) {
+    const cfg = applyDefaults({
+      control_plane: controlPlane,
+      tracker: {
+        kind: "tok-juara",
+        endpoint: "http://localhost:3010",
+        api_key: null,
+        active_states: ["Todo"],
+        terminal_states: ["Done"],
+      },
+    });
+
+    expect(() => WorkflowFrontMatterSchema.parse(cfg)).toThrow();
+  }
+});
+
+test("rejects explicit invalid tracker instead of treating it as absent", () => {
+  for (const tracker of [null, false, 0, "", []]) {
+    const cfg = applyDefaults({ tracker });
+
+    expect(() => WorkflowFrontMatterSchema.parse(cfg)).toThrow();
+  }
+});
+
+test("maps wayang control_plane input to tracker compatibility alias when tracker omitted", () => {
+  const cfg = applyDefaults({
+    control_plane: {
+      kind: "wayang",
+      endpoint: "http://localhost:3011",
+      api_key: "wayang-key",
+      board: "ops",
+      active_states: ["Queued", "Building"],
+      terminal_states: ["Shipped", "Dropped"],
+      ownership: { mode: "none" },
+    },
+  });
+
+  expect(cfg.tracker).toEqual({
+    kind: "tok-juara",
+    endpoint: "http://localhost:3011",
+    api_key: "wayang-key",
+    board: "ops",
+    active_states: ["Queued", "Building"],
+    terminal_states: ["Shipped", "Dropped"],
+  });
+});

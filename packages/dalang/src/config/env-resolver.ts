@@ -11,6 +11,12 @@ export function resolveEnvValue(value: string | null | undefined): string | null
   return got;
 }
 
+export function resolveTrackerApiKey(value: string | null | undefined): string | null {
+  if (!value) return null;
+  if (value.startsWith("$")) return resolveEnvValue(value);
+  return value;
+}
+
 export function expandPath(input: string): string {
   let out = input;
   if (out.startsWith("~/") || out === "~") {

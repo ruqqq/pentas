@@ -7,7 +7,7 @@ Supersedes: none. Extends `2026-04-29-dalang-orchestrator-design.md` and `2026-0
 
 ## 1. Purpose
 
-Add an orchestrator-driven state where dalang waits for GitHub PR checks to settle, posts results back to the wayang ticket as comments, and either escalates to a human or bounces the issue back to `In Dev` for the agent to fix — all without holding a Claude worker slot during the wait.
+Add an orchestrator-driven state where dalang waits for GitHub PR checks to settle, posts results back to the control-plane work item as comments, and either escalates to a human or bounces the item back to `In Dev` for the agent to fix — all without holding an agent worker slot during the wait. Wayang preserves the original `gh`-backed behavior; GitHub Projects implements the same state/comment protocol natively against GitHub issues, PRs, checks, and Project v2 status fields.
 
 ## 2. Motivation
 
