@@ -3,6 +3,7 @@ import type { NormalizedIssue, RuntimeEvent } from "../types";
 import { buildFirstTurnPrompt, buildContinuationPrompt, type TrackerPromptContext, type RecentActivity } from "./prompt-builder";
 import { mapSdkMessage } from "./event-mapper";
 import { mapCodexEvent } from "./codex-event-mapper";
+import { mapOpencodeEvent } from "./opencode-event-mapper";
 
 export interface CommonAgentConfig {
   model: string;
@@ -24,7 +25,11 @@ export interface CodexAgentConfig extends CommonAgentConfig {
   approvalPolicy: "untrusted" | "on-failure" | "on-request" | "never";
 }
 
-export type AgentConfig = ClaudeAgentConfig | CodexAgentConfig;
+export interface OpencodeAgentConfig extends CommonAgentConfig {
+  provider: "opencode";
+}
+
+export type AgentConfig = ClaudeAgentConfig | CodexAgentConfig | OpencodeAgentConfig;
 
 interface CommonRunQueryOptions {
   prompt: string;
@@ -38,6 +43,7 @@ interface CommonRunQueryOptions {
 export type ClaudeRunQueryOptions = CommonRunQueryOptions & {
   claude: { permissionMode: ClaudeAgentConfig["permissionMode"] };
   codex?: never;
+  opencode?: never;
 };
 
 export type CodexRunQueryOptions = CommonRunQueryOptions & {
@@ -46,9 +52,16 @@ export type CodexRunQueryOptions = CommonRunQueryOptions & {
     approvalPolicy: CodexAgentConfig["approvalPolicy"];
   };
   claude?: never;
+  opencode?: never;
 };
 
-export type RunQueryOptions = ClaudeRunQueryOptions | CodexRunQueryOptions;
+export type OpencodeRunQueryOptions = CommonRunQueryOptions & {
+  opencode: Record<string, never>;
+  claude?: never;
+  codex?: never;
+};
+
+export type RunQueryOptions = ClaudeRunQueryOptions | CodexRunQueryOptions | OpencodeRunQueryOptions;
 
 export type RunQuery = (opts: RunQueryOptions) => AsyncIterable<unknown>;
 
@@ -160,13 +173,15 @@ async function driveOneTurn(opts: DriveOneTurnOptions): Promise<DriveOneTurnResu
     const queryOpts: RunQueryOptions =
       opts.config.provider === "claude"
         ? { ...baseOpts, claude: { permissionMode: opts.config.permissionMode } }
-        : {
-            ...baseOpts,
-            codex: {
-              sandboxMode: opts.config.sandboxMode,
-              approvalPolicy: opts.config.approvalPolicy,
-            },
-          };
+        : opts.config.provider === "codex"
+          ? {
+              ...baseOpts,
+              codex: {
+                sandboxMode: opts.config.sandboxMode,
+                approvalPolicy: opts.config.approvalPolicy,
+              },
+            }
+          : { ...baseOpts, opencode: {} };
     const iter = opts.runQuery(queryOpts);
 
     for await (const raw of iter) {
@@ -174,7 +189,9 @@ async function driveOneTurn(opts: DriveOneTurnOptions): Promise<DriveOneTurnResu
         return { success: false, reason: "turn_cancelled", thread_id: threadId, tokens };
       }
       const evt =
-        opts.config.provider === "codex" ? mapCodexEvent(raw) : mapSdkMessage(raw);
+        opts.config.provider === "codex"    ? mapCodexEvent(raw) :
+        opts.config.provider === "opencode" ? mapOpencodeEvent(raw) :
+        mapSdkMessage(raw);
       if (!evt) continue;
       if (evt.event === "session_started" && evt.thread_id) threadId = evt.thread_id;
       if (evt.event === "turn_completed" && evt.usage) {

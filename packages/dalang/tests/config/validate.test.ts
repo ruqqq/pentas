@@ -1,7 +1,18 @@
 // packages/dalang/tests/config/validate.test.ts
 import { test, expect } from "bun:test";
+import { mkdtempSync, writeFileSync, chmodSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { applyDefaults } from "../../src/config/schema";
-import { validateForDispatch, ValidationError, probeCodexAuth } from "../../src/config/validate";
+import { validateForDispatch, ValidationError, probeCodexAuth, probeOpencodeAuth } from "../../src/config/validate";
+
+function makeFakeBin(script: string): string {
+  const dir = mkdtempSync(join(tmpdir(), "opencode-bin-"));
+  const path = join(dir, "opencode");
+  writeFileSync(path, `#!/bin/sh\n${script}\n`, { mode: 0o755 });
+  chmodSync(path, 0o755);
+  return path;
+}
 
 const baseConfig = () => applyDefaults({
   tracker: { endpoint: "http://localhost:3001", active_states: ["Todo"], terminal_states: ["Done"] },
@@ -63,4 +74,42 @@ test("probeCodexAuth resolves a message on failure", async () => {
   const result = await probeCodexAuth("/usr/bin/false");
   expect(typeof result).toBe("string");
   expect(result).toMatch(/codex/i);
+});
+
+test("probeOpencodeAuth returns null when version OK and provider is in auth list", async () => {
+  const bin = makeFakeBin(`
+case "$1" in
+  --version) echo "opencode 1.0.0"; exit 0;;
+  auth)      echo '[{"provider":"anthropic"}]'; exit 0;;
+esac
+exit 0
+`);
+  const err = await probeOpencodeAuth(bin, "anthropic/claude-sonnet-4-6");
+  expect(err).toBeNull();
+});
+
+test("probeOpencodeAuth returns error when --version exits non-zero", async () => {
+  const bin = makeFakeBin(`exit 1`);
+  const err = await probeOpencodeAuth(bin, "anthropic/foo");
+  expect(err).not.toBeNull();
+  expect(err).toContain("opencode probe");
+});
+
+test("probeOpencodeAuth returns error when provider missing from auth list", async () => {
+  const bin = makeFakeBin(`
+case "$1" in
+  --version) echo "opencode 1.0.0"; exit 0;;
+  auth)      echo '[{"provider":"openai"}]'; exit 0;;
+esac
+exit 0
+`);
+  const err = await probeOpencodeAuth(bin, "anthropic/claude-sonnet-4-6");
+  expect(err).not.toBeNull();
+  expect(err).toContain("anthropic");
+});
+
+test("validateForDispatch fails when agent_provider=opencode but block missing", () => {
+  const cfg = applyDefaults({ agent_provider: "opencode" });
+  delete (cfg as Record<string, unknown>).opencode;
+  expect(() => validateForDispatch(cfg)).toThrow(ValidationError);
 });

@@ -123,3 +123,37 @@ test("rejects agent_provider=claude without a claude block", () => {
   delete cfg.claude;
   expect(() => WorkflowFrontMatterSchema.parse(cfg)).toThrow(/claude/i);
 });
+
+test("applyDefaults fills opencode block when agent_provider=opencode and omits claude/codex blocks", () => {
+  const result = applyDefaults({
+    agent_provider: "opencode",
+    opencode: { model: "google/gemini-2.5-pro" },
+  });
+  expect(result.claude).toBeUndefined();
+  expect(result.codex).toBeUndefined();
+  expect(result.opencode?.executable_path).toBe("opencode");
+  expect(result.opencode?.turn_timeout_ms).toBe(3600000);
+  expect(result.opencode?.model).toBe("google/gemini-2.5-pro");
+});
+
+test("agent_provider accepts \"opencode\"", () => {
+  const cfg = applyDefaults({ agent_provider: "opencode", opencode: { model: "anthropic/claude-sonnet-4-6" } });
+  const parsed = WorkflowFrontMatterSchema.safeParse(cfg);
+  expect(parsed.success).toBe(true);
+});
+
+test("agent_provider=\"opencode\" without opencode block fails superRefine", () => {
+  const cfg = applyDefaults({ agent_provider: "opencode" });
+  delete (cfg as Record<string, unknown>).opencode;
+  const parsed = WorkflowFrontMatterSchema.safeParse(cfg);
+  expect(parsed.success).toBe(false);
+  if (!parsed.success) {
+    expect(parsed.error.issues.some((i) => i.path[0] === "opencode")).toBe(true);
+  }
+});
+
+test("opencode.model must be in provider/model form", () => {
+  const cfg = applyDefaults({ agent_provider: "opencode", opencode: { model: "no-slash" } });
+  const parsed = WorkflowFrontMatterSchema.safeParse(cfg);
+  expect(parsed.success).toBe(false);
+});

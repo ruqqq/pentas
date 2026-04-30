@@ -1,11 +1,13 @@
 // packages/dalang/src/cli/bootstrap.ts
 import { resolve } from "node:path";
 import { WorkflowReloader } from "../config/reload";
-import { validateForDispatch, probeClaudeAuth, probeCodexAuth, ValidationError } from "../config/validate";
+import { validateForDispatch, probeClaudeAuth, probeCodexAuth, probeOpencodeAuth, ValidationError } from "../config/validate";
 import { resolveTrackerApiKey, Orchestrator } from "../orchestrator/orchestrator";
 import { RestTrackerAdapter } from "../tracker/rest-adapter";
 import { sdkRunQuery } from "../agent/sdk-runner";
 import { codexRunQuery } from "../agent/codex-runner";
+import { opencodeRunQuery } from "../agent/opencode-runner";
+import { shutdownOpencodeServer } from "../agent/opencode-server";
 import { startServer, type ServerHandle } from "../http/server";
 import { createLogger, type Logger } from "../logging/logger";
 import type { RunQuery } from "../agent/agent-runner";
@@ -47,6 +49,16 @@ export class Bootstrap {
       if (wf.config.agent_provider === "codex") {
         const err = await probeCodexAuth(wf.config.codex!.executable_path);
         if (err) throw new ValidationError("codex_auth_inactive", err);
+      } else if (wf.config.agent_provider === "opencode") {
+        const err = await probeOpencodeAuth(wf.config.opencode!.executable_path, wf.config.opencode!.model);
+        if (err) {
+          // The probe distinguishes binary failure from missing-provider-auth in its message,
+          // so map the message prefix to the right ValidationCode.
+          const code = err.startsWith("opencode auth probe: provider")
+            ? "opencode_provider_not_authed"
+            : "opencode_auth_inactive";
+          throw new ValidationError(code, err);
+        }
       } else {
         const err = await probeClaudeAuth(wf.config.claude!.executable_path);
         if (err) throw new ValidationError("claude_auth_inactive", err);
@@ -62,7 +74,9 @@ export class Bootstrap {
       ? this.opts.runQueryFactory()
       : wf.config.agent_provider === "codex"
         ? codexRunQuery
-        : sdkRunQuery;
+        : wf.config.agent_provider === "opencode"
+          ? opencodeRunQuery
+          : sdkRunQuery;
     this.orch = new Orchestrator({
       tracker, config: wf.config, promptTemplate: wf.promptTemplate,
       runQuery, logger: this.log,
@@ -117,5 +131,6 @@ export class Bootstrap {
     this.server?.stop();
     await this.reloader.stop();
     await this.orch?.drainPendingForTest();
+    await shutdownOpencodeServer().catch(() => {});
   }
 }

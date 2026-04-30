@@ -109,9 +109,9 @@ export class Orchestrator {
 
   private async reconcile(): Promise<void> {
     const stallTimeoutMs =
-      this.cfg.agent_provider === "codex"
-        ? this.cfg.codex!.stall_timeout_ms
-        : this.cfg.claude!.stall_timeout_ms;
+      this.cfg.agent_provider === "codex"     ? this.cfg.codex!.stall_timeout_ms :
+      this.cfg.agent_provider === "opencode"  ? this.cfg.opencode!.stall_timeout_ms :
+      this.cfg.claude!.stall_timeout_ms;
     const stalls = detectStalls(this.state, stallTimeoutMs);
     for (const id of stalls) {
       const entry = this.state.running.get(id);
@@ -366,6 +366,19 @@ export class Orchestrator {
         stallTimeoutMs: this.cfg.codex.stall_timeout_ms,
         sandboxMode: this.cfg.codex.sandbox_mode,
         approvalPolicy: this.cfg.codex.approval_policy,
+      };
+    }
+    if (this.cfg.agent_provider === "opencode") {
+      if (!this.cfg.opencode) throw new Error("opencode block missing despite agent_provider=opencode");
+      const oc = this.cfg.opencode;
+      return {
+        provider: "opencode",
+        ...common,
+        model: oc.model,
+        executablePath: oc.executable_path,
+        turnTimeoutMs: oc.turn_timeout_ms,
+        readTimeoutMs: oc.read_timeout_ms,
+        stallTimeoutMs: oc.stall_timeout_ms,
       };
     }
     if (!this.cfg.claude) throw new Error("claude block missing despite agent_provider=claude");

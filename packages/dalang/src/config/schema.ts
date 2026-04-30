@@ -39,7 +39,7 @@ export const AgentSchema = z.object({
   max_concurrent_agents_by_state: z.record(z.string(), z.number().int().positive()),
 });
 
-export const AgentProvider = z.enum(["claude", "codex"]);
+export const AgentProvider = z.enum(["claude", "codex", "opencode"]);
 
 export const CodexSandboxMode = z.enum([
   "read-only",
@@ -59,6 +59,14 @@ export const CodexSchema = z.object({
   model: z.string().min(1),
   sandbox_mode: CodexSandboxMode,
   approval_policy: CodexApprovalPolicy,
+  turn_timeout_ms: z.number().int().positive(),
+  read_timeout_ms: z.number().int().positive(),
+  stall_timeout_ms: z.number().int(),
+});
+
+export const OpencodeSchema = z.object({
+  executable_path: z.string().min(1),
+  model: z.string().min(1).regex(/^[^/]+\/.+$/, "model must be in providerID/modelID form"),
   turn_timeout_ms: z.number().int().positive(),
   read_timeout_ms: z.number().int().positive(),
   stall_timeout_ms: z.number().int(),
@@ -97,6 +105,7 @@ const RawWorkflowFrontMatterSchema = z.object({
   agent_provider: AgentProvider.default("claude"),
   claude: ClaudeSchema.optional(),
   codex: CodexSchema.optional(),
+  opencode: OpencodeSchema.optional(),
   server: ServerSchema,
   pr_checks: PrChecksSchema,
 });
@@ -114,6 +123,13 @@ export const WorkflowFrontMatterSchema = RawWorkflowFrontMatterSchema.superRefin
       code: z.ZodIssueCode.custom,
       path: ["codex"],
       message: "codex block is required when agent_provider is \"codex\"",
+    });
+  }
+  if (cfg.agent_provider === "opencode" && !cfg.opencode) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["opencode"],
+      message: "opencode block is required when agent_provider is \"opencode\"",
     });
   }
 });
@@ -170,6 +186,12 @@ const DEFAULTS = {
     read_timeout_ms: 5000,
     stall_timeout_ms: 300000,
   },
+  opencode: {
+    executable_path: "opencode",
+    turn_timeout_ms: 3600000,
+    read_timeout_ms: 5000,
+    stall_timeout_ms: 300000,
+  },
   server: { port: 0 },
   pr_checks: {
     enabled: false,
@@ -208,17 +230,23 @@ function deepMerge<T>(base: T, override: unknown): T {
 
 // Contract: applyDefaults fills the ACTIVE provider's block from defaults
 // (resolving `agent_provider` from the raw input, falling back to "claude").
-// The inactive provider's block is omitted, so `superRefine`'s active-block
+// The inactive providers' blocks are omitted, so `superRefine`'s active-block
 // presence rule fires for genuinely malformed inputs through the loader path
 // rather than being shadowed by always-present defaults.
+// Supported providers: "claude", "codex", "opencode".
 export function applyDefaults(raw: unknown): WorkflowFrontMatter {
   const provider = ((raw as { agent_provider?: string } | null | undefined)?.agent_provider
-    ?? DEFAULTS.agent_provider) as "claude" | "codex";
+    ?? DEFAULTS.agent_provider) as "claude" | "codex" | "opencode";
   const base = deepClone(DEFAULTS) as Record<string, unknown>;
   if (provider === "codex") {
     delete base.claude;
+    delete base.opencode;
+  } else if (provider === "opencode") {
+    delete base.claude;
+    delete base.codex;
   } else {
     delete base.codex;
+    delete base.opencode;
   }
   const merged = deepMerge(base as typeof DEFAULTS, raw ?? {}) as WorkflowFrontMatter;
   return merged;
