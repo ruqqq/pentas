@@ -11,6 +11,7 @@ const issue: NormalizedIssue = {
   state: "In Dev",
   branch_name: null,
   url: null,
+  external_ref: null,
   labels: ["bug"],
   blocked_by: [],
   created_at: "2026-04-29T00:00:00Z",

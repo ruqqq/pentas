@@ -12,6 +12,15 @@ export interface GitWorktreeOptions {
 
 export class GitWorktreeError extends Error {}
 
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 50)
+    .replace(/-+$/g, "");
+}
+
 async function git(cwd: string, args: string[]): Promise<{ ok: boolean; stdout: string; stderr: string; exitCode: number }> {
   const p = Bun.spawn(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
   const exitCode = await p.exited;
@@ -32,8 +41,11 @@ export class GitWorktreeManager {
     this.sharedClonePath = join(resolve(opts.workspaceRoot), ".repo.git");
   }
 
-  branchName(sanitizedKey: string): string {
-    return `${this.opts.branchPrefix}${sanitizedKey}`;
+  branchName(input: { externalRef: string | null; title: string }): string {
+    if (input.externalRef && input.externalRef.trim() !== "") {
+      return `${this.opts.branchPrefix}${slugify(input.externalRef)}`;
+    }
+    return `${this.opts.branchPrefix}feat/${slugify(input.title) || "untitled"}`;
   }
 
   sharedPath(): string { return this.sharedClonePath; }

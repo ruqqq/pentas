@@ -53,6 +53,7 @@ export interface NormalizedIssue {
   state: string;
   branch_name: string | null;
   url: string | null;
+  external_ref: string | null;
   labels: string[];
   blocked_by: { id: string | null; identifier: string | null; state: string | null }[];
   created_at: string | null;

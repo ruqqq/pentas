@@ -9,7 +9,7 @@ function mkIssue(p: Partial<NormalizedIssue>): NormalizedIssue {
     id: p.id ?? "id", identifier: p.identifier ?? "X-1", title: p.title ?? "t",
     description: null, priority: p.priority ?? null,
     state: p.state ?? "Todo",
-    branch_name: null, url: null,
+    branch_name: null, url: null, external_ref: null,
     labels: [], blocked_by: p.blocked_by ?? [],
     created_at: p.created_at ?? null,
     updated_at: null,

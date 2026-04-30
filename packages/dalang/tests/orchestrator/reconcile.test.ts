@@ -22,7 +22,7 @@ function makeRunning(issue: NormalizedIssue, lastEventAt: string | null, started
 
 const issue = (state: string): NormalizedIssue => ({
   id: "i1", identifier: "X-1", title: "t", description: null, priority: null,
-  state, branch_name: null, url: null, labels: [], blocked_by: [],
+  state, branch_name: null, url: null, external_ref: null, labels: [], blocked_by: [],
   created_at: null, updated_at: null,
 });
 

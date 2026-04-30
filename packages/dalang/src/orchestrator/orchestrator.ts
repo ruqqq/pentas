@@ -155,7 +155,10 @@ export class Orchestrator {
     const cwd = this.workspaces.pathFor(issue.identifier);
     const ws = await this.workspaces.ensureWorkspace(issue.identifier);
     if (this.worktrees) {
-      const branch = this.worktrees.branchName(ws.workspace_key);
+      const branch = this.worktrees.branchName({
+        externalRef: issue.external_ref,
+        title: issue.title,
+      });
       await this.worktrees.ensureWorktree(cwd, branch);
     }
     const env = {

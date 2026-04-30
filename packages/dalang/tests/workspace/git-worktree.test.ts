@@ -49,6 +49,37 @@ test("reusing worktree path is a no-op (preserves branch)", async () => {
   expect(existsSync(join(wsPath, "wip.txt"))).toBe(true);
 });
 
+test("branchName uses external_ref when present", () => {
+  const m = new GitWorktreeManager({
+    workspaceRoot: "/tmp", repoUrl: "x", defaultBranch: "main", branchPrefix: "claude/",
+  });
+  expect(m.branchName({ externalRef: "ENG-123", title: "anything" })).toBe("claude/eng-123");
+  expect(m.branchName({ externalRef: "ABC-7", title: "Fix the login" })).toBe("claude/abc-7");
+});
+
+test("branchName falls back to feat/<title-slug> when external_ref missing", () => {
+  const m = new GitWorktreeManager({
+    workspaceRoot: "/tmp", repoUrl: "x", defaultBranch: "main", branchPrefix: "claude/",
+  });
+  expect(m.branchName({ externalRef: null, title: "Fix the login bug!" })).toBe(
+    "claude/feat/fix-the-login-bug",
+  );
+  expect(m.branchName({ externalRef: "", title: "Make it work" })).toBe("claude/feat/make-it-work");
+  expect(m.branchName({ externalRef: null, title: "" })).toBe("claude/feat/untitled");
+});
+
+test("branchName slugifies long titles to a sane length", () => {
+  const m = new GitWorktreeManager({
+    workspaceRoot: "/tmp", repoUrl: "x", defaultBranch: "main", branchPrefix: "",
+  });
+  const out = m.branchName({
+    externalRef: null,
+    title: "A very long title that should be truncated to a reasonable length for branch naming",
+  });
+  expect(out.startsWith("feat/")).toBe(true);
+  expect(out.length).toBeLessThanOrEqual(60);
+});
+
 test("removeWorktree cleans dir but leaves branch", async () => {
   const src = await setupSourceRepo();
   const root = await tmpRoot();

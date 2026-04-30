@@ -11,6 +11,7 @@ const issue: NormalizedIssue = {
   state: "Todo",
   branch_name: null,
   url: null,
+  external_ref: null,
   labels: [],
   blocked_by: [],
   created_at: "",

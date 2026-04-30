@@ -67,6 +67,7 @@ function rowToNormalized(db: Database, row: IssueRow): NormalizedIssue {
     state: row.state,
     branch_name: row.branch_name,
     url: row.external_url,
+    external_ref: row.external_ref,
     labels: hydrateLabels(db, row.id),
     blocked_by: hydrateBlockers(db, row.id),
     created_at: row.created_at,
