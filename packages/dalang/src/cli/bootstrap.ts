@@ -1,7 +1,7 @@
 // packages/dalang/src/cli/bootstrap.ts
 import { resolve } from "node:path";
 import { WorkflowReloader } from "../config/reload";
-import { validateForDispatch, probeClaudeAuth, ValidationError } from "../config/validate";
+import { validateForDispatch, probeClaudeAuth, probeCodexAuth, ValidationError } from "../config/validate";
 import { resolveTrackerApiKey, Orchestrator } from "../orchestrator/orchestrator";
 import { RestTrackerAdapter } from "../tracker/rest-adapter";
 import { sdkRunQuery } from "../agent/sdk-runner";
@@ -44,8 +44,13 @@ export class Bootstrap {
     const wf = this.reloader.current();
     validateForDispatch(wf.config);
     if (!this.opts.skipAuthProbe) {
-      const err = await probeClaudeAuth(wf.config.claude!.executable_path);
-      if (err) throw new ValidationError("claude_auth_inactive", err);
+      if (wf.config.agent_provider === "codex") {
+        const err = await probeCodexAuth(wf.config.codex!.executable_path);
+        if (err) throw new ValidationError("codex_auth_inactive", err);
+      } else {
+        const err = await probeClaudeAuth(wf.config.claude!.executable_path);
+        if (err) throw new ValidationError("claude_auth_inactive", err);
+      }
     }
     const tracker = new RestTrackerAdapter({
       endpoint: this.opts.trackerEndpoint ?? wf.config.tracker.endpoint,
