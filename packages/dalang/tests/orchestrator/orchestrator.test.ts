@@ -2,7 +2,7 @@
 import { test, expect } from "bun:test";
 import { Orchestrator } from "../../src/orchestrator/orchestrator";
 import type { TrackerAdapter } from "../../src/tracker/adapter";
-import type { NormalizedIssue, TrackerComment } from "../../src/types";
+import type { NormalizedIssue, TrackerComment, TrackerHistoryEntry } from "../../src/types";
 import { applyDefaults } from "../../src/config/schema";
 import { mkdtemp, writeFile, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -24,6 +24,7 @@ class FakeTracker implements TrackerAdapter {
   }
   async fetchIssue(id: string): Promise<NormalizedIssue | null> { return this.byIds[id] ?? null; }
   async listComments(_issueId: string): Promise<TrackerComment[]> { return []; }
+  async listHistory(_issueId: string): Promise<TrackerHistoryEntry[]> { return []; }
   async addComment(_issueId: string, _body: string, _author?: "user" | "agent"): Promise<void> { /* noop */ }
   async updateState(_issueId: string, _state: string): Promise<void> { /* noop */ }
 }

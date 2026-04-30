@@ -146,11 +146,21 @@ export async function runPrChecksReconciler(args: ReconcilerArgs): Promise<void>
           await args.tracker.updateState(issue.id, "Ready for Human Review");
           lastAction = "escalated";
           break;
-        case "passed":
+        case "passed": {
+          // Flip the PR out of draft now that CI is green. Idempotent: gh pr ready
+          // on an already-ready PR succeeds. If it fails we still proceed with the
+          // state transition — the human can flip the PR manually.
+          if (pr) {
+            const ready = await runGh(args.cfg.gh_executable, ["pr", "ready", String(pr.number)], { cwd: args.cwd });
+            if (ready.exitCode !== 0) {
+              console.warn(`[pr-checks] gh pr ready ${pr.number} failed: ${ready.stderr}`);
+            }
+          }
           await args.tracker.addComment(issue.id, formatPassedComment(action.sha));
           await args.tracker.updateState(issue.id, "Ready for Human Review");
           lastAction = "passed";
           break;
+        }
       }
     } catch (err) {
       console.warn(`[pr-checks] error polling issue ${issue.id}:`, err);

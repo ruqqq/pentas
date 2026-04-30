@@ -168,3 +168,28 @@ test("listComments throws tracker_malformed_payload when JSON is null", async ()
   const adapter = new RestTrackerAdapter({ endpoint: baseURL(), apiKey: null });
   await expect(adapter.listComments("issue-1")).rejects.toMatchObject({ code: "tracker_malformed_payload" });
 });
+
+test("listHistory parses { history: [...] }", async () => {
+  nextResponse = { status: 200, body: { history: [
+    { id: "h1", issue_id: "issue-1", kind: "state_changed", from_value: "Todo", to_value: "Plan", actor: "agent", at: "2026-01-02T00:00:00Z" },
+    { id: "h2", issue_id: "issue-1", kind: "comment_added", from_value: null, to_value: null, actor: "user", at: "2026-01-02T00:01:00Z" },
+  ]}};
+  const adapter = new RestTrackerAdapter({ endpoint: baseURL(), apiKey: null });
+  const got = await adapter.listHistory("issue-1");
+  expect(got).toHaveLength(2);
+  expect(got[0]).toMatchObject({ id: "h1", kind: "state_changed", from_value: "Todo", to_value: "Plan" });
+  expect(lastRequest!.method).toBe("GET");
+  expect(lastRequest!.url).toBe("/api/v1/issues/issue-1/history");
+});
+
+test("listHistory throws tracker_status_error on non-2xx", async () => {
+  nextResponse = { status: 500, body: { error: "x" }};
+  const adapter = new RestTrackerAdapter({ endpoint: baseURL(), apiKey: null });
+  await expect(adapter.listHistory("issue-1")).rejects.toMatchObject({ code: "tracker_status_error" });
+});
+
+test("listHistory throws tracker_malformed_payload when history is not array", async () => {
+  nextResponse = { status: 200, body: { history: "nope" }};
+  const adapter = new RestTrackerAdapter({ endpoint: baseURL(), apiKey: null });
+  await expect(adapter.listHistory("issue-1")).rejects.toMatchObject({ code: "tracker_malformed_payload" });
+});

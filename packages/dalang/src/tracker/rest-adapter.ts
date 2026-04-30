@@ -1,5 +1,5 @@
 // packages/dalang/src/tracker/rest-adapter.ts
-import type { NormalizedIssue, TrackerComment } from "../types";
+import type { NormalizedIssue, TrackerComment, TrackerHistoryEntry } from "../types";
 import type { TrackerAdapter } from "./adapter";
 import { TrackerError } from "./adapter";
 import { normalizeIssue } from "./normalize";
@@ -128,6 +128,15 @@ export class RestTrackerAdapter implements TrackerAdapter {
       throw new TrackerError("tracker_malformed_payload", `${this.endpoint}${path}: comments not array`);
     }
     return (data as { comments: TrackerComment[] }).comments;
+  }
+
+  async listHistory(issueId: string): Promise<TrackerHistoryEntry[]> {
+    const path = `/api/v1/issues/${encodeURIComponent(issueId)}/history`;
+    const data = await this.getJson(path);
+    if (typeof data !== "object" || data === null || !Array.isArray((data as { history?: unknown }).history)) {
+      throw new TrackerError("tracker_malformed_payload", `${this.endpoint}${path}: history not array`);
+    }
+    return (data as { history: TrackerHistoryEntry[] }).history;
   }
 
   async addComment(issueId: string, body: string, author: "user" | "agent" = "agent"): Promise<void> {

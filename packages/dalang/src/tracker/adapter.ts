@@ -1,5 +1,5 @@
 // packages/dalang/src/tracker/adapter.ts
-import type { NormalizedIssue, TrackerComment } from "../types";
+import type { NormalizedIssue, TrackerComment, TrackerHistoryEntry } from "../types";
 
 export interface TrackerAdapter {
   fetchCandidateIssues(activeStates: string[]): Promise<NormalizedIssue[]>;
@@ -7,6 +7,7 @@ export interface TrackerAdapter {
   fetchIssueStatesByIds(ids: string[]): Promise<NormalizedIssue[]>;
   fetchIssue(id: string): Promise<NormalizedIssue | null>;
   listComments(issueId: string): Promise<TrackerComment[]>;
+  listHistory(issueId: string): Promise<TrackerHistoryEntry[]>;
   addComment(issueId: string, body: string, author?: "user" | "agent"): Promise<void>;
   updateState(issueId: string, state: string): Promise<void>;
 }

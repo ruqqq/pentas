@@ -23,6 +23,7 @@ function fakeTracker(state: { comments: TrackerComment[]; states: Record<string,
     fetchIssueStatesByIds: async () => [],
     fetchIssue: async () => null,
     listComments: async () => state.comments,
+    listHistory: async () => [],
     addComment: async (_id, body) => {
       state.comments.push({
         id: String(state.comments.length + 1),
@@ -55,8 +56,11 @@ const issue: NormalizedIssue = {
 };
 
 describe("runPrChecksReconciler", () => {
-  test("red checks (rerun_flakes=false) under budget → bounce to In Dev with [pr_checks_failed] comment", async () => {
+  test("red checks (rerun_flakes=false) under budget → bounce to In Dev with [pr_checks_failed] comment, PR stays draft", async () => {
+    const logDir = await mkdtemp(join(tmpdir(), "gh-log-"));
+    const logPath = join(logDir, "calls.log");
     const stub = await ghStub(`
+      echo "$@" >> ${logPath}
       case "$1 $2" in
         "pr list") echo '[{"url":"https://x/pr/1","number":1,"headRefOid":"abc1234567"}]' ;;
         "pr checks") echo '[{"name":"build","state":"FAILURE","bucket":"fail","link":"https://x/run/9"}]' ;;
@@ -78,13 +82,19 @@ describe("runPrChecksReconciler", () => {
     expect(tracker.comments).toHaveLength(1);
     expect(tracker.comments[0]!.body).toContain("[pr_checks_failed] sha=abc1234 attempt=1/3");
     expect(tracker.comments[0]!.body).toContain("- build: fail — https://x/run/9");
+    const log = await Bun.file(logPath).text();
+    expect(log).not.toContain("pr ready");
   });
 
-  test("green checks → state moves to Ready for Human Review with [pr_checks_passed]", async () => {
+  test("green checks → flips PR ready, then transitions to Ready for Human Review", async () => {
+    const logDir = await mkdtemp(join(tmpdir(), "gh-log-"));
+    const logPath = join(logDir, "calls.log");
     const stub = await ghStub(`
+      echo "$@" >> ${logPath}
       case "$1 $2" in
         "pr list") echo '[{"url":"https://x/pr/1","number":1,"headRefOid":"abc1234567"}]' ;;
         "pr checks") echo '[{"name":"build","state":"SUCCESS","bucket":"pass","link":"https://x/run/9"}]' ;;
+        "pr ready") echo '' ;;
       esac`);
     const tracker = { comments: [] as TrackerComment[], states: { i1: "Waiting PR Checks" } };
     const adapter = fakeTracker(tracker);
@@ -101,6 +111,8 @@ describe("runPrChecksReconciler", () => {
 
     expect(tracker.states.i1).toBe("Ready for Human Review");
     expect(tracker.comments[0]!.body).toContain("[pr_checks_passed] sha=abc1234");
+    const log = await Bun.file(logPath).text();
+    expect(log).toContain("pr ready 1");
   });
 
   test("third failure → escalate to Ready for Human Review", async () => {

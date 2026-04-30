@@ -30,6 +30,23 @@ export interface TrackerComment {
   created_at: string;
 }
 
+export type TrackerHistoryKind =
+  | "created"
+  | "state_changed"
+  | "edited"
+  | "comment_added"
+  | "deleted";
+
+export interface TrackerHistoryEntry {
+  id: string;
+  issue_id: string;
+  kind: TrackerHistoryKind;
+  from_value: string | null;
+  to_value: string | null;
+  actor: "user" | "agent";
+  at: string;
+}
+
 export interface WorkspaceMeta {
   path: string;
   workspace_key: string;

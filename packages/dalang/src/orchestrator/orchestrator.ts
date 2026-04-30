@@ -221,6 +221,13 @@ export class Orchestrator {
         const r = await this.tracker.fetchIssueStatesByIds([id]).catch(() => []);
         return r[0] ?? null;
       },
+      fetchRecentActivity: async (iss) => {
+        const [comments, history] = await Promise.all([
+          this.tracker.listComments(iss.id).catch(() => []),
+          this.tracker.listHistory(iss.id).catch(() => []),
+        ]);
+        return { comments, history };
+      },
       isActiveState: (s) => this.cfg.tracker.active_states.some((x) => x.toLowerCase() === s.toLowerCase()),
       runQuery: this.runQuery,
       onEvent: (e) => {

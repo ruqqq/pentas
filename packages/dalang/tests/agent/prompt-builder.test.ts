@@ -1,7 +1,7 @@
 // packages/dalang/tests/agent/prompt-builder.test.ts
 import { test, expect } from "bun:test";
 import { buildFirstTurnPrompt, buildContinuationPrompt } from "../../src/agent/prompt-builder";
-import type { NormalizedIssue } from "../../src/types";
+import type { NormalizedIssue, TrackerComment, TrackerHistoryEntry } from "../../src/types";
 
 const issue: NormalizedIssue = {
   id: "i_1", identifier: "JUARA-1", title: "Fix bug", description: "details",
@@ -41,6 +41,45 @@ test("first turn iterates labels", async () => {
   const tpl = "{% for l in issue.labels %}[{{ l }}]{% endfor %}";
   const out = await buildFirstTurnPrompt(tpl, issue, null, tracker);
   expect(out).toContain("[bug][p1]");
+});
+
+test("first turn exposes recent_comments newest-first, capped to 5", async () => {
+  const comments: TrackerComment[] = Array.from({ length: 7 }, (_, i) => ({
+    id: `c${i + 1}`,
+    author: i % 2 === 0 ? "agent" : "user",
+    body: `body ${i + 1}`,
+    created_at: `2026-01-0${i + 1}T00:00:00Z`,
+  }));
+  const tpl = "{% for c in recent_comments %}<{{ c.id }}:{{ c.author }}:{{ c.body }}>{% endfor %}";
+  const out = await buildFirstTurnPrompt(tpl, issue, null, tracker, { comments, history: [] });
+  // Newest first, only last 5 ids: c7 c6 c5 c4 c3
+  expect(out).toContain("<c7:agent:body 7>");
+  expect(out).toContain("<c3:agent:body 3>");
+  expect(out).not.toContain("c2:");
+  expect(out).not.toContain("c1:");
+});
+
+test("first turn exposes recent_history newest-first, capped to 5", async () => {
+  const history: TrackerHistoryEntry[] = Array.from({ length: 6 }, (_, i) => ({
+    id: `h${i + 1}`,
+    issue_id: "i_1",
+    kind: "state_changed",
+    from_value: `S${i}`,
+    to_value: `S${i + 1}`,
+    actor: "agent",
+    at: `2026-01-0${i + 1}T00:00:00Z`,
+  }));
+  const tpl = "{% for h in recent_history %}<{{ h.id }}:{{ h.kind }}:{{ h.from_value }}->{{ h.to_value }}>{% endfor %}";
+  const out = await buildFirstTurnPrompt(tpl, issue, null, tracker, { comments: [], history });
+  expect(out).toContain("<h6:state_changed:S5->S6>");
+  expect(out).toContain("<h2:state_changed:S1->S2>");
+  expect(out).not.toContain("<h1:");
+});
+
+test("first turn defaults recent_comments and recent_history to empty arrays", async () => {
+  const tpl = "comments={{ recent_comments.size }} history={{ recent_history.size }}";
+  const out = await buildFirstTurnPrompt(tpl, issue, null, tracker);
+  expect(out).toContain("comments=0 history=0");
 });
 
 test("continuation prompt mentions identifier and turn number, omits original prompt", async () => {
