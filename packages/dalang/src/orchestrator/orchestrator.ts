@@ -110,7 +110,8 @@ export class Orchestrator {
           terminal: this.cfg.control_plane.terminal_states,
           byState: this.cfg.agent.max_concurrent_agents_by_state,
         })
-      ) continue;
+      )
+        continue;
       this.dispatch(issue, null);
     }
   }
@@ -152,9 +153,11 @@ export class Orchestrator {
 
   private async reconcile(): Promise<void> {
     const stallTimeoutMs =
-      this.cfg.agent_provider === "codex"     ? this.cfg.codex!.stall_timeout_ms :
-      this.cfg.agent_provider === "opencode"  ? this.cfg.opencode!.stall_timeout_ms :
-      this.cfg.claude!.stall_timeout_ms;
+      this.cfg.agent_provider === "codex"
+        ? this.cfg.codex!.stall_timeout_ms
+        : this.cfg.agent_provider === "opencode"
+          ? this.cfg.opencode!.stall_timeout_ms
+          : this.cfg.claude!.stall_timeout_ms;
     const stalls = detectStalls(this.state, stallTimeoutMs);
     for (const id of stalls) {
       const entry = this.state.running.get(id);
@@ -192,11 +195,13 @@ export class Orchestrator {
   private dispatch(issue: NormalizedIssue, attempt: number | null): void {
     const controller = new AbortController();
     const entry: RunningEntry = {
-      issue, identifier: issue.identifier,
+      issue,
+      identifier: issue.identifier,
       workspace_path: this.workspaces.pathFor(issue.identifier),
       started_at: new Date().toISOString(),
       abort_controller: controller,
-      retry_attempt: attempt, session: null,
+      retry_attempt: attempt,
+      session: null,
     };
     addRunning(this.state, issue.id, entry);
     this.log.info(
@@ -223,10 +228,12 @@ export class Orchestrator {
     const cwd = this.workspaces.pathFor(issue.identifier);
     const ws = await this.workspaces.ensureWorkspace(issue.identifier);
     if (this.worktrees) {
-      const branch = issue.branch_name ?? this.worktrees.branchName({
-        externalRef: issue.external_ref,
-        title: issue.title,
-      });
+      const branch =
+        issue.branch_name ??
+        this.worktrees.branchName({
+          externalRef: issue.external_ref,
+          title: issue.title,
+        });
       await this.worktrees.ensureWorktree(cwd, branch);
     }
     const env = {
@@ -248,7 +255,8 @@ export class Orchestrator {
       "spawning agent",
     );
     const result = await runAttempt({
-      issue, attempt,
+      issue,
+      attempt,
       promptTemplate: this.promptTemplate,
       workspacePath: cwd,
       controlPlane: this.buildControlPlanePromptContext(),
@@ -259,19 +267,26 @@ export class Orchestrator {
       },
       fetchRecentActivity: async (iss) => {
         const comments = await this.controlPlane.listComments(iss.id).catch((err) => {
-          this.log.warn({ issue_id: iss.id, err: (err as Error).message }, "control-plane comments fetch failed");
+          this.log.warn(
+            { issue_id: iss.id, err: (err as Error).message },
+            "control-plane comments fetch failed",
+          );
           return [];
         });
         let history: Awaited<ReturnType<NonNullable<typeof this.controlPlane.listHistory>>> = [];
         if (this.controlPlane.capabilities.history && this.controlPlane.listHistory) {
           history = await this.controlPlane.listHistory(iss.id).catch((err) => {
-            this.log.warn({ issue_id: iss.id, err: (err as Error).message }, "control-plane history fetch failed");
+            this.log.warn(
+              { issue_id: iss.id, err: (err as Error).message },
+              "control-plane history fetch failed",
+            );
             return [];
           });
         }
         return { comments, history };
       },
-      isActiveState: (s) => this.cfg.control_plane.active_states.some((x) => x.toLowerCase() === s.toLowerCase()),
+      isActiveState: (s) =>
+        this.cfg.control_plane.active_states.some((x) => x.toLowerCase() === s.toLowerCase()),
       runQuery: this.runQuery,
       onEvent: (e) => {
         const entry = this.state.running.get(issue.id);
@@ -279,11 +294,18 @@ export class Orchestrator {
         if (entry.session === null) {
           entry.session = {
             session_id: e.thread_id ? `${e.thread_id}-1` : "?-1",
-            thread_id: e.thread_id ?? "?", turn_id: "1",
-            claude_session_pid: null, last_event: e.event,
-            last_event_at: e.timestamp, last_message: e.message ?? null,
-            input_tokens: 0, output_tokens: 0, total_tokens: 0,
-            last_reported_input_tokens: 0, last_reported_output_tokens: 0, last_reported_total_tokens: 0,
+            thread_id: e.thread_id ?? "?",
+            turn_id: "1",
+            claude_session_pid: null,
+            last_event: e.event,
+            last_event_at: e.timestamp,
+            last_message: e.message ?? null,
+            input_tokens: 0,
+            output_tokens: 0,
+            total_tokens: 0,
+            last_reported_input_tokens: 0,
+            last_reported_output_tokens: 0,
+            last_reported_total_tokens: 0,
             turn_count: 1,
           };
         }
@@ -312,7 +334,9 @@ export class Orchestrator {
 
     accumulateTokens(this.state, result.tokens);
     if (this.cfg.hooks.after_run) {
-      await this.runHookLogged("after_run", this.cfg.hooks.after_run, cwd, env, issue).catch(() => {});
+      await this.runHookLogged("after_run", this.cfg.hooks.after_run, cwd, env, issue).catch(
+        () => {},
+      );
     }
     removeRunning(this.state, issue.id);
 
@@ -328,8 +352,11 @@ export class Orchestrator {
         "task completed",
       );
       scheduleRetry(this.state, {
-        issue_id: issue.id, identifier: issue.identifier,
-        attempt: 1, delayMs: CONTINUATION_RETRY_MS, error: null,
+        issue_id: issue.id,
+        identifier: issue.identifier,
+        attempt: 1,
+        delayMs: CONTINUATION_RETRY_MS,
+        error: null,
         onFire: () => this.handleRetryFire(issue.id, issue.identifier),
       });
     } else {
@@ -346,8 +373,11 @@ export class Orchestrator {
         "task failed; scheduling retry",
       );
       scheduleRetry(this.state, {
-        issue_id: issue.id, identifier: issue.identifier,
-        attempt: nextAttempt, delayMs: delay, error: result.reason ?? "worker_failed",
+        issue_id: issue.id,
+        identifier: issue.identifier,
+        attempt: nextAttempt,
+        delayMs: delay,
+        error: result.reason ?? "worker_failed",
         onFire: () => this.handleRetryFire(issue.id, issue.identifier),
       });
     }
@@ -364,8 +394,10 @@ export class Orchestrator {
       const e = this.state.retry_attempts.get(issueId);
       const next = (e?.attempt ?? 1) + 1;
       scheduleRetry(this.state, {
-        issue_id: issueId, identifier,
-        attempt: next, delayMs: computeBackoffMs(next, this.cfg.agent.max_retry_backoff_ms),
+        issue_id: issueId,
+        identifier,
+        attempt: next,
+        delayMs: computeBackoffMs(next, this.cfg.agent.max_retry_backoff_ms),
         error: "retry poll failed",
         onFire: () => this.handleRetryFire(issueId, identifier),
       });
@@ -382,16 +414,20 @@ export class Orchestrator {
       releaseClaim(this.state, issueId);
       return;
     }
-    if (!isEligible(issue, this.state, {
-      active: this.cfg.control_plane.active_states,
-      terminal: this.cfg.control_plane.terminal_states,
-      byState: this.cfg.agent.max_concurrent_agents_by_state,
-    })) {
+    if (
+      !isEligible(issue, this.state, {
+        active: this.cfg.control_plane.active_states,
+        terminal: this.cfg.control_plane.terminal_states,
+        byState: this.cfg.agent.max_concurrent_agents_by_state,
+      })
+    ) {
       const e = this.state.retry_attempts.get(issueId);
       const next = (e?.attempt ?? 1) + 1;
       scheduleRetry(this.state, {
-        issue_id: issueId, identifier: issue.identifier,
-        attempt: next, delayMs: computeBackoffMs(next, this.cfg.agent.max_retry_backoff_ms),
+        issue_id: issueId,
+        identifier: issue.identifier,
+        attempt: next,
+        delayMs: computeBackoffMs(next, this.cfg.agent.max_retry_backoff_ms),
         error: "no available orchestrator slots",
         onFire: () => this.handleRetryFire(issueId, issue.identifier),
       });
@@ -419,7 +455,8 @@ export class Orchestrator {
       };
     }
     if (this.cfg.agent_provider === "opencode") {
-      if (!this.cfg.opencode) throw new Error("opencode block missing despite agent_provider=opencode");
+      if (!this.cfg.opencode)
+        throw new Error("opencode block missing despite agent_provider=opencode");
       const oc = this.cfg.opencode;
       return {
         provider: "opencode",
@@ -444,11 +481,15 @@ export class Orchestrator {
     };
   }
 
-  private buildControlPlanePromptContext(): { kind: string; endpoint: string; api_key: string | null } {
+  private buildControlPlanePromptContext(): {
+    kind: string;
+    endpoint: string;
+    api_key: string | null;
+  } {
     const cp = this.cfg.control_plane;
-    if (cp.kind === "wayang") {
+    if (cp.kind === "papan") {
       return {
-        kind: "wayang",
+        kind: "papan",
         endpoint: cp.endpoint,
         api_key: resolveTrackerApiKey(cp.api_key ?? null),
       };
@@ -468,21 +509,24 @@ export class Orchestrator {
     });
   }
 
-  private async cleanupByIdentifier(opts: { id: string; identifier: string; state: string }): Promise<void> {
+  private async cleanupByIdentifier(opts: {
+    id: string;
+    identifier: string;
+    state: string;
+  }): Promise<void> {
     const cwd = this.workspaces.pathFor(opts.identifier);
     const env = {
-      WORKSPACE_PATH: cwd, ISSUE_ID: opts.id,
-      ISSUE_IDENTIFIER: opts.identifier, ISSUE_STATE: opts.state,
+      WORKSPACE_PATH: cwd,
+      ISSUE_ID: opts.id,
+      ISSUE_IDENTIFIER: opts.identifier,
+      ISSUE_STATE: opts.state,
       ATTEMPT: "",
     };
     if (this.cfg.hooks.before_remove) {
-      await this.runHookLogged(
-        "before_remove",
-        this.cfg.hooks.before_remove,
-        cwd,
-        env,
-        { id: opts.id, identifier: opts.identifier },
-      ).catch(() => {});
+      await this.runHookLogged("before_remove", this.cfg.hooks.before_remove, cwd, env, {
+        id: opts.id,
+        identifier: opts.identifier,
+      }).catch(() => {});
     }
     if (this.worktrees) await this.worktrees.removeWorktree(cwd);
     else await this.workspaces.removeWorkspace(opts.identifier);

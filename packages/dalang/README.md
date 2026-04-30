@@ -1,15 +1,15 @@
 # dalang — agent provider configuration
 
-dalang is the orchestrator daemon in the tok-juara monorepo. See the root [README](../../README.md) for project overview, prerequisites, install, and running instructions. This document is for operators who need to wire up or switch agent providers.
+dalang is the orchestrator daemon in the pentas monorepo. See the root [README](../../README.md) for project overview, prerequisites, install, and running instructions. This document is for operators who need to wire up or switch agent providers.
 
-Dalang reads work through a control-plane adapter. `control_plane.kind: wayang` preserves the local Wayang workflow; `control_plane.kind: github-projects` uses a GitHub Projects v2 board and requires explicit ownership (`label`, `assignee`, or `project_field`) unless `allow_unowned_dispatch: true` is set.
+Dalang reads work through a control-plane adapter. `control_plane.kind: papan` preserves the local Papan workflow; `control_plane.kind: github-projects` uses a GitHub Projects v2 board and requires explicit ownership (`label`, `assignee`, or `project_field`) unless `allow_unowned_dispatch: true` is set.
 
 ## `agent_provider`
 
 Set in the YAML front matter of your `WORKFLOW.md`:
 
 ```yaml
-agent_provider: claude   # "claude" | "codex" | "opencode" — default: "claude"
+agent_provider: claude # "claude" | "codex" | "opencode" — default: "claude"
 ```
 
 - The provider is global to a workflow run. Per-issue or per-state routing is not supported in v1.
@@ -32,22 +32,22 @@ agent_provider: claude
 claude:
   executable_path: claude
   model: claude-opus-4-7
-  permission_mode: auto        # "auto" | "default" | "plan" | "bypassPermissions"
-  turn_timeout_ms: 3600000     # 1 hour
-  read_timeout_ms: 5000        # 5 seconds
-  stall_timeout_ms: 300000     # 5 minutes
+  permission_mode: auto # "auto" | "default" | "plan" | "bypassPermissions"
+  turn_timeout_ms: 3600000 # 1 hour
+  read_timeout_ms: 5000 # 5 seconds
+  stall_timeout_ms: 300000 # 5 minutes
 ```
 
 **Fields:**
 
-| Field | Default | Notes |
-|---|---|---|
-| `executable_path` | `"claude"` | Path or name of the `claude` binary. |
-| `model` | `"claude-opus-4-7"` | Claude model to use. |
-| `permission_mode` | `"auto"` | `"auto"` is the only recommended headless value. |
-| `turn_timeout_ms` | `3600000` | Max time for a single agent turn. |
-| `read_timeout_ms` | `5000` | Max silence before declaring a stall. |
-| `stall_timeout_ms` | `300000` | Max total stall time before aborting. |
+| Field              | Default             | Notes                                            |
+| ------------------ | ------------------- | ------------------------------------------------ |
+| `executable_path`  | `"claude"`          | Path or name of the `claude` binary.             |
+| `model`            | `"claude-opus-4-7"` | Claude model to use.                             |
+| `permission_mode`  | `"auto"`            | `"auto"` is the only recommended headless value. |
+| `turn_timeout_ms`  | `3600000`           | Max time for a single agent turn.                |
+| `read_timeout_ms`  | `5000`              | Max silence before declaring a stall.            |
+| `stall_timeout_ms` | `300000`            | Max total stall time before aborting.            |
 
 ---
 
@@ -64,8 +64,8 @@ agent_provider: codex
 codex:
   executable_path: codex
   model: gpt-5.5
-  sandbox_mode: workspace-write  # "read-only" | "workspace-write" | "danger-full-access"
-  approval_policy: never         # "untrusted" | "on-failure" | "on-request" | "never"
+  sandbox_mode: workspace-write # "read-only" | "workspace-write" | "danger-full-access"
+  approval_policy: never # "untrusted" | "on-failure" | "on-request" | "never"
   turn_timeout_ms: 3600000
   read_timeout_ms: 5000
   stall_timeout_ms: 300000
@@ -73,15 +73,15 @@ codex:
 
 **Fields:**
 
-| Field | Default | Notes |
-|---|---|---|
-| `executable_path` | `"codex"` | Path or name of the `codex` binary. |
-| `model` | `"gpt-5.5"` | Codex model to use. |
-| `sandbox_mode` | `"workspace-write"` | File system access granted to the agent. |
-| `approval_policy` | `"never"` | `"never"` is the recommended headless value; `"ask"` would deadlock. |
-| `turn_timeout_ms` | `3600000` | Max time for a single agent turn. |
-| `read_timeout_ms` | `5000` | Max silence before declaring a stall. |
-| `stall_timeout_ms` | `300000` | Max total stall time before aborting. |
+| Field              | Default             | Notes                                                                |
+| ------------------ | ------------------- | -------------------------------------------------------------------- |
+| `executable_path`  | `"codex"`           | Path or name of the `codex` binary.                                  |
+| `model`            | `"gpt-5.5"`         | Codex model to use.                                                  |
+| `sandbox_mode`     | `"workspace-write"` | File system access granted to the agent.                             |
+| `approval_policy`  | `"never"`           | `"never"` is the recommended headless value; `"ask"` would deadlock. |
+| `turn_timeout_ms`  | `3600000`           | Max time for a single agent turn.                                    |
+| `read_timeout_ms`  | `5000`              | Max silence before declaring a stall.                                |
+| `stall_timeout_ms` | `300000`            | Max total stall time before aborting.                                |
 
 ---
 
@@ -92,6 +92,7 @@ Uses the opencode HTTP server via `@opencode-ai/sdk`. opencode acts as a gateway
 **Auth:** run `opencode auth login <provider>` for each model provider you intend to use. dalang does not manage credentials — it probes that the required provider is authenticated at config-load time.
 
 **`model` format:** `providerID/modelID` — for example:
+
 - `anthropic/claude-sonnet-4-6`
 - `google/gemini-2.5-pro`
 
@@ -103,7 +104,7 @@ Uses the opencode HTTP server via `@opencode-ai/sdk`. opencode acts as a gateway
 agent_provider: opencode
 opencode:
   executable_path: opencode
-  model: google/gemini-2.5-pro   # required — no default
+  model: google/gemini-2.5-pro # required — no default
   turn_timeout_ms: 3600000
   read_timeout_ms: 5000
   stall_timeout_ms: 300000
@@ -111,13 +112,13 @@ opencode:
 
 **Fields:**
 
-| Field | Default | Notes |
-|---|---|---|
-| `executable_path` | `"opencode"` | Path or name of the `opencode` binary. |
-| `model` | _(required)_ | Model in `providerID/modelID` form. |
-| `turn_timeout_ms` | `3600000` | Max time for a single agent turn. |
-| `read_timeout_ms` | `5000` | Max silence before declaring a stall. |
-| `stall_timeout_ms` | `300000` | Max total stall time before aborting. |
+| Field              | Default      | Notes                                  |
+| ------------------ | ------------ | -------------------------------------- |
+| `executable_path`  | `"opencode"` | Path or name of the `opencode` binary. |
+| `model`            | _(required)_ | Model in `providerID/modelID` form.    |
+| `turn_timeout_ms`  | `3600000`    | Max time for a single agent turn.      |
+| `read_timeout_ms`  | `5000`       | Max silence before declaring a stall.  |
+| `stall_timeout_ms` | `300000`     | Max total stall time before aborting.  |
 
 **Architecture notes:**
 

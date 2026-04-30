@@ -28,7 +28,10 @@ function inSet(set: string[], v: string): boolean {
   return set.some((x) => x.toLowerCase() === lv);
 }
 
-export function classifyTrackerRefresh(issue: NormalizedIssue, rules: RefreshRules): RefreshClassification {
+export function classifyTrackerRefresh(
+  issue: NormalizedIssue,
+  rules: RefreshRules,
+): RefreshClassification {
   if (inSet(rules.terminal, issue.state)) return { kind: "terminate_with_cleanup" };
   if (inSet(rules.active, issue.state)) return { kind: "update_snapshot" };
   return { kind: "terminate_no_cleanup" };

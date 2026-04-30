@@ -15,6 +15,7 @@
 ## File Structure
 
 **New files:**
+
 - `packages/dalang/src/agent/codex-runner.ts` — wraps `@openai/codex-sdk`, returns an `AsyncIterable<unknown>`. Mirrors `sdk-runner.ts`.
 - `packages/dalang/src/agent/codex-event-mapper.ts` — translates Codex SDK events to dalang `RuntimeEvent`. Mirrors `event-mapper.ts`.
 - `packages/dalang/tests/agent/codex-event-mapper.test.ts` — unit tests for the Codex event mapper.
@@ -22,6 +23,7 @@
 - `packages/dalang/tests/agent/agent-runner-codex.test.ts` — integration test running `runAttempt` with a fake Codex event stream.
 
 **Modified files:**
+
 - `packages/dalang/src/config/schema.ts` — add `agent_provider`, `CodexSchema`, defaults, and post-parse refinement.
 - `packages/dalang/src/config/validate.ts` — add `missing_codex_executable_path`, `codex_auth_inactive`, `probeCodexAuth`, branch `validateForDispatch` on provider.
 - `packages/dalang/src/agent/agent-runner.ts` — reshape `AgentConfig` and `RunQueryOptions` into discriminated unions; pass through provider-specific bag.
@@ -39,6 +41,7 @@
 ### Task 1: Install `@openai/codex-sdk` and add Codex schemas
 
 **Files:**
+
 - Modify: `packages/dalang/package.json`
 - Modify: `packages/dalang/src/config/schema.ts`
 
@@ -59,18 +62,9 @@ Open `packages/dalang/src/config/schema.ts`. Above `ClaudePermissionMode`, add:
 ```ts
 export const AgentProvider = z.enum(["claude", "codex"]);
 
-export const CodexSandboxMode = z.enum([
-  "read-only",
-  "workspace-write",
-  "danger-full-access",
-]);
+export const CodexSandboxMode = z.enum(["read-only", "workspace-write", "danger-full-access"]);
 
-export const CodexApprovalPolicy = z.enum([
-  "untrusted",
-  "on-failure",
-  "on-request",
-  "never",
-]);
+export const CodexApprovalPolicy = z.enum(["untrusted", "on-failure", "on-request", "never"]);
 
 export const CodexSchema = z.object({
   executable_path: z.string().min(1),
@@ -187,6 +181,7 @@ git commit -m "feat(dalang): add codex schemas and agent_provider discriminator"
 ### Task 2: Add post-parse refinement (active provider block must be present)
 
 **Files:**
+
 - Modify: `packages/dalang/src/config/schema.ts`
 - Modify: `packages/dalang/tests/config/schema.test.ts`
 
@@ -241,14 +236,14 @@ export const WorkflowFrontMatterSchema = RawWorkflowFrontMatterSchema.superRefin
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["claude"],
-      message: "claude block is required when agent_provider is \"claude\"",
+      message: 'claude block is required when agent_provider is "claude"',
     });
   }
   if (cfg.agent_provider === "codex" && !cfg.codex) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["codex"],
-      message: "codex block is required when agent_provider is \"codex\"",
+      message: 'codex block is required when agent_provider is "codex"',
     });
   }
 });
@@ -279,6 +274,7 @@ git commit -m "feat(dalang): require provider block matching agent_provider"
 This task changes the runtime types but only the Claude branch is wired. Codex branch types are added so tasks 6–7 can fill them in cleanly.
 
 **Files:**
+
 - Modify: `packages/dalang/src/agent/agent-runner.ts`
 - Modify: `packages/dalang/src/agent/sdk-runner.ts`
 - Modify: `packages/dalang/src/orchestrator/orchestrator.ts`
@@ -338,9 +334,7 @@ const iter = opts.runQuery({
   abortSignal: turnAbort.signal,
   resumeSessionId: opts.resumeSessionId,
   claude:
-    opts.config.provider === "claude"
-      ? { permissionMode: opts.config.permissionMode }
-      : undefined,
+    opts.config.provider === "claude" ? { permissionMode: opts.config.permissionMode } : undefined,
   codex:
     opts.config.provider === "codex"
       ? {
@@ -434,7 +428,8 @@ Replace the call site in `packages/dalang/tests/agent/sdk-runner.test.ts`:
 
 ```ts
 const it = sdkRunQuery({
-  prompt: "hello", cwd: "/tmp",
+  prompt: "hello",
+  cwd: "/tmp",
   claude: { permissionMode: "auto" },
   model: "claude-opus-4-7",
   executablePath: "claude",
@@ -487,6 +482,7 @@ git commit -m "refactor(dalang): make AgentConfig and RunQueryOptions provider-d
 ### Task 4: Add `probeCodexAuth` and provider-branched validation
 
 **Files:**
+
 - Modify: `packages/dalang/src/config/validate.ts`
 - Modify: `packages/dalang/tests/config/validate.test.ts`
 
@@ -565,22 +561,34 @@ export class ValidationError extends Error {
 }
 
 export function validateForDispatch(cfg: WorkflowFrontMatter): void {
-  if (cfg.tracker.kind !== "tok-juara") {
-    throw new ValidationError("unsupported_tracker_kind", `unsupported tracker kind: ${cfg.tracker.kind}`);
+  if (cfg.tracker.kind !== "papan") {
+    throw new ValidationError(
+      "unsupported_tracker_kind",
+      `unsupported tracker kind: ${cfg.tracker.kind}`,
+    );
   }
   if (cfg.tracker.api_key !== null && cfg.tracker.api_key !== undefined) {
     const resolved = resolveEnvValue(cfg.tracker.api_key);
     if (resolved === null && cfg.tracker.api_key.startsWith("$")) {
-      throw new ValidationError("missing_tracker_api_key", `tracker.api_key resolves to empty: ${cfg.tracker.api_key}`);
+      throw new ValidationError(
+        "missing_tracker_api_key",
+        `tracker.api_key resolves to empty: ${cfg.tracker.api_key}`,
+      );
     }
   }
   if (cfg.agent_provider === "claude") {
     if (!cfg.claude || cfg.claude.executable_path.trim().length === 0) {
-      throw new ValidationError("missing_claude_executable_path", "claude.executable_path is required");
+      throw new ValidationError(
+        "missing_claude_executable_path",
+        "claude.executable_path is required",
+      );
     }
   } else if (cfg.agent_provider === "codex") {
     if (!cfg.codex || cfg.codex.executable_path.trim().length === 0) {
-      throw new ValidationError("missing_codex_executable_path", "codex.executable_path is required");
+      throw new ValidationError(
+        "missing_codex_executable_path",
+        "codex.executable_path is required",
+      );
     }
   }
 }
@@ -626,6 +634,7 @@ git commit -m "feat(dalang): probeCodexAuth and provider-branched validation"
 This task lands the file with a basic, well-tested mapping. Edge cases (errors, token usage) are added in Task 6.
 
 **Files:**
+
 - Create: `packages/dalang/src/agent/codex-event-mapper.ts`
 - Create: `packages/dalang/tests/agent/codex-event-mapper.test.ts`
 
@@ -769,6 +778,7 @@ git commit -m "feat(dalang): codex-event-mapper happy-path mapping"
 ### Task 6: Codex event mapper — errors and token usage
 
 **Files:**
+
 - Modify: `packages/dalang/src/agent/codex-event-mapper.ts`
 - Modify: `packages/dalang/tests/agent/codex-event-mapper.test.ts`
 
@@ -822,38 +832,38 @@ Expected: the four new tests fail.
 In `codex-event-mapper.ts`, replace the `task.completed` branch with:
 
 ```ts
-  if (type === "task.completed") {
-    const u = m.usage as Record<string, unknown> | undefined;
-    let usage: RuntimeEvent["usage"] | undefined;
-    if (u) {
-      const input = typeof u.input_tokens === "number" ? u.input_tokens : 0;
-      const output = typeof u.output_tokens === "number" ? u.output_tokens : 0;
-      const reasoning = typeof u.reasoning_tokens === "number" ? u.reasoning_tokens : 0;
-      const total = typeof u.total_tokens === "number" ? u.total_tokens : input + output + reasoning;
-      usage = {
-        input_tokens: input,
-        output_tokens: output + reasoning,
-        total_tokens: total,
-      };
-    }
-    return { event: "turn_completed", timestamp: nowIso(), usage };
-  }
-
-  if (type === "task.failed") {
-    return {
-      event: "turn_ended_with_error",
-      timestamp: nowIso(),
-      reason: typeof m.reason === "string" ? m.reason : undefined,
+if (type === "task.completed") {
+  const u = m.usage as Record<string, unknown> | undefined;
+  let usage: RuntimeEvent["usage"] | undefined;
+  if (u) {
+    const input = typeof u.input_tokens === "number" ? u.input_tokens : 0;
+    const output = typeof u.output_tokens === "number" ? u.output_tokens : 0;
+    const reasoning = typeof u.reasoning_tokens === "number" ? u.reasoning_tokens : 0;
+    const total = typeof u.total_tokens === "number" ? u.total_tokens : input + output + reasoning;
+    usage = {
+      input_tokens: input,
+      output_tokens: output + reasoning,
+      total_tokens: total,
     };
   }
+  return { event: "turn_completed", timestamp: nowIso(), usage };
+}
 
-  if (type === "error" && m.phase === "startup") {
-    return {
-      event: "startup_failed",
-      timestamp: nowIso(),
-      reason: typeof m.message === "string" ? m.message : undefined,
-    };
-  }
+if (type === "task.failed") {
+  return {
+    event: "turn_ended_with_error",
+    timestamp: nowIso(),
+    reason: typeof m.reason === "string" ? m.reason : undefined,
+  };
+}
+
+if (type === "error" && m.phase === "startup") {
+  return {
+    event: "startup_failed",
+    timestamp: nowIso(),
+    reason: typeof m.message === "string" ? m.message : undefined,
+  };
+}
 ```
 
 Place these branches **above** the final `if (typeof type === "string")` fallthrough.
@@ -880,6 +890,7 @@ git commit -m "feat(dalang): codex-event-mapper error and token usage paths"
 ### Task 7: Codex runner
 
 **Files:**
+
 - Create: `packages/dalang/src/agent/codex-runner.ts`
 - Create: `packages/dalang/tests/agent/codex-runner.test.ts`
 
@@ -968,6 +979,7 @@ git commit -m "feat(dalang): codex-runner wraps @openai/codex-sdk"
 ### Task 8: Wire runner selection into orchestrator and bootstrap
 
 **Files:**
+
 - Modify: `packages/dalang/src/cli/bootstrap.ts`
 - Modify: `packages/dalang/src/orchestrator/orchestrator.ts`
 
@@ -1014,6 +1026,7 @@ git commit -m "feat(dalang): select runQuery based on agent_provider"
 This proves `agent-runner.ts` is genuinely provider-agnostic.
 
 **Files:**
+
 - Create: `packages/dalang/tests/agent/agent-runner-codex.test.ts`
 
 - [ ] **Step 1: Write the integration test**
@@ -1081,7 +1094,9 @@ test("runAttempt drives a Codex-shaped event stream end-to-end", async () => {
     runQuery: async function* () {
       for (const e of events) yield e;
     },
-    onEvent: (e) => { collected.push(e); },
+    onEvent: (e) => {
+      collected.push(e);
+    },
   });
 
   expect(result.success).toBe(true);
@@ -1107,6 +1122,7 @@ Expected: failures — `agent-runner.ts` currently routes every event through `m
 ### Task 10: Make `agent-runner` select the event mapper by provider
 
 **Files:**
+
 - Modify: `packages/dalang/src/agent/agent-runner.ts`
 
 - [ ] **Step 1: Update `agent-runner.ts` to pick the mapper based on `config.provider`**
@@ -1120,8 +1136,7 @@ import { mapCodexEvent } from "./codex-event-mapper";
 Inside `driveOneTurn`, replace `const evt = mapSdkMessage(raw);` with:
 
 ```ts
-const evt =
-  opts.config.provider === "codex" ? mapCodexEvent(raw) : mapSdkMessage(raw);
+const evt = opts.config.provider === "codex" ? mapCodexEvent(raw) : mapSdkMessage(raw);
 ```
 
 `opts.config` already lives on `DriveOneTurnOptions`. No other changes needed.
@@ -1158,6 +1173,7 @@ git commit -m "feat(dalang): select event mapper by provider in runAttempt"
 ### Task 11: Update spec cross-reference (no code)
 
 **Files:**
+
 - Modify: `docs/superpowers/specs/2026-04-29-dalang-orchestrator-design.md`
 
 - [ ] **Step 1: Add a single line to the orchestrator spec linking to the codex provider design**

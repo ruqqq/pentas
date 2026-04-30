@@ -27,7 +27,10 @@ export async function runHook(opts: RunHookOptions): Promise<HookResult> {
   });
 
   let timedOut = false;
-  const timer = setTimeout(() => { timedOut = true; proc.kill(); }, opts.timeoutMs);
+  const timer = setTimeout(() => {
+    timedOut = true;
+    proc.kill();
+  }, opts.timeoutMs);
 
   const exitCode = await proc.exited;
   clearTimeout(timer);

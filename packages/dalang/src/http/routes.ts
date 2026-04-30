@@ -66,23 +66,32 @@ export async function handleRequest(req: Request, deps: RouteDeps): Promise<Resp
   }
 
   if (path === "/api/v1/refresh") {
-    if (method !== "POST") return envelope("method_not_allowed", "use POST for /api/v1/refresh", 405);
+    if (method !== "POST")
+      return envelope("method_not_allowed", "use POST for /api/v1/refresh", 405);
     const coalescing = deps as CoalescingRouteDeps;
-    const { coalesced } = typeof coalescing._coalescedRefresh === "function"
-      ? await coalescing._coalescedRefresh()
-      : (() => { void deps.refresh().catch(() => {}); return { coalesced: false }; })();
-    return json({
-      queued: true,
-      coalesced,
-      requested_at: new Date().toISOString(),
-      operations: ["poll", "reconcile"],
-    }, 202);
+    const { coalesced } =
+      typeof coalescing._coalescedRefresh === "function"
+        ? await coalescing._coalescedRefresh()
+        : (() => {
+            void deps.refresh().catch(() => {});
+            return { coalesced: false };
+          })();
+    return json(
+      {
+        queued: true,
+        coalesced,
+        requested_at: new Date().toISOString(),
+        operations: ["poll", "reconcile"],
+      },
+      202,
+    );
   }
 
   // /api/v1/:identifier
   const m = path.match(/^\/api\/v1\/([^/]+)$/);
   if (m) {
-    if (method !== "GET") return envelope("method_not_allowed", "use GET for /api/v1/:identifier", 405);
+    if (method !== "GET")
+      return envelope("method_not_allowed", "use GET for /api/v1/:identifier", 405);
     const identifier = decodeURIComponent(m[1]!);
     if (identifier === "state" || identifier === "refresh") {
       return envelope("not_found", `unknown route ${path}`, 404);

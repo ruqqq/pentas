@@ -142,11 +142,14 @@ export interface OrchestratorState {
   claude_totals: ClaudeTotals;
   rate_limits: RateLimitsSnapshot | null;
   workflow_mtime: number | null;
-  pr_checks_polls: Map<string, {
-    last_polled_at: string;
-    last_seen_sha: string | null;
-    last_action: "pending" | "rerun" | "failed" | "passed" | "escalated" | "no_pr" | null;
-  }>;
+  pr_checks_polls: Map<
+    string,
+    {
+      last_polled_at: string;
+      last_seen_sha: string | null;
+      last_action: "pending" | "rerun" | "failed" | "passed" | "escalated" | "no_pr" | null;
+    }
+  >;
 }
 
 export type RuntimeEventKind =

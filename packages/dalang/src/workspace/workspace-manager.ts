@@ -29,7 +29,9 @@ export class WorkspaceManager {
     this.root = resolve(opts.root);
   }
 
-  rootPath(): string { return this.root; }
+  rootPath(): string {
+    return this.root;
+  }
 
   pathFor(identifier: string): string {
     const key = sanitizeWorkspaceKey(identifier);
@@ -68,8 +70,10 @@ export class WorkspaceManager {
   async assertCwdIsWorkspace(identifier: string, cwd: string): Promise<void> {
     const expected = this.pathFor(identifier);
     if (resolve(cwd) !== expected) {
-      throw new WorkspaceError("workspace_path_outside_root",
-        `expected cwd ${expected}, got ${cwd}`);
+      throw new WorkspaceError(
+        "workspace_path_outside_root",
+        `expected cwd ${expected}, got ${cwd}`,
+      );
     }
   }
 }

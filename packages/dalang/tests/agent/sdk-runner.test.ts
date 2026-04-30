@@ -4,7 +4,8 @@ import { sdkRunQuery } from "../../src/agent/sdk-runner";
 
 test("sdkRunQuery returns an async iterable (smoke)", () => {
   const it = sdkRunQuery({
-    prompt: "noop", cwd: "/tmp",
+    prompt: "noop",
+    cwd: "/tmp",
     claude: { permissionMode: "auto" },
     model: "claude-opus-4-7",
     executablePath: "/nonexistent/path/to/claude",

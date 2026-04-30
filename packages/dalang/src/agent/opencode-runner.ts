@@ -1,15 +1,13 @@
 // packages/dalang/src/agent/opencode-runner.ts
 import type { RunQuery, RunQueryOptions } from "./agent-runner";
-import {
-  getOpencodeClient,
-  subscribeSession,
-  unsubscribeSession,
-} from "./opencode-server";
+import { getOpencodeClient, subscribeSession, unsubscribeSession } from "./opencode-server";
 
 interface OpencodeClient {
   event(): Promise<unknown>;
   session: {
-    create(args: { body: { directory: string; permission?: unknown } }): Promise<{ data: { id: string } }>;
+    create(args: {
+      body: { directory: string; permission?: unknown };
+    }): Promise<{ data: { id: string } }>;
     promptAsync(args: {
       path: { id: string };
       body: {

@@ -13,14 +13,15 @@ import type {
 test("NormalizedIssue is constructible", () => {
   const issue: NormalizedIssue = {
     id: "i_1",
-    identifier: "JUARA-1",
+    identifier: "PENTAS-1",
     title: "t",
     description: null,
     priority: null,
     state: "Todo",
     branch_name: null,
     url: null,
-    external_ref: null, internal_ref: null,
+    external_ref: null,
+    internal_ref: null,
     labels: [],
     blocked_by: [],
     created_at: null,

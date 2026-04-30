@@ -7,7 +7,7 @@ This file is read first by Claude Code (and other AI assistants) on every sessio
 Bun + TypeScript monorepo with two packages:
 
 - `packages/dalang/` — orchestrator daemon (Symphony-style, drives `claude` sessions)
-- `packages/wayang/` — tracker (single-user issue inbox)
+- `packages/papan/` — tracker (single-user issue inbox)
 
 Specs are in `docs/superpowers/specs/`, plans in `docs/superpowers/plans/`. Both follow the `YYYY-MM-DD-<topic>-design.md` / `YYYY-MM-DD-<topic>.md` naming.
 
@@ -45,9 +45,9 @@ When changing dalang:
 - Token accounting is **additive sum** of per-turn `result.usage`. Don't try to delta against thread-cumulative counters — the SDK doesn't expose them.
 - Bare clones from `git clone --bare` use mirror-style fetchspec: refs land directly under `refs/heads/`, NOT `refs/remotes/origin/`. Use the local branch name when adding worktrees, not `origin/<branch>`.
 
-## Working in wayang
+## Working in papan
 
-Wayang owns the monorepo skeleton (root `package.json`, `tsconfig.base.json`, etc.). dalang's plan only gap-fills missing pieces. If you're touching root tooling, make the change in the wayang plan, not dalang.
+Papan owns the monorepo skeleton (root `package.json`, `tsconfig.base.json`, etc.). dalang's plan only gap-fills missing pieces. If you're touching root tooling, make the change in the papan plan, not dalang.
 
 ## Conventions for changes
 

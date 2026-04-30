@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a `Waiting PR Checks` state where dalang polls `gh pr checks`, posts results as comments on the wayang ticket, bounces back to `In Dev` on failure with a budget-bounded retry, and escalates to `Ready for Human Review` on success or budget exhaustion.
+**Goal:** Add a `Waiting PR Checks` state where dalang polls `gh pr checks`, posts results as comments on the papan ticket, bounces back to `In Dev` on failure with a budget-bounded retry, and escalates to `Ready for Human Review` on success or budget exhaustion.
 
-**Architecture:** New non-agent reconciler in dalang runs alongside the dispatch loop, fetches `Waiting PR Checks` issues from wayang, derives the PR via `gh pr list --head <branch_name>`, polls `gh pr checks`, and writes results back via two new tracker write methods (`addComment`, `updateState`). Failure budget is derived by counting `[pr_checks_failed]` tagged comments — no separate persistence. Per-SHA dedupe (in-memory cache + comment scan) prevents double-action.
+**Architecture:** New non-agent reconciler in dalang runs alongside the dispatch loop, fetches `Waiting PR Checks` issues from papan, derives the PR via `gh pr list --head <branch_name>`, polls `gh pr checks`, and writes results back via two new tracker write methods (`addComment`, `updateState`). Failure budget is derived by counting `[pr_checks_failed]` tagged comments — no separate persistence. Per-SHA dedupe (in-memory cache + comment scan) prevents double-action.
 
 **Tech Stack:** Bun + TypeScript, `tsgo` typecheck, `bun test`, oxc tooling. New external dep: `gh` CLI (assumed present on host; not bundled).
 
@@ -15,16 +15,18 @@
 ## File Structure
 
 **Created:**
+
 - `packages/dalang/src/orchestrator/pr-checks.ts` — pure logic: parse `gh pr checks` JSON, count failure comments, decide next action.
 - `packages/dalang/src/orchestrator/pr-checks-runner.ts` — IO orchestration: shell out to `gh`, drive tracker writes, throttle.
 - `packages/dalang/src/lib/gh.ts` — thin wrapper around `Bun.spawn("gh", ...)` returning stdout/exit-code.
 - `packages/dalang/tests/orchestrator/pr-checks.test.ts` — unit tests for the pure logic module.
-- `packages/dalang/tests/orchestrator/pr-checks-runner.test.ts` — integration test: real wayang server + faked `gh` shell stub.
+- `packages/dalang/tests/orchestrator/pr-checks-runner.test.ts` — integration test: real papan server + faked `gh` shell stub.
 
 **Modified:**
-- `packages/wayang/src/domain/issue.ts` — add `Waiting PR Checks` to `IssueState` union and `ALL_STATES`.
-- `packages/wayang/src/ui/public/style.css` — badge color for the new state.
-- `packages/wayang/tests/domain/issue.test.ts` — extend state union test (create file if missing).
+
+- `packages/papan/src/domain/issue.ts` — add `Waiting PR Checks` to `IssueState` union and `ALL_STATES`.
+- `packages/papan/src/ui/public/style.css` — badge color for the new state.
+- `packages/papan/tests/domain/issue.test.ts` — extend state union test (create file if missing).
 - `packages/dalang/src/tracker/adapter.ts` — add `addComment`, `listComments`, `updateState` to interface; add `tracker_write_error` to `TrackerErrorCode`.
 - `packages/dalang/src/tracker/rest-adapter.ts` — implement the three new methods.
 - `packages/dalang/src/types.ts` — add `pr_checks_polls` field to `OrchestratorState`; add `pr_checks_observed` to `RuntimeEventKind`; add `TrackerComment` type.
@@ -34,16 +36,17 @@
 
 ---
 
-## Task 1: Add `Waiting PR Checks` to wayang state union
+## Task 1: Add `Waiting PR Checks` to papan state union
 
 **Files:**
-- Modify: `packages/wayang/src/domain/issue.ts`
-- Test: `packages/wayang/tests/domain/issue.test.ts` (create if missing)
+
+- Modify: `packages/papan/src/domain/issue.ts`
+- Test: `packages/papan/tests/domain/issue.test.ts` (create if missing)
 
 - [ ] **Step 1: Write the failing test**
 
 ```ts
-// packages/wayang/tests/domain/issue.test.ts
+// packages/papan/tests/domain/issue.test.ts
 import { describe, expect, test } from "bun:test";
 import { ALL_STATES, ACTIVE_STATES, isValidState, isActive } from "../../src/domain/issue";
 
@@ -68,12 +71,12 @@ describe("Waiting PR Checks state", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `bun test packages/wayang/tests/domain/issue.test.ts`
+Run: `bun test packages/papan/tests/domain/issue.test.ts`
 Expected: FAIL — `indexOf` returns -1.
 
 - [ ] **Step 3: Edit `IssueState` union and `ALL_STATES`**
 
-In `packages/wayang/src/domain/issue.ts`, change the union and array to include `"Waiting PR Checks"` between `"Ready for Review"` and `"Ready for Human Review"`. Do **not** add it to `ACTIVE_STATES` (the dispatcher should not pick up these tickets). Do **not** add it to `TERMINAL_STATES`.
+In `packages/papan/src/domain/issue.ts`, change the union and array to include `"Waiting PR Checks"` between `"Ready for Review"` and `"Ready for Human Review"`. Do **not** add it to `ACTIVE_STATES` (the dispatcher should not pick up these tickets). Do **not** add it to `TERMINAL_STATES`.
 
 ```ts
 export type IssueState =
@@ -104,23 +107,23 @@ export const ALL_STATES = [
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `bun test packages/wayang/tests/domain/issue.test.ts`
+Run: `bun test packages/papan/tests/domain/issue.test.ts`
 Expected: PASS.
 
 - [ ] **Step 5: Add CSS badge**
 
-In `packages/wayang/src/ui/public/style.css`, copy the `[data-state="Ready for Review"]` rule pair and duplicate it for `Waiting PR Checks` with a distinct hue (e.g. amber). Match the existing two-rule pattern (background block + `::before` dot). Place the rules adjacent to `Ready for Review`.
+In `packages/papan/src/ui/public/style.css`, copy the `[data-state="Ready for Review"]` rule pair and duplicate it for `Waiting PR Checks` with a distinct hue (e.g. amber). Match the existing two-rule pattern (background block + `::before` dot). Place the rules adjacent to `Ready for Review`.
 
-- [ ] **Step 6: Run typecheck and full wayang test suite**
+- [ ] **Step 6: Run typecheck and full papan test suite**
 
-Run: `bun run typecheck && bun test packages/wayang`
+Run: `bun run typecheck && bun test packages/papan`
 Expected: PASS.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add packages/wayang/src/domain/issue.ts packages/wayang/src/ui/public/style.css packages/wayang/tests/domain/issue.test.ts
-git commit -m "feat(wayang): add Waiting PR Checks state"
+git add packages/papan/src/domain/issue.ts packages/papan/src/ui/public/style.css packages/papan/tests/domain/issue.test.ts
+git commit -m "feat(papan): add Waiting PR Checks state"
 ```
 
 ---
@@ -128,6 +131,7 @@ git commit -m "feat(wayang): add Waiting PR Checks state"
 ## Task 2: Extend TrackerAdapter with write methods + comment listing
 
 **Files:**
+
 - Modify: `packages/dalang/src/tracker/adapter.ts`
 - Modify: `packages/dalang/src/types.ts`
 - Test: `packages/dalang/tests/tracker/rest-adapter.test.ts` (extend existing)
@@ -177,46 +181,83 @@ Concrete assertions per method:
 ```ts
 test("addComment posts to /api/v1/issues/:id/comments", async () => {
   const calls: { method: string; path: string; body: unknown }[] = [];
-  const srv = Bun.serve({ port: 0, fetch: async (req) => {
-    const url = new URL(req.url);
-    const body = req.method === "GET" ? null : await req.json();
-    calls.push({ method: req.method, path: url.pathname, body });
-    return Response.json({ id: "c1", author: "agent", body: "hello", created_at: "2026-01-01T00:00:00Z" }, { status: 201 });
-  }});
-  const adapter = new RestTrackerAdapter({ endpoint: `http://localhost:${srv.port}`, apiKey: null });
+  const srv = Bun.serve({
+    port: 0,
+    fetch: async (req) => {
+      const url = new URL(req.url);
+      const body = req.method === "GET" ? null : await req.json();
+      calls.push({ method: req.method, path: url.pathname, body });
+      return Response.json(
+        { id: "c1", author: "agent", body: "hello", created_at: "2026-01-01T00:00:00Z" },
+        { status: 201 },
+      );
+    },
+  });
+  const adapter = new RestTrackerAdapter({
+    endpoint: `http://localhost:${srv.port}`,
+    apiKey: null,
+  });
   await adapter.addComment("issue-1", "hello", "agent");
-  expect(calls[0]).toEqual({ method: "POST", path: "/api/v1/issues/issue-1/comments", body: { body: "hello", author: "agent" }});
+  expect(calls[0]).toEqual({
+    method: "POST",
+    path: "/api/v1/issues/issue-1/comments",
+    body: { body: "hello", author: "agent" },
+  });
   srv.stop();
 });
 
 test("listComments returns parsed comments", async () => {
-  const srv = Bun.serve({ port: 0, fetch: () =>
-    Response.json({ comments: [{ id: "c1", author: "user", body: "hi", created_at: "2026-01-01T00:00:00Z" }] })
+  const srv = Bun.serve({
+    port: 0,
+    fetch: () =>
+      Response.json({
+        comments: [{ id: "c1", author: "user", body: "hi", created_at: "2026-01-01T00:00:00Z" }],
+      }),
   });
-  const adapter = new RestTrackerAdapter({ endpoint: `http://localhost:${srv.port}`, apiKey: null });
+  const adapter = new RestTrackerAdapter({
+    endpoint: `http://localhost:${srv.port}`,
+    apiKey: null,
+  });
   const got = await adapter.listComments("issue-1");
-  expect(got).toEqual([{ id: "c1", author: "user", body: "hi", created_at: "2026-01-01T00:00:00Z" }]);
+  expect(got).toEqual([
+    { id: "c1", author: "user", body: "hi", created_at: "2026-01-01T00:00:00Z" },
+  ]);
   srv.stop();
 });
 
 test("updateState patches /api/v1/issues/:id", async () => {
   const calls: { method: string; path: string; body: unknown }[] = [];
-  const srv = Bun.serve({ port: 0, fetch: async (req) => {
-    const url = new URL(req.url);
-    const body = req.method === "PATCH" ? await req.json() : null;
-    calls.push({ method: req.method, path: url.pathname, body });
-    return Response.json({ ok: true });
-  }});
-  const adapter = new RestTrackerAdapter({ endpoint: `http://localhost:${srv.port}`, apiKey: null });
+  const srv = Bun.serve({
+    port: 0,
+    fetch: async (req) => {
+      const url = new URL(req.url);
+      const body = req.method === "PATCH" ? await req.json() : null;
+      calls.push({ method: req.method, path: url.pathname, body });
+      return Response.json({ ok: true });
+    },
+  });
+  const adapter = new RestTrackerAdapter({
+    endpoint: `http://localhost:${srv.port}`,
+    apiKey: null,
+  });
   await adapter.updateState("issue-1", "In Dev");
-  expect(calls[0]).toEqual({ method: "PATCH", path: "/api/v1/issues/issue-1", body: { state: "In Dev" }});
+  expect(calls[0]).toEqual({
+    method: "PATCH",
+    path: "/api/v1/issues/issue-1",
+    body: { state: "In Dev" },
+  });
   srv.stop();
 });
 
 test("addComment throws TrackerError(tracker_write_error) on non-2xx", async () => {
   const srv = Bun.serve({ port: 0, fetch: () => new Response("nope", { status: 500 }) });
-  const adapter = new RestTrackerAdapter({ endpoint: `http://localhost:${srv.port}`, apiKey: null });
-  await expect(adapter.addComment("issue-1", "x")).rejects.toMatchObject({ code: "tracker_write_error" });
+  const adapter = new RestTrackerAdapter({
+    endpoint: `http://localhost:${srv.port}`,
+    apiKey: null,
+  });
+  await expect(adapter.addComment("issue-1", "x")).rejects.toMatchObject({
+    code: "tracker_write_error",
+  });
   srv.stop();
 });
 ```
@@ -275,6 +316,7 @@ git commit -m "feat(dalang): add tracker write methods (addComment, updateState,
 ## Task 3: Add `pr_checks` config schema
 
 **Files:**
+
 - Modify: `packages/dalang/src/config/schema.ts`
 - Test: `packages/dalang/tests/config/schema.test.ts` (extend or create)
 
@@ -298,7 +340,7 @@ describe("pr_checks config", () => {
     });
   });
   test("user override is applied", () => {
-    const cfg = applyDefaults({ pr_checks: { enabled: true, failure_budget: 5 }});
+    const cfg = applyDefaults({ pr_checks: { enabled: true, failure_budget: 5 } });
     expect(cfg.pr_checks.enabled).toBe(true);
     expect(cfg.pr_checks.failure_budget).toBe(5);
     expect(cfg.pr_checks.poll_interval_ms).toBe(60000);
@@ -354,6 +396,7 @@ git commit -m "feat(dalang): add pr_checks config block"
 ## Task 4: Add `pr_checks_polls` to OrchestratorState + new RuntimeEventKind
 
 **Files:**
+
 - Modify: `packages/dalang/src/types.ts`
 - Modify: `packages/dalang/src/orchestrator/state.ts`
 - Test: `packages/dalang/tests/orchestrator/state.test.ts` (extend existing)
@@ -380,11 +423,14 @@ Expected: FAIL — field missing.
 In `packages/dalang/src/types.ts`, add to `OrchestratorState`:
 
 ```ts
-pr_checks_polls: Map<string, {
-  last_polled_at: string;
-  last_seen_sha: string | null;
-  last_action: "pending" | "rerun" | "failed" | "passed" | "escalated" | "no_pr" | null;
-}>;
+pr_checks_polls: Map<
+  string,
+  {
+    last_polled_at: string;
+    last_seen_sha: string | null;
+    last_action: "pending" | "rerun" | "failed" | "passed" | "escalated" | "no_pr" | null;
+  }
+>;
 ```
 
 And add `"pr_checks_observed"` to the `RuntimeEventKind` union (locate the existing union and append the literal).
@@ -408,6 +454,7 @@ git commit -m "feat(dalang): add pr_checks_polls cache to OrchestratorState"
 ## Task 5: `gh` shell wrapper
 
 **Files:**
+
 - Create: `packages/dalang/src/lib/gh.ts`
 - Test: `packages/dalang/tests/lib/gh.test.ts`
 
@@ -424,7 +471,10 @@ import { runGh } from "../../src/lib/gh";
 async function makeStub(stdout: string, exit = 0): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "gh-stub-"));
   const path = join(dir, "gh");
-  await writeFile(path, `#!/bin/sh\nprintf '%s' '${stdout.replace(/'/g, `'\\''`)}'\nexit ${exit}\n`);
+  await writeFile(
+    path,
+    `#!/bin/sh\nprintf '%s' '${stdout.replace(/'/g, `'\\''`)}'\nexit ${exit}\n`,
+  );
   await chmod(path, 0o755);
   return path;
 }
@@ -466,7 +516,11 @@ export interface GhOptions {
   env?: Record<string, string>;
 }
 
-export async function runGh(executable: string, args: string[], opts: GhOptions): Promise<GhResult> {
+export async function runGh(
+  executable: string,
+  args: string[],
+  opts: GhOptions,
+): Promise<GhResult> {
   const proc = Bun.spawn([executable, ...args], {
     cwd: opts.cwd,
     env: { ...process.env, ...opts.env },
@@ -505,6 +559,7 @@ git commit -m "feat(dalang): add gh CLI wrapper"
 ## Task 6: Pure logic — parse `gh pr checks` JSON
 
 **Files:**
+
 - Create: `packages/dalang/src/orchestrator/pr-checks.ts`
 - Test: `packages/dalang/tests/orchestrator/pr-checks.test.ts`
 
@@ -534,13 +589,18 @@ describe("parseChecks", () => {
 
 describe("summarise", () => {
   test("all pass → passed", () => {
-    expect(summarise([{ name: "a", state: "S", bucket: "pass", link: "l" }])).toEqual({ kind: "passed", failures: [] });
+    expect(summarise([{ name: "a", state: "S", bucket: "pass", link: "l" }])).toEqual({
+      kind: "passed",
+      failures: [],
+    });
   });
   test("any pending and no fail → pending", () => {
-    expect(summarise([
-      { name: "a", state: "S", bucket: "pass", link: "l" },
-      { name: "b", state: "Q", bucket: "pending", link: "l" },
-    ])).toEqual({ kind: "pending", failures: [] });
+    expect(
+      summarise([
+        { name: "a", state: "S", bucket: "pass", link: "l" },
+        { name: "b", state: "Q", bucket: "pending", link: "l" },
+      ]),
+    ).toEqual({ kind: "pending", failures: [] });
   });
   test("any fail/cancel → failed with all failure entries", () => {
     const checks = [
@@ -548,10 +608,13 @@ describe("summarise", () => {
       { name: "b", state: "C", bucket: "cancel" as const, link: "l2" },
       { name: "c", state: "S", bucket: "pass" as const, link: "l3" },
     ];
-    expect(summarise(checks)).toEqual({ kind: "failed", failures: [
-      { name: "a", state: "F", bucket: "fail", link: "l1" },
-      { name: "b", state: "C", bucket: "cancel", link: "l2" },
-    ]});
+    expect(summarise(checks)).toEqual({
+      kind: "failed",
+      failures: [
+        { name: "a", state: "F", bucket: "fail", link: "l1" },
+        { name: "b", state: "C", bucket: "cancel", link: "l2" },
+      ],
+    });
   });
   test("empty checks list → pending (PR exists but no checks yet)", () => {
     expect(summarise([])).toEqual({ kind: "pending", failures: [] });
@@ -622,6 +685,7 @@ git commit -m "feat(dalang): parse and summarise gh pr checks output"
 ## Task 7: Pure logic — failure-comment counter and per-SHA dedupe
 
 **Files:**
+
 - Modify: `packages/dalang/src/orchestrator/pr-checks.ts`
 - Modify: `packages/dalang/tests/orchestrator/pr-checks.test.ts`
 
@@ -630,7 +694,15 @@ git commit -m "feat(dalang): parse and summarise gh pr checks output"
 Append:
 
 ```ts
-import { countFailureComments, latestActionForSha, formatFailureComment, formatPassedComment, formatEscalatedComment, formatNoPrComment, formatRerunComment } from "../../src/orchestrator/pr-checks";
+import {
+  countFailureComments,
+  latestActionForSha,
+  formatFailureComment,
+  formatPassedComment,
+  formatEscalatedComment,
+  formatNoPrComment,
+  formatRerunComment,
+} from "../../src/orchestrator/pr-checks";
 
 describe("countFailureComments", () => {
   test("counts comments tagged [pr_checks_failed]", () => {
@@ -647,9 +719,24 @@ describe("countFailureComments", () => {
 describe("latestActionForSha", () => {
   test("returns the most recent tagged action for a given sha", () => {
     const comments = [
-      { id: "1", author: "agent", body: "[pr_checks_failed] sha=abc attempt=1/3", created_at: "2026-01-01T00:00:00Z" },
-      { id: "2", author: "agent", body: "[pr_checks_rerun] sha=abc",            created_at: "2026-01-01T00:01:00Z" },
-      { id: "3", author: "agent", body: "[pr_checks_failed] sha=def attempt=2/3", created_at: "2026-01-01T00:02:00Z" },
+      {
+        id: "1",
+        author: "agent",
+        body: "[pr_checks_failed] sha=abc attempt=1/3",
+        created_at: "2026-01-01T00:00:00Z",
+      },
+      {
+        id: "2",
+        author: "agent",
+        body: "[pr_checks_rerun] sha=abc",
+        created_at: "2026-01-01T00:01:00Z",
+      },
+      {
+        id: "3",
+        author: "agent",
+        body: "[pr_checks_failed] sha=def attempt=2/3",
+        created_at: "2026-01-01T00:02:00Z",
+      },
     ];
     expect(latestActionForSha(comments, "abc")).toBe("rerun");
     expect(latestActionForSha(comments, "def")).toBe("failed");
@@ -661,7 +748,8 @@ describe("comment formatters", () => {
   test("formatFailureComment", () => {
     const body = formatFailureComment({
       sha: "abc1234567890",
-      attempt: 1, budget: 3,
+      attempt: 1,
+      budget: 3,
       failures: [{ name: "build", state: "F", bucket: "fail", link: "https://x/1" }],
     });
     expect(body).toContain("[pr_checks_failed] sha=abc1234 attempt=1/3");
@@ -669,7 +757,9 @@ describe("comment formatters", () => {
     expect(body).toContain("Bouncing back to In Dev");
   });
   test("formatPassedComment", () => {
-    expect(formatPassedComment("abc1234567890")).toBe("[pr_checks_passed] sha=abc1234\nAll checks passed. Ready for human review.");
+    expect(formatPassedComment("abc1234567890")).toBe(
+      "[pr_checks_passed] sha=abc1234\nAll checks passed. Ready for human review.",
+    );
   });
 });
 ```
@@ -703,12 +793,19 @@ export function latestActionForSha(comments: TrackerComment[], sha: string): Act
   return null;
 }
 
-function shortSha(sha: string): string { return sha.slice(0, 7); }
+function shortSha(sha: string): string {
+  return sha.slice(0, 7);
+}
 
 export function formatFailureComment(args: {
-  sha: string; attempt: number; budget: number; failures: Check[];
+  sha: string;
+  attempt: number;
+  budget: number;
+  failures: Check[];
 }): string {
-  const lines = [`[pr_checks_failed] sha=${shortSha(args.sha)} attempt=${args.attempt}/${args.budget}`];
+  const lines = [
+    `[pr_checks_failed] sha=${shortSha(args.sha)} attempt=${args.attempt}/${args.budget}`,
+  ];
   for (const f of args.failures) lines.push(`- ${f.name}: ${f.bucket} — ${f.link}`);
   lines.push("", "Bouncing back to In Dev. Read this comment and fix the failures.");
   return lines.join("\n");
@@ -718,7 +815,12 @@ export function formatPassedComment(sha: string): string {
   return `[pr_checks_passed] sha=${shortSha(sha)}\nAll checks passed. Ready for human review.`;
 }
 
-export function formatEscalatedComment(args: { sha: string; attempt: number; budget: number; failures: Check[] }): string {
+export function formatEscalatedComment(args: {
+  sha: string;
+  attempt: number;
+  budget: number;
+  failures: Check[];
+}): string {
   const lines = [
     `[pr_checks_escalated] sha=${shortSha(args.sha)} attempt=${args.attempt}/${args.budget}`,
     "Failure budget exhausted. Parking for human review.",
@@ -753,6 +855,7 @@ git commit -m "feat(dalang): pure helpers for pr_checks comment counting and for
 ## Task 8: Pure logic — decide next action
 
 **Files:**
+
 - Modify: `packages/dalang/src/orchestrator/pr-checks.ts`
 - Modify: `packages/dalang/tests/orchestrator/pr-checks.test.ts`
 
@@ -772,52 +875,151 @@ describe("decideAction", () => {
     });
   });
   test("pending → noop", () => {
-    expect(decideAction({ ...base, prResolved: { sha: "abc" }, comments: [],
-      summary: { kind: "pending", failures: [] }})).toEqual({ kind: "noop" });
+    expect(
+      decideAction({
+        ...base,
+        prResolved: { sha: "abc" },
+        comments: [],
+        summary: { kind: "pending", failures: [] },
+      }),
+    ).toEqual({ kind: "noop" });
   });
   test("passed and not yet acted on this sha → emit passed", () => {
-    expect(decideAction({ ...base, prResolved: { sha: "abc" }, comments: [],
-      summary: { kind: "passed", failures: [] }})).toEqual({ kind: "passed", sha: "abc" });
+    expect(
+      decideAction({
+        ...base,
+        prResolved: { sha: "abc" },
+        comments: [],
+        summary: { kind: "passed", failures: [] },
+      }),
+    ).toEqual({ kind: "passed", sha: "abc" });
   });
   test("passed but already posted for this sha → noop", () => {
-    expect(decideAction({ ...base, prResolved: { sha: "abc" },
-      comments: [{ id: "1", author: "agent", body: "[pr_checks_passed] sha=abc", created_at: "2026-01-01T00:00:00Z" }],
-      summary: { kind: "passed", failures: [] }})).toEqual({ kind: "noop" });
+    expect(
+      decideAction({
+        ...base,
+        prResolved: { sha: "abc" },
+        comments: [
+          {
+            id: "1",
+            author: "agent",
+            body: "[pr_checks_passed] sha=abc",
+            created_at: "2026-01-01T00:00:00Z",
+          },
+        ],
+        summary: { kind: "passed", failures: [] },
+      }),
+    ).toEqual({ kind: "noop" });
   });
   test("failed first time on a sha and rerun_flakes → rerun", () => {
-    expect(decideAction({ ...base, prResolved: { sha: "abc" }, comments: [],
-      summary: { kind: "failed", failures: [{ name: "x", state: "F", bucket: "fail", link: "l" }]}})).toMatchObject({ kind: "rerun" });
+    expect(
+      decideAction({
+        ...base,
+        prResolved: { sha: "abc" },
+        comments: [],
+        summary: {
+          kind: "failed",
+          failures: [{ name: "x", state: "F", bucket: "fail", link: "l" }],
+        },
+      }),
+    ).toMatchObject({ kind: "rerun" });
   });
   test("failed and rerun already done for this sha → count failure", () => {
-    const comments = [{ id: "1", author: "agent", body: "[pr_checks_rerun] sha=abc", created_at: "2026-01-01T00:00:00Z" }];
-    expect(decideAction({ ...base, prResolved: { sha: "abc" }, comments,
-      summary: { kind: "failed", failures: [{ name: "x", state: "F", bucket: "fail", link: "l" }]}})).toMatchObject({
-        kind: "failed_bounce", attempt: 1,
-      });
+    const comments = [
+      {
+        id: "1",
+        author: "agent",
+        body: "[pr_checks_rerun] sha=abc",
+        created_at: "2026-01-01T00:00:00Z",
+      },
+    ];
+    expect(
+      decideAction({
+        ...base,
+        prResolved: { sha: "abc" },
+        comments,
+        summary: {
+          kind: "failed",
+          failures: [{ name: "x", state: "F", bucket: "fail", link: "l" }],
+        },
+      }),
+    ).toMatchObject({
+      kind: "failed_bounce",
+      attempt: 1,
+    });
   });
   test("failed under budget → failed_bounce", () => {
     const comments = [
-      { id: "1", author: "agent", body: "[pr_checks_failed] sha=old1 attempt=1/3", created_at: "2026-01-01T00:00:00Z" },
-      { id: "2", author: "agent", body: "[pr_checks_rerun] sha=abc", created_at: "2026-01-01T00:00:01Z" },
+      {
+        id: "1",
+        author: "agent",
+        body: "[pr_checks_failed] sha=old1 attempt=1/3",
+        created_at: "2026-01-01T00:00:00Z",
+      },
+      {
+        id: "2",
+        author: "agent",
+        body: "[pr_checks_rerun] sha=abc",
+        created_at: "2026-01-01T00:00:01Z",
+      },
     ];
-    const r = decideAction({ ...base, prResolved: { sha: "abc" }, comments,
-      summary: { kind: "failed", failures: [{ name: "x", state: "F", bucket: "fail", link: "l" }]}});
+    const r = decideAction({
+      ...base,
+      prResolved: { sha: "abc" },
+      comments,
+      summary: { kind: "failed", failures: [{ name: "x", state: "F", bucket: "fail", link: "l" }] },
+    });
     expect(r).toMatchObject({ kind: "failed_bounce", attempt: 2 });
   });
   test("failed at budget → escalate", () => {
     const comments = [
-      { id: "1", author: "agent", body: "[pr_checks_failed] sha=a attempt=1/3", created_at: "2026-01-01T00:00:00Z" },
-      { id: "2", author: "agent", body: "[pr_checks_failed] sha=b attempt=2/3", created_at: "2026-01-01T00:00:01Z" },
-      { id: "3", author: "agent", body: "[pr_checks_rerun] sha=abc",          created_at: "2026-01-01T00:00:02Z" },
+      {
+        id: "1",
+        author: "agent",
+        body: "[pr_checks_failed] sha=a attempt=1/3",
+        created_at: "2026-01-01T00:00:00Z",
+      },
+      {
+        id: "2",
+        author: "agent",
+        body: "[pr_checks_failed] sha=b attempt=2/3",
+        created_at: "2026-01-01T00:00:01Z",
+      },
+      {
+        id: "3",
+        author: "agent",
+        body: "[pr_checks_rerun] sha=abc",
+        created_at: "2026-01-01T00:00:02Z",
+      },
     ];
-    const r = decideAction({ ...base, prResolved: { sha: "abc" }, comments,
-      summary: { kind: "failed", failures: [{ name: "x", state: "F", bucket: "fail", link: "l" }]}});
+    const r = decideAction({
+      ...base,
+      prResolved: { sha: "abc" },
+      comments,
+      summary: { kind: "failed", failures: [{ name: "x", state: "F", bucket: "fail", link: "l" }] },
+    });
     expect(r).toMatchObject({ kind: "escalate", attempt: 3 });
   });
   test("failed but already bounced for this sha → noop (waiting for agent fix)", () => {
-    const comments = [{ id: "1", author: "agent", body: "[pr_checks_failed] sha=abc attempt=1/3", created_at: "2026-01-01T00:00:00Z" }];
-    expect(decideAction({ ...base, prResolved: { sha: "abc" }, comments,
-      summary: { kind: "failed", failures: [{ name: "x", state: "F", bucket: "fail", link: "l" }]}})).toEqual({ kind: "noop" });
+    const comments = [
+      {
+        id: "1",
+        author: "agent",
+        body: "[pr_checks_failed] sha=abc attempt=1/3",
+        created_at: "2026-01-01T00:00:00Z",
+      },
+    ];
+    expect(
+      decideAction({
+        ...base,
+        prResolved: { sha: "abc" },
+        comments,
+        summary: {
+          kind: "failed",
+          failures: [{ name: "x", state: "F", bucket: "fail", link: "l" }],
+        },
+      }),
+    ).toEqual({ kind: "noop" });
   });
 });
 ```
@@ -887,6 +1089,7 @@ git commit -m "feat(dalang): decideAction state machine for pr_checks reconciler
 ## Task 9: Reconciler — orchestrate gh + tracker writes
 
 **Files:**
+
 - Create: `packages/dalang/src/orchestrator/pr-checks-runner.ts`
 - Test: `packages/dalang/tests/orchestrator/pr-checks-runner.test.ts`
 
@@ -910,15 +1113,27 @@ async function ghStub(scriptBody: string): Promise<string> {
   return path;
 }
 
-function fakeTracker(state: { comments: TrackerComment[]; states: Record<string, string> }): TrackerAdapter {
+function fakeTracker(state: {
+  comments: TrackerComment[];
+  states: Record<string, string>;
+}): TrackerAdapter {
   return {
     fetchCandidateIssues: async () => [],
     fetchIssuesByStates: async () => [],
     fetchIssueStatesByIds: async () => [],
     fetchIssue: async () => null,
     listComments: async () => state.comments,
-    addComment: async (id, body) => { state.comments.push({ id: String(state.comments.length + 1), author: "agent", body, created_at: new Date().toISOString() }); },
-    updateState: async (id, s) => { state.states[id] = s; },
+    addComment: async (id, body) => {
+      state.comments.push({
+        id: String(state.comments.length + 1),
+        author: "agent",
+        body,
+        created_at: new Date().toISOString(),
+      });
+    },
+    updateState: async (id, s) => {
+      state.states[id] = s;
+    },
   };
 }
 
@@ -935,10 +1150,20 @@ function emptyState(): OrchestratorState {
 }
 
 const issue: NormalizedIssue = {
-  id: "i1", identifier: "TJ-1", title: "x", description: null, priority: null,
-  state: "Waiting PR Checks", branch_name: "feat/tj-1", url: null,
-  external_ref: null, internal_ref: "tj-1", labels: [], blocked_by: [],
-  created_at: null, updated_at: null,
+  id: "i1",
+  identifier: "TJ-1",
+  title: "x",
+  description: null,
+  priority: null,
+  state: "Waiting PR Checks",
+  branch_name: "feat/tj-1",
+  url: null,
+  external_ref: null,
+  internal_ref: "tj-1",
+  labels: [],
+  blocked_by: [],
+  created_at: null,
+  updated_at: null,
 };
 
 describe("runPrChecksReconciler", () => {
@@ -953,8 +1178,16 @@ describe("runPrChecksReconciler", () => {
     const state = emptyState();
 
     await runPrChecksReconciler({
-      issues: [issue], state, tracker: adapter,
-      cfg: { enabled: true, poll_interval_ms: 1000, failure_budget: 3, rerun_flakes: false, gh_executable: stub },
+      issues: [issue],
+      state,
+      tracker: adapter,
+      cfg: {
+        enabled: true,
+        poll_interval_ms: 1000,
+        failure_budget: 3,
+        rerun_flakes: false,
+        gh_executable: stub,
+      },
       cwd: process.cwd(),
       now: () => new Date("2026-01-01T00:00:00Z"),
     });
@@ -975,8 +1208,16 @@ describe("runPrChecksReconciler", () => {
     const adapter = fakeTracker(tracker);
     const state = emptyState();
     await runPrChecksReconciler({
-      issues: [issue], state, tracker: adapter,
-      cfg: { enabled: true, poll_interval_ms: 1000, failure_budget: 3, rerun_flakes: false, gh_executable: stub },
+      issues: [issue],
+      state,
+      tracker: adapter,
+      cfg: {
+        enabled: true,
+        poll_interval_ms: 1000,
+        failure_budget: 3,
+        rerun_flakes: false,
+        gh_executable: stub,
+      },
       cwd: process.cwd(),
       now: () => new Date("2026-01-01T00:00:00Z"),
     });
@@ -992,14 +1233,32 @@ describe("runPrChecksReconciler", () => {
       esac`);
     const tracker = {
       comments: [
-        { id: "1", author: "agent", body: "[pr_checks_failed] sha=aaa attempt=1/3", created_at: "2026-01-01T00:00:00Z" },
-        { id: "2", author: "agent", body: "[pr_checks_failed] sha=bbb attempt=2/3", created_at: "2026-01-01T00:00:01Z" },
+        {
+          id: "1",
+          author: "agent",
+          body: "[pr_checks_failed] sha=aaa attempt=1/3",
+          created_at: "2026-01-01T00:00:00Z",
+        },
+        {
+          id: "2",
+          author: "agent",
+          body: "[pr_checks_failed] sha=bbb attempt=2/3",
+          created_at: "2026-01-01T00:00:01Z",
+        },
       ] as TrackerComment[],
       states: { i1: "Waiting PR Checks" },
     };
     await runPrChecksReconciler({
-      issues: [issue], state: emptyState(), tracker: fakeTracker(tracker),
-      cfg: { enabled: true, poll_interval_ms: 1000, failure_budget: 3, rerun_flakes: false, gh_executable: stub },
+      issues: [issue],
+      state: emptyState(),
+      tracker: fakeTracker(tracker),
+      cfg: {
+        enabled: true,
+        poll_interval_ms: 1000,
+        failure_budget: 3,
+        rerun_flakes: false,
+        gh_executable: stub,
+      },
       cwd: process.cwd(),
       now: () => new Date("2026-01-01T00:00:02Z"),
     });
@@ -1011,10 +1270,22 @@ describe("runPrChecksReconciler", () => {
     const stub = await ghStub(`exit 99`); // would fail if invoked
     const tracker = { comments: [] as TrackerComment[], states: { i1: "Waiting PR Checks" } };
     const state = emptyState();
-    state.pr_checks_polls.set("i1", { last_polled_at: "2026-01-01T00:00:00Z", last_seen_sha: null, last_action: "pending" });
+    state.pr_checks_polls.set("i1", {
+      last_polled_at: "2026-01-01T00:00:00Z",
+      last_seen_sha: null,
+      last_action: "pending",
+    });
     await runPrChecksReconciler({
-      issues: [issue], state, tracker: fakeTracker(tracker),
-      cfg: { enabled: true, poll_interval_ms: 60000, failure_budget: 3, rerun_flakes: false, gh_executable: stub },
+      issues: [issue],
+      state,
+      tracker: fakeTracker(tracker),
+      cfg: {
+        enabled: true,
+        poll_interval_ms: 60000,
+        failure_budget: 3,
+        rerun_flakes: false,
+        gh_executable: stub,
+      },
       cwd: process.cwd(),
       now: () => new Date("2026-01-01T00:00:30Z"),
     });
@@ -1026,8 +1297,16 @@ describe("runPrChecksReconciler", () => {
     const stub = await ghStub(`exit 99`);
     const tracker = { comments: [] as TrackerComment[], states: { i1: "Waiting PR Checks" } };
     await runPrChecksReconciler({
-      issues: [issue], state: emptyState(), tracker: fakeTracker(tracker),
-      cfg: { enabled: false, poll_interval_ms: 1000, failure_budget: 3, rerun_flakes: false, gh_executable: stub },
+      issues: [issue],
+      state: emptyState(),
+      tracker: fakeTracker(tracker),
+      cfg: {
+        enabled: false,
+        poll_interval_ms: 1000,
+        failure_budget: 3,
+        rerun_flakes: false,
+        gh_executable: stub,
+      },
       cwd: process.cwd(),
       now: () => new Date(),
     });
@@ -1041,8 +1320,16 @@ describe("runPrChecksReconciler", () => {
       esac`);
     const tracker = { comments: [] as TrackerComment[], states: { i1: "Waiting PR Checks" } };
     await runPrChecksReconciler({
-      issues: [issue], state: emptyState(), tracker: fakeTracker(tracker),
-      cfg: { enabled: true, poll_interval_ms: 1000, failure_budget: 3, rerun_flakes: false, gh_executable: stub },
+      issues: [issue],
+      state: emptyState(),
+      tracker: fakeTracker(tracker),
+      cfg: {
+        enabled: true,
+        poll_interval_ms: 1000,
+        failure_budget: 3,
+        rerun_flakes: false,
+        gh_executable: stub,
+      },
       cwd: process.cwd(),
       now: () => new Date(),
     });
@@ -1065,9 +1352,14 @@ import type { TrackerAdapter } from "../tracker/adapter";
 import type { NormalizedIssue, OrchestratorState } from "../types";
 import { runGh } from "../lib/gh";
 import {
-  parseChecks, summarise, decideAction,
-  formatFailureComment, formatPassedComment, formatEscalatedComment,
-  formatNoPrComment, formatRerunComment,
+  parseChecks,
+  summarise,
+  decideAction,
+  formatFailureComment,
+  formatPassedComment,
+  formatEscalatedComment,
+  formatNoPrComment,
+  formatRerunComment,
 } from "./pr-checks";
 
 export interface PrChecksConfig {
@@ -1087,10 +1379,18 @@ export interface ReconcilerArgs {
   now: () => Date;
 }
 
-interface PrInfo { url: string; number: number; sha: string; }
+interface PrInfo {
+  url: string;
+  number: number;
+  sha: string;
+}
 
 async function resolvePr(gh: string, branch: string, cwd: string): Promise<PrInfo | null> {
-  const r = await runGh(gh, ["pr", "list", "--head", branch, "--state", "open", "--json", "url,number,headRefOid"], { cwd });
+  const r = await runGh(
+    gh,
+    ["pr", "list", "--head", branch, "--state", "open", "--json", "url,number,headRefOid"],
+    { cwd },
+  );
   if (r.exitCode !== 0) return null;
   try {
     const data = JSON.parse(r.stdout) as Array<{ url: string; number: number; headRefOid: string }>;
@@ -1103,8 +1403,13 @@ async function resolvePr(gh: string, branch: string, cwd: string): Promise<PrInf
 }
 
 async function fetchChecks(gh: string, prNumber: number, cwd: string): Promise<string> {
-  const r = await runGh(gh, ["pr", "checks", String(prNumber), "--json", "name,state,bucket,link"], { cwd });
-  if (r.exitCode !== 0 && r.stdout.trim() === "") throw new Error(`gh pr checks failed: ${r.stderr}`);
+  const r = await runGh(
+    gh,
+    ["pr", "checks", String(prNumber), "--json", "name,state,bucket,link"],
+    { cwd },
+  );
+  if (r.exitCode !== 0 && r.stdout.trim() === "")
+    throw new Error(`gh pr checks failed: ${r.stderr}`);
   return r.stdout;
 }
 
@@ -1127,7 +1432,9 @@ export async function runPrChecksReconciler(args: ReconcilerArgs): Promise<void>
     if (!pr) {
       action = { kind: "no_pr_bounce" as const };
     } else {
-      const checksJson = await fetchChecks(args.cfg.gh_executable, pr.number, args.cwd).catch(() => "");
+      const checksJson = await fetchChecks(args.cfg.gh_executable, pr.number, args.cwd).catch(
+        () => "",
+      );
       const checks = checksJson ? parseChecks(checksJson) : [];
       const summary = summarise(checks);
       const comments = await args.tracker.listComments(issue.id);
@@ -1140,7 +1447,9 @@ export async function runPrChecksReconciler(args: ReconcilerArgs): Promise<void>
       });
     }
 
-    let lastAction: NonNullable<ReturnType<Map<string, { last_action: string }>["get"]>>["last_action"] = null as never;
+    let lastAction: NonNullable<
+      ReturnType<Map<string, { last_action: string }>["get"]>
+    >["last_action"] = null as never;
     switch (action.kind) {
       case "noop":
         lastAction = "pending";
@@ -1155,16 +1464,28 @@ export async function runPrChecksReconciler(args: ReconcilerArgs): Promise<void>
         lastAction = "rerun";
         break;
       case "failed_bounce":
-        await args.tracker.addComment(issue.id, formatFailureComment({
-          sha: action.sha, attempt: action.attempt, budget: args.cfg.failure_budget, failures: action.failures,
-        }));
+        await args.tracker.addComment(
+          issue.id,
+          formatFailureComment({
+            sha: action.sha,
+            attempt: action.attempt,
+            budget: args.cfg.failure_budget,
+            failures: action.failures,
+          }),
+        );
         await args.tracker.updateState(issue.id, "In Dev");
         lastAction = "failed";
         break;
       case "escalate":
-        await args.tracker.addComment(issue.id, formatEscalatedComment({
-          sha: action.sha, attempt: action.attempt, budget: args.cfg.failure_budget, failures: action.failures,
-        }));
+        await args.tracker.addComment(
+          issue.id,
+          formatEscalatedComment({
+            sha: action.sha,
+            attempt: action.attempt,
+            budget: args.cfg.failure_budget,
+            failures: action.failures,
+          }),
+        );
         await args.tracker.updateState(issue.id, "Ready for Human Review");
         lastAction = "escalated";
         break;
@@ -1203,12 +1524,14 @@ git commit -m "feat(dalang): pr_checks reconciler — gh + tracker write orchest
 ## Task 10: Wire reconciler into orchestrator tick
 
 **Files:**
+
 - Modify: `packages/dalang/src/orchestrator/orchestrator.ts`
 - Modify: `packages/dalang/tests/orchestrator/orchestrator.test.ts` (extend existing — locate its dispatch-loop test pattern first)
 
 - [ ] **Step 1: Write the failing test**
 
 Locate the existing orchestrator test file (`grep -rln "Orchestrator" packages/dalang/tests/`). Append a test that:
+
 1. Constructs an `Orchestrator` with `pr_checks.enabled: true`, a tracker fake whose `fetchIssuesByStates(["Waiting PR Checks"])` returns one issue, and a `gh_executable` shell stub returning red checks (use the helper from Task 9's test — extract to `packages/dalang/tests/helpers/gh-stub.ts` if duplicated).
 2. Calls `await orch.tick()`.
 3. Asserts the tracker's `updateState` was called with `("i1", "In Dev")` and `addComment` was called with a body starting with `[pr_checks_failed]`.
@@ -1290,24 +1613,25 @@ git commit -m "feat(dalang): wire pr_checks reconciler into tick()"
 
 ---
 
-## Task 11: End-to-end test against real wayang server
+## Task 11: End-to-end test against real papan server
 
 **Files:**
+
 - Create: `packages/dalang/tests/e2e/pr-checks-e2e.test.ts`
 
 - [ ] **Step 1: Write the test**
 
-Locate an existing dalang e2e test that boots wayang in-process (`grep -rln "createApp\|startWayang" packages/dalang/tests/`). Reuse its boot helper. The test:
+Locate an existing dalang e2e test that boots papan in-process (`grep -rln "createApp\|startPapan" packages/dalang/tests/`). Reuse its boot helper. The test:
 
-1. Boots wayang on an ephemeral port with an in-memory SQLite.
+1. Boots papan on an ephemeral port with an in-memory SQLite.
 2. Creates an issue in `Waiting PR Checks` with `branch_name: "feat/e2e-1"` via `POST /api/v1/issues`.
-3. Constructs a `RestTrackerAdapter` pointed at that wayang instance.
+3. Constructs a `RestTrackerAdapter` pointed at that papan instance.
 4. Builds a minimal `WorkflowFrontMatter` with `pr_checks.enabled: true`, `failure_budget: 3`, `rerun_flakes: false`, `gh_executable` pointing at a stub returning failed checks.
 5. Constructs an `Orchestrator` and calls `tick()` once.
 6. Fetches the issue via `GET /api/v1/issues/:id` and asserts `state === "In Dev"`.
 7. Fetches comments via `GET /api/v1/issues/:id/comments` and asserts a `[pr_checks_failed] sha=...` comment exists with `author === "agent"`.
 
-If the helper does not exist (no dalang↔wayang e2e yet), write a minimal one inline in this test using `Bun.serve` + the wayang `createApp` factory (locate via `grep -n "export.*createApp\|export.*serve" packages/wayang/src/`).
+If the helper does not exist (no dalang↔papan e2e yet), write a minimal one inline in this test using `Bun.serve` + the papan `createApp` factory (locate via `grep -n "export.*createApp\|export.*serve" packages/papan/src/`).
 
 - [ ] **Step 2: Run test**
 
@@ -1323,7 +1647,7 @@ Expected: PASS.
 
 ```bash
 git add packages/dalang/tests/e2e/pr-checks-e2e.test.ts
-git commit -m "test(dalang): e2e pr_checks reconciler against real wayang"
+git commit -m "test(dalang): e2e pr_checks reconciler against real papan"
 ```
 
 ---
@@ -1331,8 +1655,9 @@ git commit -m "test(dalang): e2e pr_checks reconciler against real wayang"
 ## Task 12: Update specs (cross-link the new spec)
 
 **Files:**
+
 - Modify: `docs/superpowers/specs/2026-04-29-dalang-orchestrator-design.md`
-- Modify: `docs/superpowers/specs/2026-04-29-wayang-tracker-design.md`
+- Modify: `docs/superpowers/specs/2026-04-29-papan-tracker-design.md`
 
 - [ ] **Step 1: Add cross-links**
 
@@ -1340,15 +1665,15 @@ In the dalang spec's §2 "In scope (v1)" or a new §2.1 "Extensions", add a one-
 
 > - PR-checks waiting state — see `2026-04-30-pr-checks-wait-design.md`.
 
-In the wayang tracker spec where states are enumerated, add `Waiting PR Checks` to the canonical state list with a one-line note:
+In the papan tracker spec where states are enumerated, add `Waiting PR Checks` to the canonical state list with a one-line note:
 
 > `Waiting PR Checks` — orchestrator-driven; not in `ACTIVE_STATES`. See `2026-04-30-pr-checks-wait-design.md`.
 
 - [ ] **Step 2: Commit**
 
 ```bash
-git add docs/superpowers/specs/2026-04-29-dalang-orchestrator-design.md docs/superpowers/specs/2026-04-29-wayang-tracker-design.md
-git commit -m "docs: cross-link pr_checks design from dalang and wayang specs"
+git add docs/superpowers/specs/2026-04-29-dalang-orchestrator-design.md docs/superpowers/specs/2026-04-29-papan-tracker-design.md
+git commit -m "docs: cross-link pr_checks design from dalang and papan specs"
 ```
 
 ---

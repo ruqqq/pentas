@@ -1,14 +1,14 @@
 {
-  "name": "@tok-juara/dalang",
+  "name": "@pentas/dalang",
   "version": "0.0.0",
   "private": true,
+  "bin": {
+    "dalang": "src/index.ts"
+  },
   "type": "module",
   "main": "src/lib.ts",
   "exports": {
     ".": "./src/lib.ts"
-  },
-  "bin": {
-    "dalang": "src/index.ts"
   },
   "scripts": {
     "dev": "bun run src/index.ts",

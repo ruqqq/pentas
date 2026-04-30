@@ -25,20 +25,31 @@ function makeFakeFactory(): FakeFactoryControls {
     let push!: (v: { data: unknown } | null) => void;
     const queue: ({ data: unknown } | null)[] = [];
     const waiters: ((v: { data: unknown } | null) => void)[] = [];
-    push = (v) => { if (waiters.length) waiters.shift()!(v); else queue.push(v); };
+    push = (v) => {
+      if (waiters.length) waiters.shift()!(v);
+      else queue.push(v);
+    };
     ctl.emit = (e) => push({ data: e });
     const iter = {
-      [Symbol.asyncIterator]() { return this; },
+      [Symbol.asyncIterator]() {
+        return this;
+      },
       async next() {
-        const v = queue.length ? queue.shift()! : await new Promise<{ data: unknown } | null>((r) => waiters.push(r));
+        const v = queue.length
+          ? queue.shift()!
+          : await new Promise<{ data: unknown } | null>((r) => waiters.push(r));
         if (v === null) return { done: true as const, value: undefined };
         return { done: false as const, value: v };
       },
     };
     const close = () => push(null);
     return {
-      client: { event: () => Promise.resolve({ stream: iter as AsyncIterable<{ data: unknown }> }) },
-      shutdown: async () => { close(); },
+      client: {
+        event: () => Promise.resolve({ stream: iter as AsyncIterable<{ data: unknown }> }),
+      },
+      shutdown: async () => {
+        close();
+      },
     };
   });
   return ctl;
@@ -63,13 +74,16 @@ test("subscribeSession yields events filtered by sessionID", async () => {
 
   ctl.emit({ type: "session.created", properties: { info: { id: "ses-1" } } });
   ctl.emit({ type: "message.part.updated", properties: { sessionID: "other" } });
-  ctl.emit({ type: "message.part.updated", properties: { sessionID: "ses-1", part: { type: "text", text: "hi" } } });
+  ctl.emit({
+    type: "message.part.updated",
+    properties: { sessionID: "ses-1", part: { type: "text", text: "hi" } },
+  });
 
   const a = await it.next();
   expect((a.value as { type: string }).type).toBe("session.created");
   const b = await it.next();
   expect((b.value as { type: string }).type).toBe("message.part.updated");
-  expect(((b.value as { properties: { sessionID: string } }).properties.sessionID)).toBe("ses-1");
+  expect((b.value as { properties: { sessionID: string } }).properties.sessionID).toBe("ses-1");
 
   await shutdownOpencodeServer();
 });
@@ -80,7 +94,9 @@ test("shutdownOpencodeServer closes subscribers", async () => {
   await getOpencodeClient({ executablePath: "opencode" });
   const sub = subscribeSession("ses-1");
   await shutdownOpencodeServer();
-  for await (const _ of sub) { /* should drain */ }
+  for await (const _ of sub) {
+    /* should drain */
+  }
   expect(true).toBe(true);
 });
 
@@ -99,17 +115,25 @@ test("after a crash, the next getOpencodeClient call respawns the backend", asyn
       else queue.push(v);
     };
     const iter = {
-      [Symbol.asyncIterator]() { return this; },
+      [Symbol.asyncIterator]() {
+        return this;
+      },
       async next() {
-        const v = queue.length ? queue.shift()! : await new Promise<{ data: unknown } | null>((r) => waiters.push(r));
+        const v = queue.length
+          ? queue.shift()!
+          : await new Promise<{ data: unknown } | null>((r) => waiters.push(r));
         if (v === null) return { done: true as const, value: undefined };
         return { done: false as const, value: v };
       },
     };
     crashControl = { close: () => push(null) };
     return {
-      client: { event: () => Promise.resolve({ stream: iter as AsyncIterable<{ data: unknown }> }) },
-      shutdown: async () => { push(null); },
+      client: {
+        event: () => Promise.resolve({ stream: iter as AsyncIterable<{ data: unknown }> }),
+      },
+      shutdown: async () => {
+        push(null);
+      },
     };
   });
 
@@ -138,11 +162,17 @@ test("after exhausting retry budget, queues are closed", async () => {
     spawnCount += 1;
     // The stream is always-already-done: for-await exits immediately, triggering crash logic.
     const stream = {
-      [Symbol.asyncIterator]() { return this; },
-      async next() { return { done: true as const, value: undefined }; },
+      [Symbol.asyncIterator]() {
+        return this;
+      },
+      async next() {
+        return { done: true as const, value: undefined };
+      },
     };
     return {
-      client: { event: () => Promise.resolve({ stream: stream as AsyncIterable<{ data: unknown }> }) },
+      client: {
+        event: () => Promise.resolve({ stream: stream as AsyncIterable<{ data: unknown }> }),
+      },
       shutdown: async () => {},
     };
   });

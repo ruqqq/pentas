@@ -20,8 +20,8 @@ async function writeValidWorkflow(dir: string, body: string): Promise<string> {
 
 test("loads valid workflow with front matter and prompt body", async () => {
   const wf = await loadWorkflow(fix("workflow-valid.md"));
-  expect(wf.config.tracker.kind).toBe("tok-juara");
-  expect(wf.config.control_plane.kind).toBe("wayang");
+  expect(wf.config.tracker.kind).toBe("papan");
+  expect(wf.config.control_plane.kind).toBe("papan");
   expect(wf.config.control_plane.active_states).toEqual(wf.config.tracker.active_states);
   expect(wf.promptTemplate).toContain("Work on");
   expect(wf.mtimeMs).toBeGreaterThan(0);
@@ -30,14 +30,18 @@ test("loads valid workflow with front matter and prompt body", async () => {
 test("tracker-only missing api_key preserves legacy validation code through loader path", async () => {
   const dir = await tempWorkflowDir();
   const path = join(dir, "WORKFLOW.md");
-  await writeFile(path, `---
+  await writeFile(
+    path,
+    `---
 tracker:
   endpoint: http://localhost:3001
   api_key: $MISSING_LEGACY_TRACKER_TOKEN_FOR_LOADER_TEST
   active_states: [Todo]
   terminal_states: [Done]
 ---
-Body for {{ issue.identifier }}.`, "utf8");
+Body for {{ issue.identifier }}.`,
+    "utf8",
+  );
   delete process.env.MISSING_LEGACY_TRACKER_TOKEN_FOR_LOADER_TEST;
 
   const wf = await loadWorkflow(path);
@@ -52,9 +56,11 @@ Body for {{ issue.identifier }}.`, "utf8");
 test("control_plane-only missing api_key preserves control_plane validation code through loader path", async () => {
   const dir = await tempWorkflowDir();
   const path = join(dir, "WORKFLOW.md");
-  await writeFile(path, `---
+  await writeFile(
+    path,
+    `---
 control_plane:
-  kind: wayang
+  kind: papan
   endpoint: http://localhost:3001
   api_key: $MISSING_CONTROL_PLANE_TOKEN_FOR_LOADER_TEST
   active_states: [Todo]
@@ -62,7 +68,9 @@ control_plane:
   ownership:
     mode: none
 ---
-Body for {{ issue.identifier }}.`, "utf8");
+Body for {{ issue.identifier }}.`,
+    "utf8",
+  );
   delete process.env.MISSING_CONTROL_PLANE_TOKEN_FOR_LOADER_TEST;
 
   const wf = await loadWorkflow(path);

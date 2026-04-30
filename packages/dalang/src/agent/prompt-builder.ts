@@ -23,7 +23,10 @@ export interface RecentActivity {
   history: ControlPlaneHistoryEntry[];
 }
 
-function newestFirst<T extends { created_at?: string; at?: string }>(items: T[], getKey: (x: T) => string): T[] {
+function newestFirst<T extends { created_at?: string; at?: string }>(
+  items: T[],
+  getKey: (x: T) => string,
+): T[] {
   return [...items].sort((a, b) => getKey(b).localeCompare(getKey(a))).slice(0, RECENT_LIMIT);
 }
 

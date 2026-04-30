@@ -35,11 +35,17 @@ export class GithubClient {
         body: JSON.stringify({ query, variables }),
       });
     } catch (err) {
-      throw new ControlPlaneError("control_plane_request_error", `github graphql: ${(err as Error).message}`);
+      throw new ControlPlaneError(
+        "control_plane_request_error",
+        `github graphql: ${(err as Error).message}`,
+      );
     }
 
     if (!res.ok) {
-      throw new ControlPlaneError("control_plane_status_error", `github graphql: HTTP ${res.status}`);
+      throw new ControlPlaneError(
+        "control_plane_status_error",
+        `github graphql: HTTP ${res.status}`,
+      );
     }
     const body = await this.readJson(res, "github graphql");
     if (body && typeof body === "object" && Array.isArray((body as { errors?: unknown }).errors)) {
@@ -49,12 +55,19 @@ export class GithubClient {
       throw new ControlPlaneError("control_plane_status_error", `github graphql: ${msg}`);
     }
     if (!body || typeof body !== "object" || !("data" in body)) {
-      throw new ControlPlaneError("control_plane_malformed_payload", "github graphql: missing data");
+      throw new ControlPlaneError(
+        "control_plane_malformed_payload",
+        "github graphql: missing data",
+      );
     }
     return (body as { data: T }).data;
   }
 
-  async restJson<T = unknown>(path: string, method: "GET" | "POST" | "PATCH", payload?: unknown): Promise<T> {
+  async restJson<T = unknown>(
+    path: string,
+    method: "GET" | "POST" | "PATCH",
+    payload?: unknown,
+  ): Promise<T> {
     const url = `${this.apiBaseUrl}${path}`;
     let res: Response;
     try {
@@ -64,7 +77,10 @@ export class GithubClient {
         body: payload === undefined ? undefined : JSON.stringify(payload),
       });
     } catch (err) {
-      throw new ControlPlaneError("control_plane_request_error", `${url}: ${(err as Error).message}`);
+      throw new ControlPlaneError(
+        "control_plane_request_error",
+        `${url}: ${(err as Error).message}`,
+      );
     }
 
     if (!res.ok) {
@@ -79,7 +95,10 @@ export class GithubClient {
       const text = await res.text();
       return text.length === 0 ? null : JSON.parse(text);
     } catch (err) {
-      throw new ControlPlaneError("control_plane_malformed_payload", `${context}: ${(err as Error).message}`);
+      throw new ControlPlaneError(
+        "control_plane_malformed_payload",
+        `${context}: ${(err as Error).message}`,
+      );
     }
   }
 }

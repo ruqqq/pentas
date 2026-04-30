@@ -1,8 +1,16 @@
 // packages/dalang/tests/orchestrator/orchestrator.test.ts
 import { test, expect } from "bun:test";
 import { Orchestrator } from "../../src/orchestrator/orchestrator";
-import type { ControlPlaneAdapter, DispatchQuery, PrChecksReconcileArgs } from "../../src/control-plane/adapter";
-import type { NormalizedIssue, ControlPlaneComment, ControlPlaneHistoryEntry } from "../../src/types";
+import type {
+  ControlPlaneAdapter,
+  DispatchQuery,
+  PrChecksReconcileArgs,
+} from "../../src/control-plane/adapter";
+import type {
+  NormalizedIssue,
+  ControlPlaneComment,
+  ControlPlaneHistoryEntry,
+} from "../../src/types";
 import { applyDefaults } from "../../src/config/schema";
 import { ValidationError } from "../../src/config/validate";
 import { mkdtemp, writeFile, chmod } from "node:fs/promises";
@@ -11,26 +19,53 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const issue = (id: string, state = "Todo"): NormalizedIssue => ({
-  id, identifier: `X-${id}`, title: "t", description: null, priority: 1,
-  state, branch_name: null, url: null, external_ref: null, internal_ref: null, labels: [], blocked_by: [],
-  created_at: "2026-01-01", updated_at: null,
+  id,
+  identifier: `X-${id}`,
+  title: "t",
+  description: null,
+  priority: 1,
+  state,
+  branch_name: null,
+  url: null,
+  external_ref: null,
+  internal_ref: null,
+  labels: [],
+  blocked_by: [],
+  created_at: "2026-01-01",
+  updated_at: null,
 });
 
 class FakeControlPlane implements ControlPlaneAdapter {
   candidates: NormalizedIssue[] = [];
   byIds: Record<string, NormalizedIssue> = {};
   readonly capabilities: ControlPlaneAdapter["capabilities"] = { history: true, prChecks: true };
-  async fetchDispatchableWork(_query: DispatchQuery): Promise<NormalizedIssue[]> { return this.candidates; }
-  async fetchWorkByStates(_states: string[]): Promise<NormalizedIssue[]> { return []; }
+  async fetchDispatchableWork(_query: DispatchQuery): Promise<NormalizedIssue[]> {
+    return this.candidates;
+  }
+  async fetchWorkByStates(_states: string[]): Promise<NormalizedIssue[]> {
+    return [];
+  }
   async refreshWork(ids: string[]): Promise<NormalizedIssue[]> {
     return ids.map((id) => this.byIds[id]).filter((x): x is NormalizedIssue => Boolean(x));
   }
-  async fetchWorkItem(id: string): Promise<NormalizedIssue | null> { return this.byIds[id] ?? null; }
-  async listComments(_issueId: string): Promise<ControlPlaneComment[]> { return []; }
-  async listHistory(_issueId: string): Promise<ControlPlaneHistoryEntry[]> { return []; }
-  async addComment(_issueId: string, _body: string, _author?: "user" | "agent"): Promise<void> { /* noop */ }
-  async updateState(_issueId: string, _state: string): Promise<void> { /* noop */ }
-  async reconcilePrChecks(_args: PrChecksReconcileArgs): Promise<void> { /* noop */ }
+  async fetchWorkItem(id: string): Promise<NormalizedIssue | null> {
+    return this.byIds[id] ?? null;
+  }
+  async listComments(_issueId: string): Promise<ControlPlaneComment[]> {
+    return [];
+  }
+  async listHistory(_issueId: string): Promise<ControlPlaneHistoryEntry[]> {
+    return [];
+  }
+  async addComment(_issueId: string, _body: string, _author?: "user" | "agent"): Promise<void> {
+    /* noop */
+  }
+  async updateState(_issueId: string, _state: string): Promise<void> {
+    /* noop */
+  }
+  async reconcilePrChecks(_args: PrChecksReconcileArgs): Promise<void> {
+    /* noop */
+  }
 }
 
 async function tmpRoot(): Promise<string> {
@@ -44,7 +79,11 @@ test("tick dispatches eligible issue and runs an attempt to completion", async (
   tracker.byIds["i1"] = issue("i1");
 
   const cfg = applyDefaults({
-    tracker: { endpoint: "http://localhost:1234", active_states: ["Todo"], terminal_states: ["Done"] },
+    tracker: {
+      endpoint: "http://localhost:1234",
+      active_states: ["Todo"],
+      terminal_states: ["Done"],
+    },
     workspace: { root },
     agent: { max_concurrent_agents: 1, max_turns: 1 },
     polling: { interval_ms: 1000 },
@@ -56,7 +95,11 @@ test("tick dispatches eligible issue and runs an attempt to completion", async (
     promptTemplate: "Body for {{ issue.identifier }}",
     runQuery: async function* () {
       yield { type: "system", subtype: "init", session_id: "sess-1" };
-      yield { type: "result", subtype: "success", usage: { input_tokens: 5, output_tokens: 5, total_tokens: 10 } };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 5, output_tokens: 5, total_tokens: 10 },
+      };
     },
   });
 
@@ -82,10 +125,16 @@ test("workspace is removed when issue disappears between completion and continua
   });
 
   const orch = new Orchestrator({
-    controlPlane: tracker, config: cfg, promptTemplate: "x",
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
     runQuery: async function* () {
       yield { type: "system", subtype: "init", session_id: "s-1" };
-      yield { type: "result", subtype: "success", usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
     },
   });
 
@@ -123,11 +172,17 @@ test("tick respects max_concurrent_agents and queues the rest", async () => {
 
   let dispatched = 0;
   const orch = new Orchestrator({
-    controlPlane: tracker, config: cfg, promptTemplate: "x",
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
     runQuery: async function* () {
       dispatched += 1;
       yield { type: "system", subtype: "init", session_id: `s-${dispatched}` };
-      yield { type: "result", subtype: "success", usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
     },
   });
   await orch.tick();
@@ -152,10 +207,20 @@ test("tick runs pr_checks reconciler when enabled, bouncing red checks to In Dev
     esac`);
 
   const waiting: NormalizedIssue = {
-    id: "i1", identifier: "TJ-1", title: "x", description: null, priority: null,
-    state: "Waiting PR Checks", branch_name: "feat/tj-1", url: null,
-    external_ref: null, internal_ref: null, labels: [], blocked_by: [],
-    created_at: "2026-01-01", updated_at: null,
+    id: "i1",
+    identifier: "TJ-1",
+    title: "x",
+    description: null,
+    priority: null,
+    state: "Waiting PR Checks",
+    branch_name: "feat/tj-1",
+    url: null,
+    external_ref: null,
+    internal_ref: null,
+    labels: [],
+    blocked_by: [],
+    created_at: "2026-01-01",
+    updated_at: null,
   };
 
   class WriteRecordingTracker extends FakeControlPlane {
@@ -167,7 +232,9 @@ test("tick runs pr_checks reconciler when enabled, bouncing red checks to In Dev
       this.queries.push(query);
       return query.activeStates.includes("Waiting PR Checks") ? [waiting] : [];
     }
-    override async listComments(_id: string): Promise<ControlPlaneComment[]> { return []; }
+    override async listComments(_id: string): Promise<ControlPlaneComment[]> {
+      return [];
+    }
     override async addComment(id: string, body: string): Promise<void> {
       this.comments.push({ id, body });
     }
@@ -197,10 +264,16 @@ test("tick runs pr_checks reconciler when enabled, bouncing red checks to In Dev
   });
 
   const orch = new Orchestrator({
-    controlPlane: tracker, config: cfg, promptTemplate: "x",
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
     runQuery: async function* () {
       yield { type: "system", subtype: "init", session_id: "s" };
-      yield { type: "result", subtype: "success", usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 } };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
+      };
     },
   });
 
@@ -242,12 +315,15 @@ test("constructor rejects enabled pr_checks when control plane lacks capability"
     },
   });
 
-  expect(() => new Orchestrator({
-    controlPlane: new NoPrChecksControlPlane(),
-    config: cfg,
-    promptTemplate: "x",
-    runQuery: async function* () {},
-  })).toThrow(ValidationError);
+  expect(
+    () =>
+      new Orchestrator({
+        controlPlane: new NoPrChecksControlPlane(),
+        config: cfg,
+        promptTemplate: "x",
+        runQuery: async function* () {},
+      }),
+  ).toThrow(ValidationError);
 });
 
 test("github control_plane pr_checks config drives delegation", async () => {
@@ -341,10 +417,16 @@ test("tick skips pr_checks reconciler when disabled", async () => {
   });
 
   const orch = new Orchestrator({
-    controlPlane: tracker, config: cfg, promptTemplate: "x",
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
     runQuery: async function* () {
       yield { type: "system", subtype: "init", session_id: "s" };
-      yield { type: "result", subtype: "success", usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 } };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
+      };
     },
   });
   await orch.tick();

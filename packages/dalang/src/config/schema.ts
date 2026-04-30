@@ -2,7 +2,7 @@
 import { z } from "zod";
 
 export const TrackerSchema = z.object({
-  kind: z.literal("tok-juara"),
+  kind: z.literal("papan"),
   endpoint: z.string().url(),
   api_key: z.string().nullable().optional(),
   board: z.string().nullable().optional(),
@@ -30,8 +30,8 @@ export const OwnershipSchema = z.discriminatedUnion("mode", [
   }),
 ]);
 
-export const WayangControlPlaneSchema = z.object({
-  kind: z.literal("wayang"),
+export const PapanControlPlaneSchema = z.object({
+  kind: z.literal("papan"),
   endpoint: z.string().url(),
   api_key: z.string().nullable().optional(),
   board: z.string().nullable().optional(),
@@ -67,15 +67,18 @@ export const GithubProjectsControlPlaneSchema = z.object({
 });
 
 export const ControlPlaneSchema = z.discriminatedUnion("kind", [
-  WayangControlPlaneSchema,
+  PapanControlPlaneSchema,
   GithubProjectsControlPlaneSchema,
 ]);
 
-export const RepoSchema = z.object({
-  url: z.string().min(1),
-  default_branch: z.string().min(1),
-  branch_prefix: z.string().min(0),
-}).optional().nullable();
+export const RepoSchema = z
+  .object({
+    url: z.string().min(1),
+    default_branch: z.string().min(1),
+    branch_prefix: z.string().min(0),
+  })
+  .optional()
+  .nullable();
 
 export const PollingSchema = z.object({
   interval_ms: z.number().int().positive(),
@@ -102,18 +105,9 @@ export const AgentSchema = z.object({
 
 export const AgentProvider = z.enum(["claude", "codex", "opencode"]);
 
-export const CodexSandboxMode = z.enum([
-  "read-only",
-  "workspace-write",
-  "danger-full-access",
-]);
+export const CodexSandboxMode = z.enum(["read-only", "workspace-write", "danger-full-access"]);
 
-export const CodexApprovalPolicy = z.enum([
-  "untrusted",
-  "on-failure",
-  "on-request",
-  "never",
-]);
+export const CodexApprovalPolicy = z.enum(["untrusted", "on-failure", "on-request", "never"]);
 
 export const CodexSchema = z.object({
   executable_path: z.string().min(1),
@@ -127,7 +121,10 @@ export const CodexSchema = z.object({
 
 export const OpencodeSchema = z.object({
   executable_path: z.string().min(1),
-  model: z.string().min(1).regex(/^[^/]+\/.+$/, "model must be in providerID/modelID form"),
+  model: z
+    .string()
+    .min(1)
+    .regex(/^[^/]+\/.+$/, "model must be in providerID/modelID form"),
   turn_timeout_ms: z.number().int().positive(),
   read_timeout_ms: z.number().int().positive(),
   stall_timeout_ms: z.number().int(),
@@ -167,8 +164,8 @@ const DEFAULT_ACTIVE_STATES = [
 
 const DEFAULT_TERMINAL_STATES = ["Done", "Cancelled"];
 
-const DEFAULT_WAYANG_CONTROL_PLANE = {
-  kind: "wayang" as const,
+const DEFAULT_PAPAN_CONTROL_PLANE = {
+  kind: "papan" as const,
   endpoint: "http://localhost:3001",
   api_key: null,
   board: null,
@@ -178,7 +175,7 @@ const DEFAULT_WAYANG_CONTROL_PLANE = {
 };
 
 const DEFAULT_TRACKER = {
-  kind: "tok-juara" as const,
+  kind: "papan" as const,
   endpoint: "http://localhost:3001",
   api_key: null,
   board: null,
@@ -200,13 +197,14 @@ const ALIAS_PROVENANCE = Symbol("dalang.control_plane.alias_provenance");
 const aliasProvenance = new WeakMap<object, AliasProvenance>();
 
 export function getAliasProvenance(cfg: object): AliasProvenance {
-  return (cfg as { [ALIAS_PROVENANCE]?: AliasProvenance })[ALIAS_PROVENANCE]
-    ?? aliasProvenance.get(cfg)
-    ?? {
+  return (
+    (cfg as { [ALIAS_PROVENANCE]?: AliasProvenance })[ALIAS_PROVENANCE] ??
+    aliasProvenance.get(cfg) ?? {
       controlPlaneFromTracker: false,
       trackerFromControlPlane: false,
       conflict: null,
-    };
+    }
+  );
 }
 
 function setAliasProvenance(cfg: object, provenance: AliasProvenance): void {
@@ -257,8 +255,8 @@ function normalizeControlPlaneAliases(raw: unknown): AliasNormalizationResult {
   if (raw === null || typeof raw !== "object") {
     return { raw, controlPlaneFromTracker: false, trackerFromControlPlane: false };
   }
-  const priorProvenance = (raw as { [ALIAS_PROVENANCE]?: AliasProvenance })[ALIAS_PROVENANCE]
-    ?? aliasProvenance.get(raw);
+  const priorProvenance =
+    (raw as { [ALIAS_PROVENANCE]?: AliasProvenance })[ALIAS_PROVENANCE] ?? aliasProvenance.get(raw);
   const {
     [CONTROL_PLANE_FROM_TRACKER_KEY]: _ignoredControlPlaneFromTracker,
     [TRACKER_FROM_CONTROL_PLANE_KEY]: _ignoredTrackerFromControlPlane,
@@ -269,9 +267,15 @@ function normalizeControlPlaneAliases(raw: unknown): AliasNormalizationResult {
     return {
       raw: {
         ...r,
-        ...(priorProvenance.controlPlaneFromTracker ? { [CONTROL_PLANE_FROM_TRACKER_KEY]: true } : {}),
-        ...(priorProvenance.trackerFromControlPlane ? { [TRACKER_FROM_CONTROL_PLANE_KEY]: true } : {}),
-        ...(priorProvenance.conflict ? { [CONTROL_PLANE_TRACKER_CONFLICT_KEY]: priorProvenance.conflict } : {}),
+        ...(priorProvenance.controlPlaneFromTracker
+          ? { [CONTROL_PLANE_FROM_TRACKER_KEY]: true }
+          : {}),
+        ...(priorProvenance.trackerFromControlPlane
+          ? { [TRACKER_FROM_CONTROL_PLANE_KEY]: true }
+          : {}),
+        ...(priorProvenance.conflict
+          ? { [CONTROL_PLANE_TRACKER_CONFLICT_KEY]: priorProvenance.conflict }
+          : {}),
       },
       controlPlaneFromTracker: priorProvenance.controlPlaneFromTracker,
       trackerFromControlPlane: priorProvenance.trackerFromControlPlane,
@@ -283,12 +287,12 @@ function normalizeControlPlaneAliases(raw: unknown): AliasNormalizationResult {
 
   if (tracker === undefined && controlPlane !== null && typeof controlPlane === "object") {
     const cp = controlPlane as Record<string, unknown>;
-    if (cp.kind === "wayang") {
+    if (cp.kind === "papan") {
       return {
         raw: {
           ...r,
           tracker: {
-            kind: "tok-juara",
+            kind: "papan",
             endpoint: cp.endpoint,
             api_key: cp.api_key ?? null,
             board: cp.board ?? null,
@@ -306,12 +310,12 @@ function normalizeControlPlaneAliases(raw: unknown): AliasNormalizationResult {
   if ("control_plane" in r) return unchanged;
   if (tracker === null || typeof tracker !== "object") return unchanged;
   const t = tracker as Record<string, unknown>;
-  if (t.kind !== undefined && t.kind !== "tok-juara") return unchanged;
+  if (t.kind !== undefined && t.kind !== "papan") return unchanged;
   return {
     raw: {
       ...r,
       control_plane: {
-        kind: "wayang",
+        kind: "papan",
         endpoint: t.endpoint,
         api_key: t.api_key ?? null,
         board: t.board ?? null,
@@ -326,58 +330,63 @@ function normalizeControlPlaneAliases(raw: unknown): AliasNormalizationResult {
   };
 }
 
-const RawWorkflowFrontMatterSchema = z.preprocess((raw) => normalizeControlPlaneAliases(raw).raw, z.object({
-  [CONTROL_PLANE_TRACKER_CONFLICT_KEY]: z.string().optional(),
-  [CONTROL_PLANE_FROM_TRACKER_KEY]: z.boolean().optional(),
-  [TRACKER_FROM_CONTROL_PLANE_KEY]: z.boolean().optional(),
-  control_plane: ControlPlaneSchema.default(DEFAULT_WAYANG_CONTROL_PLANE),
-  tracker: TrackerSchema.default(DEFAULT_TRACKER),
-  repo: RepoSchema,
-  polling: PollingSchema,
-  workspace: WorkspaceSchema,
-  hooks: HooksSchema,
-  agent: AgentSchema,
-  agent_provider: AgentProvider.default("claude"),
-  claude: ClaudeSchema.optional(),
-  codex: CodexSchema.optional(),
-  opencode: OpencodeSchema.optional(),
-  server: ServerSchema,
-  pr_checks: PrChecksSchema,
-}).transform((cfg) => {
-  const {
-    [CONTROL_PLANE_TRACKER_CONFLICT_KEY]: conflict,
-    [CONTROL_PLANE_FROM_TRACKER_KEY]: controlPlaneFromTracker,
-    [TRACKER_FROM_CONTROL_PLANE_KEY]: trackerFromControlPlane,
-    ...clean
-  } = cfg;
-  setAliasProvenance(clean, {
-    controlPlaneFromTracker: controlPlaneFromTracker === true,
-    trackerFromControlPlane: trackerFromControlPlane === true,
-    conflict: conflict ?? null,
-  });
-  return clean;
-}));
+const RawWorkflowFrontMatterSchema = z.preprocess(
+  (raw) => normalizeControlPlaneAliases(raw).raw,
+  z
+    .object({
+      [CONTROL_PLANE_TRACKER_CONFLICT_KEY]: z.string().optional(),
+      [CONTROL_PLANE_FROM_TRACKER_KEY]: z.boolean().optional(),
+      [TRACKER_FROM_CONTROL_PLANE_KEY]: z.boolean().optional(),
+      control_plane: ControlPlaneSchema.default(DEFAULT_PAPAN_CONTROL_PLANE),
+      tracker: TrackerSchema.default(DEFAULT_TRACKER),
+      repo: RepoSchema,
+      polling: PollingSchema,
+      workspace: WorkspaceSchema,
+      hooks: HooksSchema,
+      agent: AgentSchema,
+      agent_provider: AgentProvider.default("claude"),
+      claude: ClaudeSchema.optional(),
+      codex: CodexSchema.optional(),
+      opencode: OpencodeSchema.optional(),
+      server: ServerSchema,
+      pr_checks: PrChecksSchema,
+    })
+    .transform((cfg) => {
+      const {
+        [CONTROL_PLANE_TRACKER_CONFLICT_KEY]: conflict,
+        [CONTROL_PLANE_FROM_TRACKER_KEY]: controlPlaneFromTracker,
+        [TRACKER_FROM_CONTROL_PLANE_KEY]: trackerFromControlPlane,
+        ...clean
+      } = cfg;
+      setAliasProvenance(clean, {
+        controlPlaneFromTracker: controlPlaneFromTracker === true,
+        trackerFromControlPlane: trackerFromControlPlane === true,
+        conflict: conflict ?? null,
+      });
+      return clean;
+    }),
+);
 
 export const WorkflowFrontMatterSchema = RawWorkflowFrontMatterSchema.superRefine((cfg, ctx) => {
   if (cfg.agent_provider === "claude" && !cfg.claude) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["claude"],
-      message: "claude block is required when agent_provider is \"claude\"",
+      message: 'claude block is required when agent_provider is "claude"',
     });
   }
   if (cfg.agent_provider === "codex" && !cfg.codex) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["codex"],
-      message: "codex block is required when agent_provider is \"codex\"",
+      message: 'codex block is required when agent_provider is "codex"',
     });
   }
   if (cfg.agent_provider === "opencode" && !cfg.opencode) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["opencode"],
-      message: "opencode block is required when agent_provider is \"opencode\"",
+      message: 'opencode block is required when agent_provider is "opencode"',
     });
   }
 });
@@ -389,7 +398,7 @@ export type WorkflowFrontMatter = ParsedWorkflowFrontMatter & {
 };
 
 const DEFAULTS = {
-  control_plane: DEFAULT_WAYANG_CONTROL_PLANE,
+  control_plane: DEFAULT_PAPAN_CONTROL_PLANE,
   tracker: DEFAULT_TRACKER,
   repo: null,
   polling: { interval_ms: 30000 },
@@ -450,8 +459,8 @@ const DEFAULTS = {
 export function applyDefaults(raw: unknown): WorkflowFrontMatter {
   const normalized = normalizeControlPlaneAliases(raw);
   const normalizedRaw = normalized.raw;
-  const provider = ((normalizedRaw as { agent_provider?: string } | null | undefined)?.agent_provider
-    ?? DEFAULTS.agent_provider) as "claude" | "codex" | "opencode";
+  const provider = ((normalizedRaw as { agent_provider?: string } | null | undefined)
+    ?.agent_provider ?? DEFAULTS.agent_provider) as "claude" | "codex" | "opencode";
   const base = deepClone(DEFAULTS) as Record<string, unknown>;
   if (provider === "codex") {
     delete base.claude;

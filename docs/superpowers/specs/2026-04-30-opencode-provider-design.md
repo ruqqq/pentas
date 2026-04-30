@@ -76,8 +76,15 @@ export const AgentProvider = z.enum(["claude", "codex", "opencode"]);
 
 export const OpencodeSchema = z.object({
   executable_path: z.string().min(1).default("opencode"),
-  model: z.string().min(1).regex(/^[^/]+\/.+$/),     // "providerID/modelID"
-  small_model: z.string().min(1).regex(/^[^/]+\/.+$/).optional(),
+  model: z
+    .string()
+    .min(1)
+    .regex(/^[^/]+\/.+$/), // "providerID/modelID"
+  small_model: z
+    .string()
+    .min(1)
+    .regex(/^[^/]+\/.+$/)
+    .optional(),
   turn_timeout_ms: z.number().int().positive(),
   read_timeout_ms: z.number().int().positive(),
   stall_timeout_ms: z.number().int(),
@@ -160,9 +167,11 @@ The existing two-way branch at the worker call site extends to three:
 
 ```ts
 const runQuery =
-  config.provider === "codex"     ? codexRunQuery     :
-  config.provider === "opencode"  ? opencodeRunQuery  :
-                                    sdkRunQuery;
+  config.provider === "codex"
+    ? codexRunQuery
+    : config.provider === "opencode"
+      ? opencodeRunQuery
+      : sdkRunQuery;
 ```
 
 No changes to retry, backoff, concurrency, abort, or tracker-refresh code.
@@ -208,7 +217,7 @@ export const opencodeRunQuery: RunQuery = async (opts: RunQueryOptions) => {
   const client = await getOpencodeClient();
   const { providerID, modelID } = parseProviderModel(opts.model);
 
-  const sessionId = opts.resumeSessionId ?? await createSession(client, opts.cwd);
+  const sessionId = opts.resumeSessionId ?? (await createSession(client, opts.cwd));
 
   await client.session.promptAsync({
     path: { id: sessionId },
@@ -235,16 +244,16 @@ async function createSession(client, cwd) {
 
 ### 8. Event mapping (`opencode-event-mapper.ts`)
 
-| opencode event                          | RuntimeEvent                                       |
-|-----------------------------------------|----------------------------------------------------|
-| First event with `sessionID` populated  | `session_started` (`thread_id` = `sessionID`)      |
-| `message.part.updated` (text part)      | `notification` (truncated text)                    |
-| `message.part.updated` (tool call start)| `notification` (`tool_use:<name>`)                 |
-| `message.part.updated` (tool call result)| `notification` (`tool_result`)                    |
-| `session.idle`                          | `turn_completed` (usage from final `Message.tokens`)|
-| `session.error`                         | `turn_ended_with_error` (reason from event)        |
-| Server connection lost                  | `startup_failed` (reason `opencode_disconnect`)    |
-| Anything else                           | `other_message` with raw `type`                    |
+| opencode event                            | RuntimeEvent                                         |
+| ----------------------------------------- | ---------------------------------------------------- |
+| First event with `sessionID` populated    | `session_started` (`thread_id` = `sessionID`)        |
+| `message.part.updated` (text part)        | `notification` (truncated text)                      |
+| `message.part.updated` (tool call start)  | `notification` (`tool_use:<name>`)                   |
+| `message.part.updated` (tool call result) | `notification` (`tool_result`)                       |
+| `session.idle`                            | `turn_completed` (usage from final `Message.tokens`) |
+| `session.error`                           | `turn_ended_with_error` (reason from event)          |
+| Server connection lost                    | `startup_failed` (reason `opencode_disconnect`)      |
+| Anything else                             | `other_message` with raw `type`                      |
 
 **Token usage.** opencode normalizes per-provider token usage into `Message.tokens` (input / output / reasoning). Map to dalang's existing `tokens` shape:
 

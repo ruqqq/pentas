@@ -6,11 +6,18 @@ import type { NormalizedIssue } from "../../src/types";
 
 function mkIssue(p: Partial<NormalizedIssue>): NormalizedIssue {
   return {
-    id: p.id ?? "id", identifier: p.identifier ?? "X-1", title: p.title ?? "t",
-    description: null, priority: p.priority ?? null,
+    id: p.id ?? "id",
+    identifier: p.identifier ?? "X-1",
+    title: p.title ?? "t",
+    description: null,
+    priority: p.priority ?? null,
     state: p.state ?? "Todo",
-    branch_name: null, url: null, external_ref: null, internal_ref: null,
-    labels: [], blocked_by: p.blocked_by ?? [],
+    branch_name: null,
+    url: null,
+    external_ref: null,
+    internal_ref: null,
+    labels: [],
+    blocked_by: p.blocked_by ?? [],
     created_at: p.created_at ?? null,
     updated_at: null,
   };
@@ -42,13 +49,19 @@ test("isEligible: rejects already-running issue", () => {
 
 test("isEligible: Todo with non-terminal blocker not eligible", () => {
   const s = createInitialState({ poll_interval_ms: 30000, max_concurrent_agents: 4 });
-  const issue = mkIssue({ state: "Todo", blocked_by: [{ id: "x", identifier: "X-9", state: "In Progress" }] });
+  const issue = mkIssue({
+    state: "Todo",
+    blocked_by: [{ id: "x", identifier: "X-9", state: "In Progress" }],
+  });
   expect(isEligible(issue, s, { active: ["Todo"], terminal: ["Done"], byState: {} })).toBe(false);
 });
 
 test("isEligible: Todo with all-terminal blockers eligible", () => {
   const s = createInitialState({ poll_interval_ms: 30000, max_concurrent_agents: 4 });
-  const issue = mkIssue({ state: "Todo", blocked_by: [{ id: "x", identifier: "X-9", state: "Done" }] });
+  const issue = mkIssue({
+    state: "Todo",
+    blocked_by: [{ id: "x", identifier: "X-9", state: "Done" }],
+  });
   expect(isEligible(issue, s, { active: ["Todo"], terminal: ["Done"], byState: {} })).toBe(true);
 });
 
@@ -57,13 +70,22 @@ test("isEligible: respects per-state concurrency limit", () => {
   // simulate 2 running In Progress
   for (const id of ["a", "b"]) {
     s.running.set(id, {
-      issue: mkIssue({ id, state: "In Progress" }), identifier: id, workspace_path: "/",
-      started_at: "", abort_controller: new AbortController(), retry_attempt: null, session: null,
+      issue: mkIssue({ id, state: "In Progress" }),
+      identifier: id,
+      workspace_path: "/",
+      started_at: "",
+      abort_controller: new AbortController(),
+      retry_attempt: null,
+      session: null,
     });
     s.claimed.add(id);
   }
   const candidate = mkIssue({ id: "c", state: "In Progress" });
-  expect(isEligible(candidate, s, {
-    active: ["In Progress"], terminal: [], byState: { "in progress": 2 },
-  })).toBe(false);
+  expect(
+    isEligible(candidate, s, {
+      active: ["In Progress"],
+      terminal: [],
+      byState: { "in progress": 2 },
+    }),
+  ).toBe(false);
 });

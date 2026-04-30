@@ -23,8 +23,14 @@ const issue: NormalizedIssue = {
 test("runAttempt drives an opencode-shaped event stream end-to-end", async () => {
   const events: unknown[] = [
     { type: "session.created", properties: { info: { id: "ses-1" } } },
-    { type: "message.part.updated", properties: { sessionID: "ses-1", part: { type: "text", text: "hello" } } },
-    { type: "session.idle", properties: { sessionID: "ses-1", tokens: { input: 12, output: 7, reasoning: 3 } } },
+    {
+      type: "message.part.updated",
+      properties: { sessionID: "ses-1", part: { type: "text", text: "hello" } },
+    },
+    {
+      type: "session.idle",
+      properties: { sessionID: "ses-1", tokens: { input: 12, output: 7, reasoning: 3 } },
+    },
   ];
 
   const collected: RuntimeEvent[] = [];
@@ -42,13 +48,15 @@ test("runAttempt drives an opencode-shaped event stream end-to-end", async () =>
       stallTimeoutMs: 30000,
       maxTurns: 1,
     },
-    controlPlane: { kind: "wayang", endpoint: "http://localhost", api_key: null },
+    controlPlane: { kind: "papan", endpoint: "http://localhost", api_key: null },
     trackerRefresh: async () => null,
     isActiveState: () => false,
     runQuery: async function* () {
       for (const e of events) yield e;
     },
-    onEvent: (e) => { collected.push(e); },
+    onEvent: (e) => {
+      collected.push(e);
+    },
   });
 
   expect(result.success).toBe(true);

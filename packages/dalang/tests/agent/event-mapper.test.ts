@@ -37,7 +37,8 @@ test("user tool_result → notification", () => {
 
 test("result success → turn_completed with usage", () => {
   const ev = mapSdkMessage({
-    type: "result", subtype: "success",
+    type: "result",
+    subtype: "success",
     usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 },
   });
   expect(ev?.event).toBe("turn_completed");
@@ -61,7 +62,12 @@ test("null/undefined input returns null", () => {
 
 // §10.4 startup_failed mappings
 test("auth_status with error → startup_failed", () => {
-  const ev = mapSdkMessage({ type: "auth_status", isAuthenticating: false, output: [], error: "subscription_required" });
+  const ev = mapSdkMessage({
+    type: "auth_status",
+    isAuthenticating: false,
+    output: [],
+    error: "subscription_required",
+  });
   expect(ev?.event).toBe("startup_failed");
   expect(ev?.reason).toBe("subscription_required");
 });

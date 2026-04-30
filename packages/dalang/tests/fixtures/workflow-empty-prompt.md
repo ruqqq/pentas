@@ -4,4 +4,3 @@ tracker:
   active_states: [Todo]
   terminal_states: [Done]
 ---
-

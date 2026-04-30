@@ -109,7 +109,9 @@ async function defaultFactory(_opts: { executablePath: string }): Promise<Openco
 
   return {
     client: wrappedClient,
-    shutdown: async () => { server.close(); },
+    shutdown: async () => {
+      server.close();
+    },
   };
 }
 
@@ -175,7 +177,9 @@ async function spawn(opts: { executablePath: string }): Promise<OpencodeBackend>
   return starting;
 }
 
-export async function getOpencodeClient(opts: { executablePath: string }): Promise<OpencodeBackendClient> {
+export async function getOpencodeClient(opts: {
+  executablePath: string;
+}): Promise<OpencodeBackendClient> {
   if (stopped) throw new Error("opencode_server_unavailable");
   if (backend) return backend.client;
   const b = await spawn(opts);
@@ -205,13 +209,21 @@ export async function shutdownOpencodeServer(): Promise<void> {
     const b = backend;
     backend = null;
     starting = null;
-    try { await b.shutdown(); } catch { /* swallow */ }
+    try {
+      await b.shutdown();
+    } catch {
+      /* swallow */
+    }
   }
 }
 
 // Test hooks (NOT for production callers)
-export function __setOpencodeFactoryForTests(f: OpencodeFactory): void { factory = f; }
-export function __setOpencodeBackoffsForTests(backoffs: readonly number[]): void { restartBackoffsMs = backoffs; }
+export function __setOpencodeFactoryForTests(f: OpencodeFactory): void {
+  factory = f;
+}
+export function __setOpencodeBackoffsForTests(backoffs: readonly number[]): void {
+  restartBackoffsMs = backoffs;
+}
 export function __resetOpencodeServerForTests(): void {
   stopped = false;
   backend = null;

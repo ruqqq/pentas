@@ -4,7 +4,12 @@ import { mkdtempSync, writeFileSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { applyDefaults } from "../../src/config/schema";
-import { validateForDispatch, ValidationError, probeCodexAuth, probeOpencodeAuth } from "../../src/config/validate";
+import {
+  validateForDispatch,
+  ValidationError,
+  probeCodexAuth,
+  probeOpencodeAuth,
+} from "../../src/config/validate";
 
 function makeFakeBin(script: string): string {
   const dir = mkdtempSync(join(tmpdir(), "opencode-bin-"));
@@ -14,10 +19,15 @@ function makeFakeBin(script: string): string {
   return path;
 }
 
-const baseConfig = () => applyDefaults({
-  tracker: { endpoint: "http://localhost:3001", active_states: ["Todo"], terminal_states: ["Done"] },
-  workspace: { root: "/tmp/dalang" },
-});
+const baseConfig = () =>
+  applyDefaults({
+    tracker: {
+      endpoint: "http://localhost:3001",
+      active_states: ["Todo"],
+      terminal_states: ["Done"],
+    },
+    workspace: { root: "/tmp/dalang" },
+  });
 
 test("accepts a complete valid config", () => {
   const cfg = baseConfig();
@@ -28,7 +38,7 @@ test("accepts a complete valid config", () => {
 test("rejects when control_plane $VAR api_key is unresolved", () => {
   const cfg = applyDefaults({
     control_plane: {
-      kind: "wayang",
+      kind: "papan",
       endpoint: "http://localhost:3001",
       api_key: "$NEVER_DEFINED_KEY_XYZ",
       active_states: ["Todo"],
@@ -47,7 +57,7 @@ test("rejects when control_plane $VAR api_key is unresolved", () => {
 
 test("accepts when control_plane $VAR api_key resolves", () => {
   const cfg = baseConfig();
-  if (cfg.control_plane.kind !== "wayang") throw new Error("expected wayang control plane");
+  if (cfg.control_plane.kind !== "papan") throw new Error("expected papan control plane");
   cfg.control_plane.api_key = "$EXISTS_KEY_XYZ";
   process.env.EXISTS_KEY_XYZ = "abc";
   expect(() => validateForDispatch(cfg)).not.toThrow();
@@ -192,7 +202,7 @@ test("rejects github-projects control plane when token env var is missing", () =
 test("rejects explicit legacy tracker api_key when env var is missing", () => {
   const cfg = applyDefaults({
     control_plane: {
-      kind: "wayang",
+      kind: "papan",
       endpoint: "http://localhost:3001",
       api_key: null,
       active_states: ["Todo"],
@@ -200,7 +210,7 @@ test("rejects explicit legacy tracker api_key when env var is missing", () => {
       ownership: { mode: "none" },
     },
     tracker: {
-      kind: "tok-juara",
+      kind: "papan",
       endpoint: "http://localhost:3001",
       api_key: "$MISSING_TRACKER_TOKEN_FOR_TEST",
       active_states: ["Todo"],
@@ -217,10 +227,10 @@ test("rejects explicit legacy tracker api_key when env var is missing", () => {
   }
 });
 
-test("rejects matching mixed wayang api_key env var with legacy tracker error code", () => {
+test("rejects matching mixed papan api_key env var with legacy tracker error code", () => {
   const cfg = applyDefaults({
     control_plane: {
-      kind: "wayang",
+      kind: "papan",
       endpoint: "http://localhost:3001",
       api_key: "$MISSING_SHARED_TRACKER_TOKEN_FOR_TEST",
       active_states: ["Todo"],
@@ -228,7 +238,7 @@ test("rejects matching mixed wayang api_key env var with legacy tracker error co
       ownership: { mode: "none" },
     },
     tracker: {
-      kind: "tok-juara",
+      kind: "papan",
       endpoint: "http://localhost:3001",
       api_key: "$MISSING_SHARED_TRACKER_TOKEN_FOR_TEST",
       active_states: ["Todo"],
@@ -248,7 +258,7 @@ test("rejects matching mixed wayang api_key env var with legacy tracker error co
 test("rejects tracker-only legacy api_key with legacy error code when env var is missing", () => {
   const cfg = applyDefaults({
     tracker: {
-      kind: "tok-juara",
+      kind: "papan",
       endpoint: "http://localhost:3001",
       api_key: "$MISSING_LEGACY_TRACKER_TOKEN_FOR_TEST",
       active_states: ["Todo"],
@@ -265,10 +275,10 @@ test("rejects tracker-only legacy api_key with legacy error code when env var is
   }
 });
 
-test("rejects divergent mixed wayang control_plane and tracker config", () => {
+test("rejects divergent mixed papan control_plane and tracker config", () => {
   const cfg = applyDefaults({
     control_plane: {
-      kind: "wayang",
+      kind: "papan",
       endpoint: "http://localhost:3001",
       api_key: "same-key",
       board: "main",
@@ -277,7 +287,7 @@ test("rejects divergent mixed wayang control_plane and tracker config", () => {
       ownership: { mode: "none" },
     },
     tracker: {
-      kind: "tok-juara",
+      kind: "papan",
       endpoint: "http://localhost:3002",
       api_key: "same-key",
       board: "main",
@@ -298,7 +308,7 @@ test("rejects divergent mixed config even if raw input spoofs internal alias mar
   const cfg = applyDefaults({
     __control_plane_from_tracker: true,
     control_plane: {
-      kind: "wayang",
+      kind: "papan",
       endpoint: "http://localhost:3001",
       api_key: "same-key",
       board: "main",
@@ -307,7 +317,7 @@ test("rejects divergent mixed config even if raw input spoofs internal alias mar
       ownership: { mode: "none" },
     },
     tracker: {
-      kind: "tok-juara",
+      kind: "papan",
       endpoint: "http://localhost:3002",
       api_key: "same-key",
       board: "main",
@@ -328,7 +338,7 @@ test("raw internal alias marker cannot suppress explicit tracker api_key validat
   const cfg = applyDefaults({
     __tracker_from_control_plane: true,
     control_plane: {
-      kind: "wayang",
+      kind: "papan",
       endpoint: "http://localhost:3001",
       api_key: null,
       active_states: ["Todo"],
@@ -336,7 +346,7 @@ test("raw internal alias marker cannot suppress explicit tracker api_key validat
       ownership: { mode: "none" },
     },
     tracker: {
-      kind: "tok-juara",
+      kind: "papan",
       endpoint: "http://localhost:3001",
       api_key: "$MISSING_SPOOFED_TRACKER_TOKEN_FOR_TEST",
       active_states: ["Todo"],
@@ -357,7 +367,7 @@ test("control_plane alias provenance survives object spread cloning", () => {
   const cfg = {
     ...applyDefaults({
       control_plane: {
-        kind: "wayang",
+        kind: "papan",
         endpoint: "http://localhost:3001",
         api_key: "$MISSING_SPREAD_CONTROL_PLANE_TOKEN_FOR_TEST",
         active_states: ["Todo"],
@@ -376,10 +386,10 @@ test("control_plane alias provenance survives object spread cloning", () => {
   }
 });
 
-test("accepts matching mixed wayang control_plane and tracker config", () => {
+test("accepts matching mixed papan control_plane and tracker config", () => {
   const cfg = applyDefaults({
     control_plane: {
-      kind: "wayang",
+      kind: "papan",
       endpoint: "http://localhost:3001",
       api_key: "same-key",
       board: "main",
@@ -388,7 +398,7 @@ test("accepts matching mixed wayang control_plane and tracker config", () => {
       ownership: { mode: "none" },
     },
     tracker: {
-      kind: "tok-juara",
+      kind: "papan",
       endpoint: "http://localhost:3001",
       api_key: "same-key",
       board: "main",
@@ -400,15 +410,15 @@ test("accepts matching mixed wayang control_plane and tracker config", () => {
   expect(() => validateForDispatch(cfg)).not.toThrow();
 });
 
-test("accepts matching mixed wayang config when both sides rely on default states", () => {
+test("accepts matching mixed papan config when both sides rely on default states", () => {
   const cfg = applyDefaults({
     control_plane: {
-      kind: "wayang",
+      kind: "papan",
       endpoint: "http://localhost:3001",
       ownership: { mode: "none" },
     },
     tracker: {
-      kind: "tok-juara",
+      kind: "papan",
       endpoint: "http://localhost:3001",
     },
   });

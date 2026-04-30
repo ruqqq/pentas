@@ -10,7 +10,11 @@ export interface GhOptions {
   env?: Record<string, string>;
 }
 
-export async function runGh(executable: string, args: string[], opts: GhOptions): Promise<GhResult> {
+export async function runGh(
+  executable: string,
+  args: string[],
+  opts: GhOptions,
+): Promise<GhResult> {
   const proc = Bun.spawn([executable, ...args], {
     cwd: opts.cwd,
     env: { ...process.env, ...opts.env },

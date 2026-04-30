@@ -4,9 +4,9 @@ import { mkdtemp, writeFile, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Orchestrator } from "../../src/orchestrator/orchestrator";
-import { WayangControlPlaneAdapter } from "../../src/control-plane/wayang-adapter";
+import { PapanControlPlaneAdapter } from "../../src/control-plane/papan-adapter";
 import { applyDefaults } from "../../src/config/schema";
-import { runWayang } from "../../../wayang/src/main";
+import { runPapan } from "../../../papan/src/main";
 import type { NormalizedIssue } from "../../src/types";
 
 async function ghStub(scriptBody: string): Promise<string> {
@@ -19,13 +19,13 @@ async function ghStub(scriptBody: string): Promise<string> {
 
 test("e2e: pr_checks reconciler bounces an issue back to In Dev with a comment", async () => {
   const wsRoot = await mkdtemp(join(tmpdir(), "dalang-e2e-"));
-  const { server, db } = runWayang({ port: 0, dbPath: ":memory:" });
+  const { server, db } = runPapan({ port: 0, dbPath: ":memory:" });
 
   try {
     // server.url ends with "/" per Bun's URL serialisation
     const baseUrl = server.url;
 
-    // Create the issue via the wayang HTTP API in state "Waiting PR Checks".
+    // Create the issue via the papan HTTP API in state "Waiting PR Checks".
     // We use external_ref for the human-readable identifier since the create route
     // auto-allocates the internal identifier.
     const createRes = await fetch(`${baseUrl}api/v1/issues`, {
@@ -48,9 +48,9 @@ test("e2e: pr_checks reconciler bounces an issue back to In Dev with a comment",
       "pr checks") echo '[{"name":"build","state":"FAILURE","bucket":"fail","link":"https://x/run/9"}]' ;;
     esac`);
 
-    // Strip trailing slash for WayangControlPlaneAdapter - it adds its own.
+    // Strip trailing slash for PapanControlPlaneAdapter - it adds its own.
     const endpointNoSlash = baseUrl.replace(/\/$/, "");
-    const controlPlane = new WayangControlPlaneAdapter({ endpoint: endpointNoSlash, apiKey: null });
+    const controlPlane = new PapanControlPlaneAdapter({ endpoint: endpointNoSlash, apiKey: null });
 
     const cfg = applyDefaults({
       tracker: {

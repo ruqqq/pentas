@@ -8,7 +8,9 @@ function truncate(s: string): string {
   return s.slice(0, TRUNC) + `... [truncated ${s.length - TRUNC} bytes]`;
 }
 
-function nowIso(): string { return new Date().toISOString(); }
+function nowIso(): string {
+  return new Date().toISOString();
+}
 
 // SDK message shapes that the current SDK version (@anthropic-ai/claude-agent-sdk 0.2.x)
 // does NOT surface as discrete streaming events, per §10.4 of the spec:
@@ -64,7 +66,8 @@ function mapSdkMessageInner(raw: unknown): RuntimeEvent | null {
     // error code and the message content is empty, treat it as startup_failed (§10.4).
     const errorCode = typeof m.error === "string" ? m.error : null;
     const startupErrors = new Set(["authentication_failed", "billing_error"]);
-    const content = ((m.message as Record<string, unknown> | undefined)?.content ?? []) as unknown[];
+    const content = ((m.message as Record<string, unknown> | undefined)?.content ??
+      []) as unknown[];
     if (errorCode !== null && startupErrors.has(errorCode) && content.length === 0) {
       return { event: "startup_failed", timestamp: nowIso(), reason: errorCode };
     }
@@ -84,9 +87,13 @@ function mapSdkMessageInner(raw: unknown): RuntimeEvent | null {
   }
 
   if (type === "user") {
-    const content = ((m.message as Record<string, unknown> | undefined)?.content ?? []) as unknown[];
-    const hasToolResult = content.some((c) =>
-      c !== null && typeof c === "object" && (c as Record<string, unknown>).type === "tool_result"
+    const content = ((m.message as Record<string, unknown> | undefined)?.content ??
+      []) as unknown[];
+    const hasToolResult = content.some(
+      (c) =>
+        c !== null &&
+        typeof c === "object" &&
+        (c as Record<string, unknown>).type === "tool_result",
     );
     if (hasToolResult) {
       return { event: "notification", timestamp: nowIso(), message: "tool_result" };
@@ -100,7 +107,11 @@ function mapSdkMessageInner(raw: unknown): RuntimeEvent | null {
     if (subtype === "success") {
       return { event: "turn_completed", timestamp: nowIso(), usage };
     }
-    return { event: "turn_ended_with_error", timestamp: nowIso(), reason: typeof subtype === "string" ? subtype : undefined };
+    return {
+      event: "turn_ended_with_error",
+      timestamp: nowIso(),
+      reason: typeof subtype === "string" ? subtype : undefined,
+    };
   }
 
   if (typeof type === "string") {

@@ -91,9 +91,7 @@ export function mapOpencodeEvent(raw: unknown): RuntimeEvent | null {
     }
     case "message.part.updated": {
       const part =
-        props && typeof props.part === "object"
-          ? (props.part as Record<string, unknown>)
-          : null;
+        props && typeof props.part === "object" ? (props.part as Record<string, unknown>) : null;
       if (!part) return null;
       return mapPart(part);
     }

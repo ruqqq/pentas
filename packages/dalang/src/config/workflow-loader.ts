@@ -38,7 +38,10 @@ export async function loadWorkflow(path: string): Promise<LoadedWorkflow> {
     const st = await stat(path);
     mtimeMs = st.mtimeMs;
   } catch (err) {
-    throw new WorkflowError("missing_workflow_file", `cannot read workflow at ${path}: ${(err as Error).message}`);
+    throw new WorkflowError(
+      "missing_workflow_file",
+      `cannot read workflow at ${path}: ${(err as Error).message}`,
+    );
   }
 
   let frontMatterText = "";
@@ -59,7 +62,10 @@ export async function loadWorkflow(path: string): Promise<LoadedWorkflow> {
     frontMatterText = lines.slice(1, endIdx).join("\n");
     body = lines.slice(endIdx + 1).join("\n");
   } else {
-    throw new WorkflowError("workflow_front_matter_not_a_map", "WORKFLOW.md must start with YAML front matter `---`");
+    throw new WorkflowError(
+      "workflow_front_matter_not_a_map",
+      "WORKFLOW.md must start with YAML front matter `---`",
+    );
   }
 
   let parsed: unknown;
@@ -76,7 +82,10 @@ export async function loadWorkflow(path: string): Promise<LoadedWorkflow> {
   const merged = applyDefaults(parsed);
   const validation = WorkflowFrontMatterSchema.safeParse(merged);
   if (!validation.success) {
-    throw new WorkflowError("workflow_validation_error", `front matter invalid: ${validation.error.message}`);
+    throw new WorkflowError(
+      "workflow_validation_error",
+      `front matter invalid: ${validation.error.message}`,
+    );
   }
 
   const expanded = await expandImports(body, {
@@ -118,7 +127,10 @@ interface ExpandResult {
 
 async function expandImports(body: string, ctx: ImportContext): Promise<ExpandResult> {
   if (ctx.depth > MAX_IMPORT_DEPTH) {
-    throw new WorkflowError("workflow_import_error", `workflow import depth exceeds ${MAX_IMPORT_DEPTH}`);
+    throw new WorkflowError(
+      "workflow_import_error",
+      `workflow import depth exceeds ${MAX_IMPORT_DEPTH}`,
+    );
   }
 
   const lines = body.split("\n");
@@ -166,7 +178,10 @@ async function expandImports(body: string, ctx: ImportContext): Promise<ExpandRe
     }
 
     if (imported.split("\n")[0]?.trim() === "---") {
-      throw new WorkflowError("workflow_import_error", `import ${importPath} must not contain front matter`);
+      throw new WorkflowError(
+        "workflow_import_error",
+        `import ${importPath} must not contain front matter`,
+      );
     }
 
     ctx.importedPaths.push(targetReal);
@@ -190,13 +205,22 @@ async function expandImports(body: string, ctx: ImportContext): Promise<ExpandRe
 
 function resolveImportPath(importPath: string, currentDir: string, rootReal: string): string {
   if (isAbsolute(importPath)) {
-    throw new WorkflowError("workflow_import_error", `absolute workflow import rejected: ${importPath}`);
+    throw new WorkflowError(
+      "workflow_import_error",
+      `absolute workflow import rejected: ${importPath}`,
+    );
   }
   if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(importPath)) {
-    throw new WorkflowError("workflow_import_error", `URL-style workflow import rejected: ${importPath}`);
+    throw new WorkflowError(
+      "workflow_import_error",
+      `URL-style workflow import rejected: ${importPath}`,
+    );
   }
   if (extname(importPath) !== ".md") {
-    throw new WorkflowError("workflow_import_error", `workflow import must be a .md file: ${importPath}`);
+    throw new WorkflowError(
+      "workflow_import_error",
+      `workflow import must be a .md file: ${importPath}`,
+    );
   }
 
   const resolved = resolve(currentDir, importPath);
@@ -206,6 +230,9 @@ function resolveImportPath(importPath: string, currentDir: string, rootReal: str
 
 function assertInsideRoot(path: string, rootReal: string, importPath: string): void {
   if (path !== rootReal && !path.startsWith(rootReal + sep)) {
-    throw new WorkflowError("workflow_import_error", `workflow import escapes root directory: ${importPath}`);
+    throw new WorkflowError(
+      "workflow_import_error",
+      `workflow import escapes root directory: ${importPath}`,
+    );
   }
 }

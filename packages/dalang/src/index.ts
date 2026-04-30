@@ -13,8 +13,12 @@ const shutdown = async () => {
   process.exit(0);
 };
 
-process.on("SIGINT", () => { void shutdown(); });
-process.on("SIGTERM", () => { void shutdown(); });
+process.on("SIGINT", () => {
+  void shutdown();
+});
+process.on("SIGTERM", () => {
+  void shutdown();
+});
 
 try {
   await boot.start();

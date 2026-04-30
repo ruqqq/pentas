@@ -1,11 +1,11 @@
-# tok-juara
+# pentas
 
-A two-package Bun + TypeScript monorepo:
+A three-package Bun + TypeScript monorepo:
 
-- **`@tok-juara/dalang`** — orchestrator daemon. Polls a control plane for owned work, dispatches per-item work to git-worktree workspaces, and runs Claude/Codex/opencode agent sessions.
-- **`@tok-juara/wayang`** — single-user issue control plane and inbox that dalang can drive against (REST API + minimal UI). Dalang can also use GitHub Projects v2 as a control plane.
+- **`@pentas/dalang`** — orchestrator daemon. Polls a control plane for owned work, dispatches per-item work to git-worktree workspaces, and runs Claude/Codex/opencode agent sessions.
+- **`@pentas/papan`** — single-user issue control plane and inbox that dalang can drive against (REST API + minimal UI). Dalang can also use GitHub Projects v2 as a control plane.
 
-The names are Malay: *dalang* = puppeteer/mastermind, *wayang* = shadow-puppet show.
+The names are Malay/Indonesian: _pentas_ = stage, _dalang_ = puppeteer/mastermind, _papan_ = board.
 
 ## Prerequisites
 
@@ -17,22 +17,22 @@ The names are Malay: *dalang* = puppeteer/mastermind, *wayang* = shadow-puppet s
 ## Install
 
 ```bash
-git clone <this-repo> tok-juara
-cd tok-juara
+git clone <this-repo> pentas
+cd pentas
 bun install
 ```
 
 ## Repository layout
 
 ```
-tok-juara/
+pentas/
 ├── package.json                 # Bun workspaces root, top-level scripts
 ├── tsconfig.base.json           # shared TypeScript config (tsgo)
 ├── oxlint.json
 ├── bunfig.toml
 ├── packages/
 │   ├── dalang/                  # orchestrator daemon
-│   └── wayang/                  # local control plane
+│   └── papan/                  # local control plane
 └── docs/superpowers/
     ├── specs/                   # design specs
     └── plans/                   # implementation plans
@@ -52,14 +52,14 @@ bun test               # bun test on every package
 
 ## Running locally
 
-### 1. Start wayang (optional local control plane)
+### 1. Start papan (optional local control plane)
 
 ```bash
-cd packages/wayang
+cd packages/papan
 bun run start
 ```
 
-Wayang serves its UI and REST API at `http://localhost:3001` by default. See `packages/wayang/README.md` (if present) or its source for endpoints.
+Papan serves its UI and REST API at `http://localhost:3001` by default. See `packages/papan/README.md` (if present) or its source for endpoints.
 
 ### 2. Configure dalang
 
@@ -68,7 +68,7 @@ Create a `WORKFLOW.md` somewhere — typically the repo root or a project root. 
 ```yaml
 ---
 control_plane:
-  kind: wayang
+  kind: papan
   endpoint: http://localhost:3001
   active_states: [Todo, "In Progress"]
   terminal_states: [Done, Cancelled, Duplicate]
@@ -107,7 +107,7 @@ control_plane:
     value: dalang
 ```
 
-`tracker:` remains accepted as a temporary compatibility alias for Wayang workflows.
+`tracker:` remains accepted as a temporary compatibility alias for Papan workflows.
 
 Optional `repo:` block to enable git worktrees:
 
@@ -115,7 +115,7 @@ Optional `repo:` block to enable git worktrees:
 repo:
   url: git@github.com:me/myproject.git
   default_branch: main
-  branch_prefix: juara/
+  branch_prefix: pentas/
 ```
 
 When `repo:` is present, dalang creates a shared bare clone at `<workspace.root>/.repo.git` and per-issue worktrees beneath it.

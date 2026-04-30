@@ -23,9 +23,13 @@ function installFakeBackend(opts: {
       setTimeout(() => opts.emitEvents!(emit), 0);
     }
     const iter = {
-      [Symbol.asyncIterator]() { return this; },
+      [Symbol.asyncIterator]() {
+        return this;
+      },
       async next() {
-        const v = queue.length ? queue.shift()! : await new Promise<{ data: unknown } | null>((r) => waiters.push(r));
+        const v = queue.length
+          ? queue.shift()!
+          : await new Promise<{ data: unknown } | null>((r) => waiters.push(r));
         if (v === null) return { done: true as const, value: undefined };
         return { done: false as const, value: v };
       },
@@ -44,7 +48,9 @@ function installFakeBackend(opts: {
           },
         },
       },
-      shutdown: async () => { push(null); },
+      shutdown: async () => {
+        push(null);
+      },
     };
   });
 }
@@ -52,7 +58,9 @@ function installFakeBackend(opts: {
 test("opencodeRunQuery throws when opts.opencode bag is missing (provider mismatch)", () => {
   expect(() =>
     opencodeRunQuery({
-      prompt: "hi", cwd: "/tmp", model: "anthropic/claude",
+      prompt: "hi",
+      cwd: "/tmp",
+      model: "anthropic/claude",
       executablePath: "opencode",
       claude: { permissionMode: "auto" },
     } as never),
@@ -62,11 +70,15 @@ test("opencodeRunQuery throws when opts.opencode bag is missing (provider mismat
 test("opencodeRunQuery throws when model has no provider/model split", () => {
   // Model parsing happens lazily inside the iterator, so we must consume it to surface the throw.
   const iter = opencodeRunQuery({
-    prompt: "hi", cwd: "/tmp", model: "no-slash",
+    prompt: "hi",
+    cwd: "/tmp",
+    model: "no-slash",
     executablePath: "opencode",
     opencode: {},
   });
-  expect(async () => { for await (const _ of iter) break; }).toThrow(/providerID/);
+  expect(async () => {
+    for await (const _ of iter) break;
+  }).toThrow(/providerID/);
 });
 
 test("opencodeRunQuery creates a session, sends a prompt, and yields filtered events", async () => {
@@ -75,12 +87,24 @@ test("opencodeRunQuery creates a session, sends a prompt, and yields filtered ev
   let promptPath: { id: string } | null = null;
   let promptBody: unknown = null;
   installFakeBackend({
-    onSessionCreate: (body) => { createdBody = body; return { id: "ses-1" }; },
-    onPrompt: (path, body) => { promptPath = path; promptBody = body; },
+    onSessionCreate: (body) => {
+      createdBody = body;
+      return { id: "ses-1" };
+    },
+    onPrompt: (path, body) => {
+      promptPath = path;
+      promptBody = body;
+    },
     emitEvents: (emit) => {
       emit({ type: "session.created", properties: { info: { id: "ses-1" } } });
-      emit({ type: "message.part.updated", properties: { sessionID: "ses-1", part: { type: "text", text: "hi" } } });
-      emit({ type: "session.idle", properties: { sessionID: "ses-1", tokens: { input: 1, output: 2, reasoning: 0 } } });
+      emit({
+        type: "message.part.updated",
+        properties: { sessionID: "ses-1", part: { type: "text", text: "hi" } },
+      });
+      emit({
+        type: "session.idle",
+        properties: { sessionID: "ses-1", tokens: { input: 1, output: 2, reasoning: 0 } },
+      });
     },
   });
 
@@ -100,8 +124,10 @@ test("opencodeRunQuery creates a session, sends a prompt, and yields filtered ev
   expect(events.length).toBe(3);
   expect((createdBody as { directory: string }).directory).toBe("/tmp/ws");
   expect((promptPath as { id: string } | null)?.id).toBe("ses-1");
-  expect((promptBody as { model: { providerID: string; modelID: string } }).model)
-    .toEqual({ providerID: "anthropic", modelID: "claude-sonnet-4-6" });
+  expect((promptBody as { model: { providerID: string; modelID: string } }).model).toEqual({
+    providerID: "anthropic",
+    modelID: "claude-sonnet-4-6",
+  });
 });
 
 test("opencodeRunQuery terminates promptly when abortSignal fires while waiting for events", async () => {
@@ -135,7 +161,9 @@ test("opencodeRunQuery terminates promptly when abortSignal fires while waiting 
   // The consume loop should resolve quickly (within ~500ms) once the queue closes.
   await Promise.race([
     consume,
-    new Promise((_, reject) => setTimeout(() => reject(new Error("runner did not terminate after abort")), 500)),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("runner did not terminate after abort")), 500),
+    ),
   ]);
 
   expect(consumed.length).toBe(0);
@@ -149,14 +177,26 @@ test("opencodeRunQuery resumes an existing session id without calling create", a
   __setOpencodeFactoryForTests(async () => {
     const queue: ({ data: unknown } | null)[] = [];
     const waiters: ((v: { data: unknown } | null) => void)[] = [];
-    const push = (v: { data: unknown } | null) => { if (waiters.length) waiters.shift()!(v); else queue.push(v); };
+    const push = (v: { data: unknown } | null) => {
+      if (waiters.length) waiters.shift()!(v);
+      else queue.push(v);
+    };
     queueMicrotask(() => {
-      push({ data: { type: "session.idle", properties: { sessionID: "ses-resume", tokens: { input: 0, output: 0, reasoning: 0 } } } });
+      push({
+        data: {
+          type: "session.idle",
+          properties: { sessionID: "ses-resume", tokens: { input: 0, output: 0, reasoning: 0 } },
+        },
+      });
     });
     const stream = {
-      [Symbol.asyncIterator]() { return this; },
+      [Symbol.asyncIterator]() {
+        return this;
+      },
       async next() {
-        const v = queue.length ? queue.shift()! : await new Promise<{ data: unknown } | null>((r) => waiters.push(r));
+        const v = queue.length
+          ? queue.shift()!
+          : await new Promise<{ data: unknown } | null>((r) => waiters.push(r));
         if (v === null) return { done: true as const, value: undefined };
         return { done: false as const, value: v };
       },
@@ -165,11 +205,19 @@ test("opencodeRunQuery resumes an existing session id without calling create", a
       client: {
         event: () => Promise.resolve({ stream: stream as AsyncIterable<{ data: unknown }> }),
         session: {
-          create: async () => { createCalls += 1; return { data: { id: "should-not-be-used" } }; },
-          promptAsync: async ({ path }: { path: { id: string } }) => { promptedSessionId = path.id; return { data: {} }; },
+          create: async () => {
+            createCalls += 1;
+            return { data: { id: "should-not-be-used" } };
+          },
+          promptAsync: async ({ path }: { path: { id: string } }) => {
+            promptedSessionId = path.id;
+            return { data: {} };
+          },
         },
       },
-      shutdown: async () => { push(null); },
+      shutdown: async () => {
+        push(null);
+      },
     };
   });
 

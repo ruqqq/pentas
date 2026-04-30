@@ -57,7 +57,7 @@ test("runAttempt drives a Codex-shaped event stream end-to-end", async () => {
       stallTimeoutMs: 30000,
       maxTurns: 1,
     },
-    controlPlane: { kind: "wayang", endpoint: "http://localhost", api_key: null },
+    controlPlane: { kind: "papan", endpoint: "http://localhost", api_key: null },
     trackerRefresh: async () => null,
     isActiveState: () => false,
     runQuery: async function* () {

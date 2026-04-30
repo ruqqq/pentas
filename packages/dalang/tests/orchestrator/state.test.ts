@@ -1,12 +1,28 @@
 // packages/dalang/tests/orchestrator/state.test.ts
 import { test, expect } from "bun:test";
-import { createInitialState, addRunning, removeRunning, accumulateTokens } from "../../src/orchestrator/state";
+import {
+  createInitialState,
+  addRunning,
+  removeRunning,
+  accumulateTokens,
+} from "../../src/orchestrator/state";
 import type { NormalizedIssue, RunningEntry } from "../../src/types";
 
 const issue: NormalizedIssue = {
-  id: "i1", identifier: "X-1", title: "t", description: null, priority: null,
-  state: "Todo", branch_name: null, url: null, external_ref: null, internal_ref: null, labels: [], blocked_by: [],
-  created_at: null, updated_at: null,
+  id: "i1",
+  identifier: "X-1",
+  title: "t",
+  description: null,
+  priority: null,
+  state: "Todo",
+  branch_name: null,
+  url: null,
+  external_ref: null,
+  internal_ref: null,
+  labels: [],
+  blocked_by: [],
+  created_at: null,
+  updated_at: null,
 };
 
 test("creates initial state with defaults", () => {
@@ -18,10 +34,13 @@ test("creates initial state with defaults", () => {
 test("addRunning sets entry and adds to claimed", () => {
   const s = createInitialState({ poll_interval_ms: 30000, max_concurrent_agents: 4 });
   const entry: RunningEntry = {
-    issue, identifier: "X-1", workspace_path: "/tmp/X-1",
+    issue,
+    identifier: "X-1",
+    workspace_path: "/tmp/X-1",
     started_at: new Date().toISOString(),
     abort_controller: new AbortController(),
-    retry_attempt: null, session: null,
+    retry_attempt: null,
+    session: null,
   };
   addRunning(s, "i1", entry);
   expect(s.running.has("i1")).toBe(true);
@@ -31,10 +50,13 @@ test("addRunning sets entry and adds to claimed", () => {
 test("removeRunning unsets entry and clears claim", () => {
   const s = createInitialState({ poll_interval_ms: 30000, max_concurrent_agents: 4 });
   const entry: RunningEntry = {
-    issue, identifier: "X-1", workspace_path: "/tmp/X-1",
+    issue,
+    identifier: "X-1",
+    workspace_path: "/tmp/X-1",
     started_at: new Date().toISOString(),
     abort_controller: new AbortController(),
-    retry_attempt: null, session: null,
+    retry_attempt: null,
+    session: null,
   };
   addRunning(s, "i1", entry);
   removeRunning(s, "i1");

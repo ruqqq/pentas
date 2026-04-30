@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "tok-juara",
+      "name": "pentas",
       "devDependencies": {
         "@types/bun": "^1.3.13",
         "@typescript/native-preview": "latest",
@@ -12,7 +12,7 @@
       },
     },
     "packages/dalang": {
-      "name": "@tok-juara/dalang",
+      "name": "@pentas/dalang",
       "version": "0.0.0",
       "bin": {
         "dalang": "src/index.ts",
@@ -32,23 +32,23 @@
       },
     },
     "packages/supervisor": {
-      "name": "@tok-juara/supervisor",
+      "name": "@pentas/supervisor",
       "version": "0.0.0",
       "bin": {
-        "tok-juara": "src/index.ts",
+        "pentas": "src/index.ts",
       },
       "dependencies": {
-        "@tok-juara/dalang": "workspace:*",
-        "@tok-juara/wayang": "workspace:*",
+        "@pentas/dalang": "workspace:*",
+        "@pentas/papan": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "latest",
       },
     },
-    "packages/wayang": {
-      "name": "@tok-juara/wayang",
+    "packages/papan": {
+      "name": "@pentas/papan",
       "bin": {
-        "wayang": "./src/index.ts",
+        "papan": "./src/index.ts",
       },
       "dependencies": {
         "isomorphic-dompurify": "^2.0.0",
@@ -206,11 +206,11 @@
 
     "@pinojs/redact": ["@pinojs/redact@0.4.0", "", {}, "sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg=="],
 
-    "@tok-juara/dalang": ["@tok-juara/dalang@workspace:packages/dalang"],
+    "@pentas/dalang": ["@pentas/dalang@workspace:packages/dalang"],
 
-    "@tok-juara/supervisor": ["@tok-juara/supervisor@workspace:packages/supervisor"],
+    "@pentas/supervisor": ["@pentas/supervisor@workspace:packages/supervisor"],
 
-    "@tok-juara/wayang": ["@tok-juara/wayang@workspace:packages/wayang"],
+    "@pentas/papan": ["@pentas/papan@workspace:packages/papan"],
 
     "@types/bun": ["@types/bun@1.3.13", "", { "dependencies": { "bun-types": "1.3.13" } }, "sha512-9fqXWk5YIHGGnUau9TEi+qdlTYDAnOj+xLCmSTwXfAIqXr2x4tytJb43E9uCvt09zJURKXwAtkoH4nLQfzeTXw=="],
 

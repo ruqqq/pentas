@@ -59,18 +59,9 @@ packages/dalang/src/agent/
 ```ts
 export const AgentProvider = z.enum(["claude", "codex"]);
 
-export const CodexSandboxMode = z.enum([
-  "read-only",
-  "workspace-write",
-  "danger-full-access",
-]);
+export const CodexSandboxMode = z.enum(["read-only", "workspace-write", "danger-full-access"]);
 
-export const CodexApprovalPolicy = z.enum([
-  "untrusted",
-  "on-failure",
-  "on-request",
-  "never",
-]);
+export const CodexApprovalPolicy = z.enum(["untrusted", "on-failure", "on-request", "never"]);
 
 export const CodexSchema = z.object({
   executable_path: z.string().min(1),
@@ -191,16 +182,16 @@ If the SDK API differs at implementation time (e.g. different method names), the
 
 `codex-event-mapper.ts` translates Codex SDK events into the existing `RuntimeEvent` union. Initial mapping table (event names verified against the installed SDK at implementation time):
 
-| Codex event                             | RuntimeEvent                              |
-|-----------------------------------------|-------------------------------------------|
-| First event with `threadId` populated   | `session_started` (thread_id set)         |
-| `agent_message` / `agent_message.delta` | `notification` (truncated text)           |
-| `tool_call` (start)                     | `notification` (`tool_use:<name>`)        |
-| `tool_call.completed`                   | `notification` (`tool_result`)            |
-| `task.completed` / final `result`        | `turn_completed` (usage mapped)          |
-| `task.failed` / error event             | `turn_ended_with_error` (reason)          |
-| Auth/startup error                      | `startup_failed` (reason from event)      |
-| Anything else                           | `other_message` with raw `type`           |
+| Codex event                             | RuntimeEvent                         |
+| --------------------------------------- | ------------------------------------ |
+| First event with `threadId` populated   | `session_started` (thread_id set)    |
+| `agent_message` / `agent_message.delta` | `notification` (truncated text)      |
+| `tool_call` (start)                     | `notification` (`tool_use:<name>`)   |
+| `tool_call.completed`                   | `notification` (`tool_result`)       |
+| `task.completed` / final `result`       | `turn_completed` (usage mapped)      |
+| `task.failed` / error event             | `turn_ended_with_error` (reason)     |
+| Auth/startup error                      | `startup_failed` (reason from event) |
+| Anything else                           | `other_message` with raw `type`      |
 
 **Token usage:** the Codex SDK exposes `input_tokens`, `output_tokens`, and (per April 2026 changelog) `reasoning_tokens`. Map to dalang's existing `tokens` shape:
 

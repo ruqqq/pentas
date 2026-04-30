@@ -13,6 +13,7 @@
 ## File Structure
 
 **Create:**
+
 - `packages/dalang/src/agent/opencode-server.ts` — singleton server + SSE fan-out
 - `packages/dalang/src/agent/opencode-runner.ts` — `RunQuery` implementation
 - `packages/dalang/src/agent/opencode-event-mapper.ts` — opencode events → `RuntimeEvent`
@@ -22,6 +23,7 @@
 - `packages/dalang/tests/agent/agent-runner-opencode.test.ts`
 
 **Modify:**
+
 - `packages/dalang/package.json` — add `@opencode-ai/sdk` dep
 - `packages/dalang/src/config/schema.ts` — add `OpencodeSchema`, extend `AgentProvider` and `applyDefaults`, extend `superRefine`
 - `packages/dalang/src/config/validate.ts` — add `probeOpencodeAuth`, new `ValidationCode`s
@@ -37,6 +39,7 @@
 ## Task 1: Install `@opencode-ai/sdk` and verify it loads
 
 **Files:**
+
 - Modify: `packages/dalang/package.json`
 
 - [ ] **Step 1: Add dependency**
@@ -67,6 +70,7 @@ git commit -m "chore(dalang): add @opencode-ai/sdk dependency"
 ## Task 2: Extend `AgentProvider` enum and add `OpencodeSchema`
 
 **Files:**
+
 - Modify: `packages/dalang/src/config/schema.ts:42-65, 90-119, 155-181, 214-225`
 - Test: `packages/dalang/tests/config/schema.test.ts`
 
@@ -78,13 +82,16 @@ Append to `packages/dalang/tests/config/schema.test.ts`:
 import { test, expect } from "bun:test";
 import { applyDefaults, WorkflowFrontMatterSchema } from "../../src/config/schema";
 
-test("agent_provider accepts \"opencode\"", () => {
-  const cfg = applyDefaults({ agent_provider: "opencode", opencode: { model: "anthropic/claude-sonnet-4-6" } });
+test('agent_provider accepts "opencode"', () => {
+  const cfg = applyDefaults({
+    agent_provider: "opencode",
+    opencode: { model: "anthropic/claude-sonnet-4-6" },
+  });
   const parsed = WorkflowFrontMatterSchema.safeParse(cfg);
   expect(parsed.success).toBe(true);
 });
 
-test("agent_provider=\"opencode\" without opencode block fails superRefine", () => {
+test('agent_provider="opencode" without opencode block fails superRefine', () => {
   const cfg = applyDefaults({ agent_provider: "opencode" });
   // applyDefaults for opencode with no provided opencode block should leave opencode missing,
   // so superRefine fires.
@@ -121,8 +128,15 @@ After `CodexSchema` (around line 65), add:
 ```ts
 export const OpencodeSchema = z.object({
   executable_path: z.string().min(1),
-  model: z.string().min(1).regex(/^[^/]+\/.+$/, "model must be in providerID/modelID form"),
-  small_model: z.string().min(1).regex(/^[^/]+\/.+$/).optional(),
+  model: z
+    .string()
+    .min(1)
+    .regex(/^[^/]+\/.+$/, "model must be in providerID/modelID form"),
+  small_model: z
+    .string()
+    .min(1)
+    .regex(/^[^/]+\/.+$/)
+    .optional(),
   turn_timeout_ms: z.number().int().positive(),
   read_timeout_ms: z.number().int().positive(),
   stall_timeout_ms: z.number().int(),
@@ -138,13 +152,13 @@ In `RawWorkflowFrontMatterSchema` (around line 90), add a line after `codex: Cod
 In the `superRefine` block (around line 104), add a third clause after the codex one:
 
 ```ts
-  if (cfg.agent_provider === "opencode" && !cfg.opencode) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["opencode"],
-      message: "opencode block is required when agent_provider is \"opencode\"",
-    });
-  }
+if (cfg.agent_provider === "opencode" && !cfg.opencode) {
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: ["opencode"],
+    message: 'opencode block is required when agent_provider is "opencode"',
+  });
+}
 ```
 
 In `DEFAULTS` (around line 164), add after the `codex:` block:
@@ -163,8 +177,8 @@ In `applyDefaults` (around line 214), update the provider handling to a 3-way:
 
 ```ts
 export function applyDefaults(raw: unknown): WorkflowFrontMatter {
-  const provider = ((raw as { agent_provider?: string } | null | undefined)?.agent_provider
-    ?? DEFAULTS.agent_provider) as "claude" | "codex" | "opencode";
+  const provider = ((raw as { agent_provider?: string } | null | undefined)?.agent_provider ??
+    DEFAULTS.agent_provider) as "claude" | "codex" | "opencode";
   const base = deepClone(DEFAULTS) as Record<string, unknown>;
   if (provider === "codex") {
     delete base.claude;
@@ -203,6 +217,7 @@ git commit -m "feat(dalang): extend WorkflowFrontMatter with opencode provider s
 ## Task 3: Add `probeOpencodeAuth` and validation codes
 
 **Files:**
+
 - Modify: `packages/dalang/src/config/validate.ts`
 - Test: `packages/dalang/tests/config/validate.test.ts`
 
@@ -309,7 +324,10 @@ Add `probeOpencodeAuth` at the end of the file:
  *
  * Returns null on success, or a human-readable error string on failure.
  */
-export async function probeOpencodeAuth(executablePath: string, model: string): Promise<string | null> {
+export async function probeOpencodeAuth(
+  executablePath: string,
+  model: string,
+): Promise<string | null> {
   const version = Bun.spawn([executablePath, "--version"], { stdout: "pipe", stderr: "pipe" });
   const versionExit = await version.exited;
   if (versionExit !== 0) {
@@ -325,7 +343,7 @@ export async function probeOpencodeAuth(executablePath: string, model: string): 
   const stdout = await new Response(auth.stdout).text();
   if (authExit !== 0) {
     const stderr = await new Response(auth.stderr).text();
-    return `opencode auth probe failed: ${(stderr.trim() || stdout.trim() || `exit code ${authExit}`)}`;
+    return `opencode auth probe failed: ${stderr.trim() || stdout.trim() || `exit code ${authExit}`}`;
   }
   if (!stdout.includes(providerId)) {
     return `opencode auth probe: provider "${providerId}" not authenticated (run \`opencode auth login ${providerId}\`)`;
@@ -351,6 +369,7 @@ git commit -m "feat(dalang): add probeOpencodeAuth and opencode validation codes
 ## Task 4: Extend `AgentConfig` and `RunQueryOptions` in `agent-runner.ts`
 
 **Files:**
+
 - Modify: `packages/dalang/src/agent/agent-runner.ts:7-53, 142-189`
 
 - [ ] **Step 1: Add the opencode discriminant types**
@@ -402,7 +421,10 @@ export type CodexRunQueryOptions = CommonRunQueryOptions & {
 Replace `RunQueryOptions`:
 
 ```ts
-export type RunQueryOptions = ClaudeRunQueryOptions | CodexRunQueryOptions | OpencodeRunQueryOptions;
+export type RunQueryOptions =
+  | ClaudeRunQueryOptions
+  | CodexRunQueryOptions
+  | OpencodeRunQueryOptions;
 ```
 
 - [ ] **Step 2: Update the queryOpts construction in `driveOneTurn`**
@@ -410,23 +432,22 @@ export type RunQueryOptions = ClaudeRunQueryOptions | CodexRunQueryOptions | Ope
 Replace the `queryOpts` ternary (around line 160):
 
 ```ts
-    const queryOpts: RunQueryOptions =
-      opts.config.provider === "claude"
-        ? { ...baseOpts, claude: { permissionMode: opts.config.permissionMode } }
-        : opts.config.provider === "codex"
-          ? {
-              ...baseOpts,
-              codex: {
-                sandboxMode: opts.config.sandboxMode,
-                approvalPolicy: opts.config.approvalPolicy,
-              },
-            }
-          : {
-              ...baseOpts,
-              opencode: opts.config.smallModel !== undefined
-                ? { smallModel: opts.config.smallModel }
-                : {},
-            };
+const queryOpts: RunQueryOptions =
+  opts.config.provider === "claude"
+    ? { ...baseOpts, claude: { permissionMode: opts.config.permissionMode } }
+    : opts.config.provider === "codex"
+      ? {
+          ...baseOpts,
+          codex: {
+            sandboxMode: opts.config.sandboxMode,
+            approvalPolicy: opts.config.approvalPolicy,
+          },
+        }
+      : {
+          ...baseOpts,
+          opencode:
+            opts.config.smallModel !== undefined ? { smallModel: opts.config.smallModel } : {},
+        };
 ```
 
 - [ ] **Step 3: Update the event-mapper switch (placeholder for now)**
@@ -434,10 +455,12 @@ Replace the `queryOpts` ternary (around line 160):
 Replace the line `const evt = opts.config.provider === "codex" ? mapCodexEvent(raw) : mapSdkMessage(raw);` (around line 177) with:
 
 ```ts
-      const evt =
-        opts.config.provider === "codex"   ? mapCodexEvent(raw) :
-        opts.config.provider === "opencode" ? mapOpencodeEvent(raw) :
-        mapSdkMessage(raw);
+const evt =
+  opts.config.provider === "codex"
+    ? mapCodexEvent(raw)
+    : opts.config.provider === "opencode"
+      ? mapOpencodeEvent(raw)
+      : mapSdkMessage(raw);
 ```
 
 Add the import at the top of the file (after `mapCodexEvent`):
@@ -476,6 +499,7 @@ git commit -m "feat(dalang): extend AgentConfig and RunQueryOptions with opencod
 ## Task 5: Implement `opencode-event-mapper.ts`
 
 **Files:**
+
 - Modify: `packages/dalang/src/agent/opencode-event-mapper.ts` (replace stub)
 - Test: `packages/dalang/tests/agent/opencode-event-mapper.test.ts`
 
@@ -655,7 +679,8 @@ export function mapOpencodeEvent(raw: unknown): RuntimeEvent | null {
 
   switch (t) {
     case "session.created": {
-      const info = props && typeof props.info === "object" ? (props.info as Record<string, unknown>) : null;
+      const info =
+        props && typeof props.info === "object" ? (props.info as Record<string, unknown>) : null;
       const id = info && typeof info.id === "string" ? info.id : null;
       const out: RuntimeEvent = { event: "session_started", timestamp: nowIso() };
       if (id) out.thread_id = id;
@@ -664,7 +689,10 @@ export function mapOpencodeEvent(raw: unknown): RuntimeEvent | null {
     case "session.updated":
       return null;
     case "session.idle": {
-      const tokens = props && typeof props.tokens === "object" ? (props.tokens as Record<string, unknown>) : null;
+      const tokens =
+        props && typeof props.tokens === "object"
+          ? (props.tokens as Record<string, unknown>)
+          : null;
       const input = tokens && typeof tokens.input === "number" ? tokens.input : 0;
       const output = tokens && typeof tokens.output === "number" ? tokens.output : 0;
       const reasoning = tokens && typeof tokens.reasoning === "number" ? tokens.reasoning : 0;
@@ -685,7 +713,8 @@ export function mapOpencodeEvent(raw: unknown): RuntimeEvent | null {
       return out;
     }
     case "message.part.updated": {
-      const part = props && typeof props.part === "object" ? (props.part as Record<string, unknown>) : null;
+      const part =
+        props && typeof props.part === "object" ? (props.part as Record<string, unknown>) : null;
       if (!part) return null;
       return mapPart(part);
     }
@@ -722,10 +751,12 @@ git commit -m "feat(dalang): map opencode SSE events to RuntimeEvent"
 ## Task 6: Implement `opencode-server.ts` (singleton + supervisor + SSE fan-out)
 
 **Files:**
+
 - Create: `packages/dalang/src/agent/opencode-server.ts`
 - Test: `packages/dalang/tests/agent/opencode-server.test.ts`
 
 **Design notes for this module:**
+
 - The module exposes two functions: `getOpencodeClient(opts: { executablePath: string })` (lazy spawn, returns client) and `shutdownOpencodeServer()` (graceful close used by daemon shutdown).
 - It maintains a `Map<sessionId, AsyncQueue<unknown>>` and reads `client.event()` once. Each event with `properties.sessionID` (or, for `session.created`, `properties.info.id`) is enqueued onto the matching queue.
 - A `subscribeSession(sessionId)` returns an `AsyncIterable<unknown>` that yields events until the queue is closed.
@@ -762,20 +793,31 @@ function makeFakeFactory(): FakeFactoryControls {
     let push!: (v: { data: unknown } | null) => void;
     const queue: ({ data: unknown } | null)[] = [];
     const waiters: ((v: { data: unknown } | null) => void)[] = [];
-    push = (v) => { if (waiters.length) waiters.shift()!(v); else queue.push(v); };
+    push = (v) => {
+      if (waiters.length) waiters.shift()!(v);
+      else queue.push(v);
+    };
     ctl.emit = (e) => push({ data: e });
     const iter = {
-      [Symbol.asyncIterator]() { return this; },
+      [Symbol.asyncIterator]() {
+        return this;
+      },
       async next() {
-        const v = queue.length ? queue.shift()! : await new Promise<{ data: unknown } | null>((r) => waiters.push(r));
+        const v = queue.length
+          ? queue.shift()!
+          : await new Promise<{ data: unknown } | null>((r) => waiters.push(r));
         if (v === null) return { done: true as const, value: undefined };
         return { done: false as const, value: v };
       },
     };
     const close = () => push(null);
     return {
-      client: { event: () => Promise.resolve({ stream: iter as AsyncIterable<{ data: unknown }> }) },
-      shutdown: async () => { close(); },
+      client: {
+        event: () => Promise.resolve({ stream: iter as AsyncIterable<{ data: unknown }> }),
+      },
+      shutdown: async () => {
+        close();
+      },
     };
   });
   return ctl;
@@ -800,13 +842,16 @@ test("subscribeSession yields events filtered by sessionID", async () => {
 
   ctl.emit({ type: "session.created", properties: { info: { id: "ses-1" } } });
   ctl.emit({ type: "message.part.updated", properties: { sessionID: "other" } });
-  ctl.emit({ type: "message.part.updated", properties: { sessionID: "ses-1", part: { type: "text", text: "hi" } } });
+  ctl.emit({
+    type: "message.part.updated",
+    properties: { sessionID: "ses-1", part: { type: "text", text: "hi" } },
+  });
 
   const a = await it.next();
   expect((a.value as { type: string }).type).toBe("session.created");
   const b = await it.next();
   expect((b.value as { type: string }).type).toBe("message.part.updated");
-  expect(((b.value as { properties: { sessionID: string } }).properties.sessionID)).toBe("ses-1");
+  expect((b.value as { properties: { sessionID: string } }).properties.sessionID).toBe("ses-1");
 
   await shutdownOpencodeServer();
 });
@@ -817,7 +862,9 @@ test("shutdownOpencodeServer closes subscribers", async () => {
   await getOpencodeClient({ executablePath: "opencode" });
   const sub = subscribeSession("ses-1");
   await shutdownOpencodeServer();
-  for await (const _ of sub) { /* should drain */ }
+  for await (const _ of sub) {
+    /* should drain */
+  }
   expect(true).toBe(true);
 });
 ```
@@ -909,7 +956,9 @@ async function defaultFactory(opts: { executablePath: string }): Promise<Opencod
     client: {
       event: () => client.event() as Promise<{ stream: AsyncIterable<{ data: unknown }> }>,
     },
-    shutdown: async () => { close(); },
+    shutdown: async () => {
+      close();
+    },
   };
   // executablePath is reserved for future config of the spawn; not consumed by createOpencodeServer today.
 }
@@ -970,7 +1019,9 @@ async function spawn(opts: { executablePath: string }): Promise<OpencodeBackend>
   return starting;
 }
 
-export async function getOpencodeClient(opts: { executablePath: string }): Promise<OpencodeBackend["client"]> {
+export async function getOpencodeClient(opts: {
+  executablePath: string;
+}): Promise<OpencodeBackend["client"]> {
   if (stopped) throw new Error("opencode_server_unavailable");
   if (backend) return backend.client;
   const b = await spawn(opts);
@@ -1000,12 +1051,18 @@ export async function shutdownOpencodeServer(): Promise<void> {
     const b = backend;
     backend = null;
     starting = null;
-    try { await b.shutdown(); } catch { /* swallow */ }
+    try {
+      await b.shutdown();
+    } catch {
+      /* swallow */
+    }
   }
 }
 
 // Test hooks (NOT for production callers)
-export function __setOpencodeFactoryForTests(f: OpencodeFactory): void { factory = f; }
+export function __setOpencodeFactoryForTests(f: OpencodeFactory): void {
+  factory = f;
+}
 export function __resetOpencodeServerForTests(): void {
   stopped = false;
   backend = null;
@@ -1033,6 +1090,7 @@ git commit -m "feat(dalang): add shared opencode server with SSE fan-out"
 ## Task 7: Implement `opencode-runner.ts`
 
 **Files:**
+
 - Create: `packages/dalang/src/agent/opencode-runner.ts`
 - Test: `packages/dalang/tests/agent/opencode-runner.test.ts`
 
@@ -1066,9 +1124,13 @@ function installFakeBackend(opts: {
       queueMicrotask(() => opts.emitEvents!(emit));
     }
     const iter = {
-      [Symbol.asyncIterator]() { return this; },
+      [Symbol.asyncIterator]() {
+        return this;
+      },
       async next() {
-        const v = queue.length ? queue.shift()! : await new Promise<{ data: unknown } | null>((r) => waiters.push(r));
+        const v = queue.length
+          ? queue.shift()!
+          : await new Promise<{ data: unknown } | null>((r) => waiters.push(r));
         if (v === null) return { done: true as const, value: undefined };
         return { done: false as const, value: v };
       },
@@ -1087,7 +1149,9 @@ function installFakeBackend(opts: {
           },
         },
       },
-      shutdown: async () => { push(null); },
+      shutdown: async () => {
+        push(null);
+      },
     };
   });
 }
@@ -1095,7 +1159,9 @@ function installFakeBackend(opts: {
 test("opencodeRunQuery throws when opts.opencode bag is missing (provider mismatch)", () => {
   expect(() =>
     opencodeRunQuery({
-      prompt: "hi", cwd: "/tmp", model: "anthropic/claude",
+      prompt: "hi",
+      cwd: "/tmp",
+      model: "anthropic/claude",
       executablePath: "opencode",
       claude: { permissionMode: "auto" },
     } as never),
@@ -1105,7 +1171,9 @@ test("opencodeRunQuery throws when opts.opencode bag is missing (provider mismat
 test("opencodeRunQuery throws when model has no provider/model split", () => {
   expect(() =>
     opencodeRunQuery({
-      prompt: "hi", cwd: "/tmp", model: "no-slash",
+      prompt: "hi",
+      cwd: "/tmp",
+      model: "no-slash",
       executablePath: "opencode",
       opencode: {},
     }),
@@ -1117,12 +1185,23 @@ test("opencodeRunQuery creates a session, sends a prompt, and yields filtered ev
   let createdBody: unknown = null;
   let promptBody: unknown = null;
   installFakeBackend({
-    onSessionCreate: (body) => { createdBody = body; return { id: "ses-1" }; },
-    onPrompt: (body) => { promptBody = body; },
+    onSessionCreate: (body) => {
+      createdBody = body;
+      return { id: "ses-1" };
+    },
+    onPrompt: (body) => {
+      promptBody = body;
+    },
     emitEvents: (emit) => {
       emit({ type: "session.created", properties: { info: { id: "ses-1" } } });
-      emit({ type: "message.part.updated", properties: { sessionID: "ses-1", part: { type: "text", text: "hi" } } });
-      emit({ type: "session.idle", properties: { sessionID: "ses-1", tokens: { input: 1, output: 2, reasoning: 0 } } });
+      emit({
+        type: "message.part.updated",
+        properties: { sessionID: "ses-1", part: { type: "text", text: "hi" } },
+      });
+      emit({
+        type: "session.idle",
+        properties: { sessionID: "ses-1", tokens: { input: 1, output: 2, reasoning: 0 } },
+      });
     },
   });
 
@@ -1141,8 +1220,10 @@ test("opencodeRunQuery creates a session, sends a prompt, and yields filtered ev
   }
   expect(events.length).toBe(3);
   expect((createdBody as { directory: string }).directory).toBe("/tmp/ws");
-  expect((promptBody as { model: { providerID: string; modelID: string } }).model)
-    .toEqual({ providerID: "anthropic", modelID: "claude-sonnet-4-6" });
+  expect((promptBody as { model: { providerID: string; modelID: string } }).model).toEqual({
+    providerID: "anthropic",
+    modelID: "claude-sonnet-4-6",
+  });
 });
 
 test("opencodeRunQuery resumes an existing session id without calling create", async () => {
@@ -1150,10 +1231,16 @@ test("opencodeRunQuery resumes an existing session id without calling create", a
   let createCalls = 0;
   let promptedSessionId = "";
   installFakeBackend({
-    onSessionCreate: () => { createCalls += 1; return { id: "should-not-be-used" }; },
+    onSessionCreate: () => {
+      createCalls += 1;
+      return { id: "should-not-be-used" };
+    },
     onPrompt: () => {},
     emitEvents: (emit) => {
-      emit({ type: "session.idle", properties: { sessionID: "ses-resume", tokens: { input: 0, output: 0, reasoning: 0 } } });
+      emit({
+        type: "session.idle",
+        properties: { sessionID: "ses-resume", tokens: { input: 0, output: 0, reasoning: 0 } },
+      });
     },
   });
 
@@ -1162,14 +1249,26 @@ test("opencodeRunQuery resumes an existing session id without calling create", a
   __setOpencodeFactoryForTests(async () => {
     const queue: ({ data: unknown } | null)[] = [];
     const waiters: ((v: { data: unknown } | null) => void)[] = [];
-    const push = (v: { data: unknown } | null) => { if (waiters.length) waiters.shift()!(v); else queue.push(v); };
+    const push = (v: { data: unknown } | null) => {
+      if (waiters.length) waiters.shift()!(v);
+      else queue.push(v);
+    };
     queueMicrotask(() => {
-      push({ data: { type: "session.idle", properties: { sessionID: "ses-resume", tokens: { input: 0, output: 0, reasoning: 0 } } } });
+      push({
+        data: {
+          type: "session.idle",
+          properties: { sessionID: "ses-resume", tokens: { input: 0, output: 0, reasoning: 0 } },
+        },
+      });
     });
     const stream = {
-      [Symbol.asyncIterator]() { return this; },
+      [Symbol.asyncIterator]() {
+        return this;
+      },
       async next() {
-        const v = queue.length ? queue.shift()! : await new Promise<{ data: unknown } | null>((r) => waiters.push(r));
+        const v = queue.length
+          ? queue.shift()!
+          : await new Promise<{ data: unknown } | null>((r) => waiters.push(r));
         if (v === null) return { done: true as const, value: undefined };
         return { done: false as const, value: v };
       },
@@ -1178,11 +1277,19 @@ test("opencodeRunQuery resumes an existing session id without calling create", a
       client: {
         event: () => Promise.resolve({ stream: stream as AsyncIterable<{ data: unknown }> }),
         session: {
-          create: async () => { createCalls += 1; return { data: { id: "should-not-be-used" } }; },
-          promptAsync: async ({ path }: { path: { id: string } }) => { promptedSessionId = path.id; return { data: {} }; },
+          create: async () => {
+            createCalls += 1;
+            return { data: { id: "should-not-be-used" } };
+          },
+          promptAsync: async ({ path }: { path: { id: string } }) => {
+            promptedSessionId = path.id;
+            return { data: {} };
+          },
         },
       },
-      shutdown: async () => { push(null); },
+      shutdown: async () => {
+        push(null);
+      },
     };
   });
 
@@ -1213,16 +1320,14 @@ Create `packages/dalang/src/agent/opencode-runner.ts`:
 ```ts
 // packages/dalang/src/agent/opencode-runner.ts
 import type { RunQuery, RunQueryOptions } from "./agent-runner";
-import {
-  getOpencodeClient,
-  subscribeSession,
-  unsubscribeSession,
-} from "./opencode-server";
+import { getOpencodeClient, subscribeSession, unsubscribeSession } from "./opencode-server";
 
 interface OpencodeClient {
   event(): Promise<unknown>;
   session: {
-    create(args: { body: { directory: string; permission?: unknown } }): Promise<{ data: { id: string } }>;
+    create(args: {
+      body: { directory: string; permission?: unknown };
+    }): Promise<{ data: { id: string } }>;
     promptAsync(args: {
       path: { id: string };
       body: {
@@ -1310,6 +1415,7 @@ git commit -m "feat(dalang): implement opencode RunQuery via shared server"
 ## Task 8: Wire orchestrator `buildAgentConfig` and stall-timeout lookup
 
 **Files:**
+
 - Modify: `packages/dalang/src/orchestrator/orchestrator.ts:110-115, 353-382`
 
 - [ ] **Step 1: Extend `reconcile`'s stall-timeout lookup**
@@ -1317,10 +1423,12 @@ git commit -m "feat(dalang): implement opencode RunQuery via shared server"
 Replace the `stallTimeoutMs` ternary in `reconcile()` (around line 110):
 
 ```ts
-    const stallTimeoutMs =
-      this.cfg.agent_provider === "codex"     ? this.cfg.codex!.stall_timeout_ms :
-      this.cfg.agent_provider === "opencode"  ? this.cfg.opencode!.stall_timeout_ms :
-      this.cfg.claude!.stall_timeout_ms;
+const stallTimeoutMs =
+  this.cfg.agent_provider === "codex"
+    ? this.cfg.codex!.stall_timeout_ms
+    : this.cfg.agent_provider === "opencode"
+      ? this.cfg.opencode!.stall_timeout_ms
+      : this.cfg.claude!.stall_timeout_ms;
 ```
 
 - [ ] **Step 2: Extend `buildAgentConfig`**
@@ -1328,21 +1436,21 @@ Replace the `stallTimeoutMs` ternary in `reconcile()` (around line 110):
 After the codex `if` block in `buildAgentConfig()` (around line 369), add:
 
 ```ts
-    if (this.cfg.agent_provider === "opencode") {
-      if (!this.cfg.opencode) throw new Error("opencode block missing despite agent_provider=opencode");
-      const oc = this.cfg.opencode;
-      const cfg: AgentConfig = {
-        provider: "opencode",
-        ...common,
-        model: oc.model,
-        executablePath: oc.executable_path,
-        turnTimeoutMs: oc.turn_timeout_ms,
-        readTimeoutMs: oc.read_timeout_ms,
-        stallTimeoutMs: oc.stall_timeout_ms,
-      };
-      if (oc.small_model !== undefined) cfg.smallModel = oc.small_model;
-      return cfg;
-    }
+if (this.cfg.agent_provider === "opencode") {
+  if (!this.cfg.opencode) throw new Error("opencode block missing despite agent_provider=opencode");
+  const oc = this.cfg.opencode;
+  const cfg: AgentConfig = {
+    provider: "opencode",
+    ...common,
+    model: oc.model,
+    executablePath: oc.executable_path,
+    turnTimeoutMs: oc.turn_timeout_ms,
+    readTimeoutMs: oc.read_timeout_ms,
+    stallTimeoutMs: oc.stall_timeout_ms,
+  };
+  if (oc.small_model !== undefined) cfg.smallModel = oc.small_model;
+  return cfg;
+}
 ```
 
 - [ ] **Step 3: Typecheck and run orchestrator tests**
@@ -1362,6 +1470,7 @@ git commit -m "feat(dalang): wire opencode provider through orchestrator config"
 ## Task 9: Wire `bootstrap.ts` (runner selection, auth probe, shutdown)
 
 **Files:**
+
 - Modify: `packages/dalang/src/cli/bootstrap.ts:1-100, end-of-file`
 
 - [ ] **Step 1: Update imports**
@@ -1381,25 +1490,28 @@ import { probeOpencodeAuth } from "../config/validate";
 Replace the auth-probe `if (!this.opts.skipAuthProbe) { ... }` block (around line 46):
 
 ```ts
-    if (!this.opts.skipAuthProbe) {
-      if (wf.config.agent_provider === "codex") {
-        const err = await probeCodexAuth(wf.config.codex!.executable_path);
-        if (err) throw new ValidationError("codex_auth_inactive", err);
-      } else if (wf.config.agent_provider === "opencode") {
-        const err = await probeOpencodeAuth(wf.config.opencode!.executable_path, wf.config.opencode!.model);
-        if (err) {
-          // The probe distinguishes binary failure from missing-provider-auth in its message,
-          // so map the message prefix to the right ValidationCode.
-          const code = err.startsWith("opencode auth probe: provider")
-            ? "opencode_provider_not_authed"
-            : "opencode_auth_inactive";
-          throw new ValidationError(code, err);
-        }
-      } else {
-        const err = await probeClaudeAuth(wf.config.claude!.executable_path);
-        if (err) throw new ValidationError("claude_auth_inactive", err);
-      }
+if (!this.opts.skipAuthProbe) {
+  if (wf.config.agent_provider === "codex") {
+    const err = await probeCodexAuth(wf.config.codex!.executable_path);
+    if (err) throw new ValidationError("codex_auth_inactive", err);
+  } else if (wf.config.agent_provider === "opencode") {
+    const err = await probeOpencodeAuth(
+      wf.config.opencode!.executable_path,
+      wf.config.opencode!.model,
+    );
+    if (err) {
+      // The probe distinguishes binary failure from missing-provider-auth in its message,
+      // so map the message prefix to the right ValidationCode.
+      const code = err.startsWith("opencode auth probe: provider")
+        ? "opencode_provider_not_authed"
+        : "opencode_auth_inactive";
+      throw new ValidationError(code, err);
     }
+  } else {
+    const err = await probeClaudeAuth(wf.config.claude!.executable_path);
+    if (err) throw new ValidationError("claude_auth_inactive", err);
+  }
+}
 ```
 
 - [ ] **Step 3: Extend the runner-selection ternary**
@@ -1407,13 +1519,13 @@ Replace the auth-probe `if (!this.opts.skipAuthProbe) { ... }` block (around lin
 Replace the `runQuery` assignment block (around line 61):
 
 ```ts
-    const runQuery = this.opts.runQueryFactory
-      ? this.opts.runQueryFactory()
-      : wf.config.agent_provider === "codex"
-        ? codexRunQuery
-        : wf.config.agent_provider === "opencode"
-          ? opencodeRunQuery
-          : sdkRunQuery;
+const runQuery = this.opts.runQueryFactory
+  ? this.opts.runQueryFactory()
+  : wf.config.agent_provider === "codex"
+    ? codexRunQuery
+    : wf.config.agent_provider === "opencode"
+      ? opencodeRunQuery
+      : sdkRunQuery;
 ```
 
 - [ ] **Step 4: Wire shutdown of the opencode server in `Bootstrap.stop()`**
@@ -1444,6 +1556,7 @@ git commit -m "feat(dalang): wire opencode provider into bootstrap"
 ## Task 10: agent-runner integration test with opencode-shaped events
 
 **Files:**
+
 - Create: `packages/dalang/tests/agent/agent-runner-opencode.test.ts`
 
 - [ ] **Step 1: Write the integration test**
@@ -1476,8 +1589,14 @@ const issue: NormalizedIssue = {
 test("runAttempt drives an opencode-shaped event stream end-to-end", async () => {
   const events: unknown[] = [
     { type: "session.created", properties: { info: { id: "ses-1" } } },
-    { type: "message.part.updated", properties: { sessionID: "ses-1", part: { type: "text", text: "hello" } } },
-    { type: "session.idle", properties: { sessionID: "ses-1", tokens: { input: 12, output: 7, reasoning: 3 } } },
+    {
+      type: "message.part.updated",
+      properties: { sessionID: "ses-1", part: { type: "text", text: "hello" } },
+    },
+    {
+      type: "session.idle",
+      properties: { sessionID: "ses-1", tokens: { input: 12, output: 7, reasoning: 3 } },
+    },
   ];
 
   const collected: RuntimeEvent[] = [];
@@ -1501,7 +1620,9 @@ test("runAttempt drives an opencode-shaped event stream end-to-end", async () =>
     runQuery: async function* () {
       for (const e of events) yield e;
     },
-    onEvent: (e) => { collected.push(e); },
+    onEvent: (e) => {
+      collected.push(e);
+    },
   });
 
   expect(result.success).toBe(true);
@@ -1536,6 +1657,7 @@ git commit -m "test(dalang): cover agent-runner end-to-end with opencode events"
 ## Task 11: README documentation
 
 **Files:**
+
 - Modify: `packages/dalang/README.md`
 
 - [ ] **Step 1: Add an opencode section**
@@ -1551,8 +1673,8 @@ Set `agent_provider: "opencode"` in `WORKFLOW.md` and add an `opencode:` block:
 agent_provider: opencode
 opencode:
   executable_path: opencode
-  model: anthropic/claude-sonnet-4-6   # provider/model — opencode picks the backend
-  small_model: openai/gpt-4o-mini      # optional, used by opencode for title/summary turns
+  model: anthropic/claude-sonnet-4-6 # provider/model — opencode picks the backend
+  small_model: openai/gpt-4o-mini # optional, used by opencode for title/summary turns
   turn_timeout_ms: 3600000
   read_timeout_ms: 5000
   stall_timeout_ms: 300000

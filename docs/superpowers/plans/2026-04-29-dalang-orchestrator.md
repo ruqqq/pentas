@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Implement the dalang orchestrator daemon that polls the wayang tracker, dispatches per-issue work to git-worktree workspaces, and runs Claude Agent SDK sessions per issue, with hot-reloadable WORKFLOW.md, retries/reconciliation, and an HTTP observability surface.
+**Goal:** Implement the dalang orchestrator daemon that polls the papan tracker, dispatches per-issue work to git-worktree workspaces, and runs Claude Agent SDK sessions per issue, with hot-reloadable WORKFLOW.md, retries/reconciliation, and an HTTP observability surface.
 
 **Architecture:** Bun + TypeScript, single in-process daemon. Single-authority orchestrator state (in-memory) mutated through one channel. Workers are async tasks driven by `@anthropic-ai/claude-agent-sdk` `query()` iterators. Workspace = `git worktree` off a shared bare clone. WORKFLOW.md (YAML front matter + Liquid prompt body) is hot-reloaded via chokidar with mtime-based defensive reload.
 
@@ -10,7 +10,7 @@
 
 **Spec reference:** `docs/superpowers/specs/2026-04-29-dalang-orchestrator-design.md`. Section numbers below (e.g. §10.4) refer to that spec.
 
-**Plan ordering:** the **wayang implementation plan owns the monorepo skeleton** — root `package.json` with `workspaces`, `tsconfig.base.json`, `oxlint.json`, `.oxfmtrc`, `bunfig.toml`, `.gitignore`, top-level scripts, and the `wayang` package. Run wayang's plan first (or at least its bootstrap task), or set up that skeleton manually. This plan's Task 1 is a sanity check that gap-fills only what's missing, then adds the `dalang` package on top.
+**Plan ordering:** the **papan implementation plan owns the monorepo skeleton** — root `package.json` with `workspaces`, `tsconfig.base.json`, `oxlint.json`, `.oxfmtrc`, `bunfig.toml`, `.gitignore`, top-level scripts, and the `papan` package. Run papan's plan first (or at least its bootstrap task), or set up that skeleton manually. This plan's Task 1 is a sanity check that gap-fills only what's missing, then adds the `dalang` package on top.
 
 ---
 
@@ -19,7 +19,7 @@
 Root (already exists from spec phase):
 
 ```
-tok-juara/
+pentas/
 ├── package.json                 # Bun workspaces root
 ├── tsconfig.base.json           # tsgo settings shared by packages
 ├── oxlint.json
@@ -41,7 +41,7 @@ tok-juara/
 │       │   ├── tracker/
 │       │   │   ├── adapter.ts              # TrackerAdapter interface
 │       │   │   ├── normalize.ts            # defensive NormalizedIssue coercion
-│       │   │   └── rest-adapter.ts         # wayang REST client
+│       │   │   └── rest-adapter.ts         # papan REST client
 │       │   ├── workspace/
 │       │   │   ├── sanitize.ts             # workspace key sanitization
 │       │   │   ├── hooks.ts                # bash -lc execution with timeout + env
@@ -74,9 +74,10 @@ The repo root `package.json`, `tsconfig.base.json`, etc. are created in Task 1.
 
 ### Task 1: Sanity-check monorepo setup and add the `dalang` package
 
-> **Ownership note:** The monorepo skeleton (root `package.json` with `workspaces`, `tsconfig.base.json`, `oxlint.json`, `.oxfmtrc`, `bunfig.toml`, `.gitignore`, top-level scripts `typecheck` / `lint` / `format` / `test`, and the `wayang` package) is owned by the **wayang implementation plan** and should already be in place when this plan runs. Dalang only adds its own package and fills any gaps it actually needs.
+> **Ownership note:** The monorepo skeleton (root `package.json` with `workspaces`, `tsconfig.base.json`, `oxlint.json`, `.oxfmtrc`, `bunfig.toml`, `.gitignore`, top-level scripts `typecheck` / `lint` / `format` / `test`, and the `papan` package) is owned by the **papan implementation plan** and should already be in place when this plan runs. Dalang only adds its own package and fills any gaps it actually needs.
 
 **Files:**
+
 - Verify (do not overwrite if present): `package.json`, `tsconfig.base.json`, `oxlint.json`, `.oxfmtrc`, `bunfig.toml`, `.gitignore`
 - Create only if missing: any of the above (gap-fill)
 - Create: `packages/dalang/package.json`
@@ -86,6 +87,7 @@ The repo root `package.json`, `tsconfig.base.json`, etc. are created in Task 1.
 - [ ] **Step 1: Sanity-check the monorepo root**
 
 Run:
+
 ```bash
 test -f package.json && cat package.json | grep -q '"workspaces"' && echo "OK: workspaces" || echo "MISSING: workspaces"
 test -f tsconfig.base.json && echo "OK: tsconfig.base.json" || echo "MISSING: tsconfig.base.json"
@@ -99,11 +101,11 @@ If everything reports `OK`, skip steps 2–7 and go to step 8. Otherwise, gap-fi
 
 - [ ] **Step 2: Gap-fill root `package.json` (only if missing)**
 
-If absent, create with the following content. If present but lacking the `workspaces` field or one of the scripts (`typecheck`, `lint`, `format`, `format:check`, `test`), edit it to add what's missing — do not replace fields wayang already set.
+If absent, create with the following content. If present but lacking the `workspaces` field or one of the scripts (`typecheck`, `lint`, `format`, `format:check`, `test`), edit it to add what's missing — do not replace fields papan already set.
 
 ```json
 {
-  "name": "tok-juara",
+  "name": "pentas",
   "private": true,
   "version": "0.0.0",
   "workspaces": ["packages/*"],
@@ -183,7 +185,7 @@ preload = []
 
 - [ ] **Step 7: Gap-fill `.gitignore` (append-only — do NOT overwrite if it exists)**
 
-If `.gitignore` is missing, create it with the block below. If it exists, append any of these lines that are missing — do not duplicate or remove wayang-owned entries.
+If `.gitignore` is missing, create it with the block below. If it exists, append any of these lines that are missing — do not duplicate or remove papan-owned entries.
 
 ```
 node_modules/
@@ -200,7 +202,7 @@ dist/
 
 ```json
 {
-  "name": "@tok-juara/dalang",
+  "name": "@pentas/dalang",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -249,11 +251,11 @@ Expected: success; lockfile updated to include dalang's deps.
 - [ ] **Step 12: Verify toolchain**
 
 Run: `bun run typecheck && bun run lint && bun run format:check`
-Expected: all three pass with no errors. (Wayang's existing package is also covered by these workspace-wide scripts; if wayang is failing one of them, fix wayang separately — do not work around it here.)
+Expected: all three pass with no errors. (Papan's existing package is also covered by these workspace-wide scripts; if papan is failing one of them, fix papan separately — do not work around it here.)
 
 - [ ] **Step 13: Commit**
 
-Stage only the dalang package and any genuinely new gap-fill files. Do **not** restage existing wayang-owned files even if their mtime changed.
+Stage only the dalang package and any genuinely new gap-fill files. Do **not** restage existing papan-owned files even if their mtime changed.
 
 ```bash
 # Always:
@@ -273,6 +275,7 @@ git commit -m "feat(dalang): scaffold dalang package and verify monorepo harness
 ### Task 2: Define core domain types
 
 **Files:**
+
 - Create: `packages/dalang/src/types.ts`
 - Create: `packages/dalang/tests/types.test.ts`
 
@@ -294,7 +297,7 @@ import type {
 test("NormalizedIssue is constructible", () => {
   const issue: NormalizedIssue = {
     id: "i_1",
-    identifier: "JUARA-1",
+    identifier: "PENTAS-1",
     title: "t",
     description: null,
     priority: null,
@@ -501,6 +504,7 @@ git commit -m "feat(dalang): add domain types"
 ### Task 3: Workspace key sanitization
 
 **Files:**
+
 - Create: `packages/dalang/src/workspace/sanitize.ts`
 - Create: `packages/dalang/tests/workspace/sanitize.test.ts`
 
@@ -512,7 +516,7 @@ import { test, expect } from "bun:test";
 import { sanitizeWorkspaceKey } from "../../src/workspace/sanitize";
 
 test("preserves allowed characters", () => {
-  expect(sanitizeWorkspaceKey("JUARA-12.3_a")).toBe("JUARA-12.3_a");
+  expect(sanitizeWorkspaceKey("PENTAS-12.3_a")).toBe("PENTAS-12.3_a");
 });
 
 test("replaces disallowed characters with _", () => {
@@ -569,6 +573,7 @@ git commit -m "feat(dalang): workspace key sanitization"
 ### Task 4: Env and path resolver (`$VAR`, `~`)
 
 **Files:**
+
 - Create: `packages/dalang/src/config/env-resolver.ts`
 - Create: `packages/dalang/tests/config/env-resolver.test.ts`
 
@@ -580,16 +585,20 @@ import { test, expect, beforeEach, afterEach } from "bun:test";
 import { resolveEnvValue, expandPath } from "../../src/config/env-resolver";
 
 const originalEnv = { ...process.env };
-beforeEach(() => { process.env = { ...originalEnv }; });
-afterEach(() => { process.env = { ...originalEnv }; });
+beforeEach(() => {
+  process.env = { ...originalEnv };
+});
+afterEach(() => {
+  process.env = { ...originalEnv };
+});
 
 test("resolveEnvValue: literal string is returned as-is", () => {
   expect(resolveEnvValue("hello")).toBe("hello");
 });
 
 test("resolveEnvValue: $VAR is replaced with env value", () => {
-  process.env.TOK_JUARA_API_KEY = "secret-1";
-  expect(resolveEnvValue("$TOK_JUARA_API_KEY")).toBe("secret-1");
+  process.env.PENTAS_API_KEY = "secret-1";
+  expect(resolveEnvValue("$PENTAS_API_KEY")).toBe("secret-1");
 });
 
 test("resolveEnvValue: missing env var returns null (treated as missing)", () => {
@@ -671,6 +680,7 @@ git commit -m "feat(dalang): env var and path resolver"
 ### Task 5: Workflow front matter zod schema
 
 **Files:**
+
 - Create: `packages/dalang/src/config/schema.ts`
 - Create: `packages/dalang/tests/config/schema.test.ts`
 
@@ -683,19 +693,34 @@ import { WorkflowFrontMatterSchema, applyDefaults } from "../../src/config/schem
 
 test("accepts a complete valid front matter", () => {
   const raw = {
-    tracker: { kind: "tok-juara", endpoint: "http://localhost:3001", project: null,
-      active_states: ["Todo", "In Progress"], terminal_states: ["Done"] },
+    tracker: {
+      kind: "papan",
+      endpoint: "http://localhost:3001",
+      project: null,
+      active_states: ["Todo", "In Progress"],
+      terminal_states: ["Done"],
+    },
     polling: { interval_ms: 5000 },
     workspace: { root: "/tmp/dalang" },
     hooks: { timeout_ms: 60000 },
-    agent: { max_concurrent_agents: 2, max_turns: 5, max_retry_backoff_ms: 60000,
-      max_concurrent_agents_by_state: {} },
-    claude: { executable_path: "claude", model: "claude-opus-4-7",
-      permission_mode: "auto", turn_timeout_ms: 60000, read_timeout_ms: 5000, stall_timeout_ms: 30000 },
+    agent: {
+      max_concurrent_agents: 2,
+      max_turns: 5,
+      max_retry_backoff_ms: 60000,
+      max_concurrent_agents_by_state: {},
+    },
+    claude: {
+      executable_path: "claude",
+      model: "claude-opus-4-7",
+      permission_mode: "auto",
+      turn_timeout_ms: 60000,
+      read_timeout_ms: 5000,
+      stall_timeout_ms: 30000,
+    },
     server: { port: 0 },
   };
   const parsed = WorkflowFrontMatterSchema.parse(raw);
-  expect(parsed.tracker.kind).toBe("tok-juara");
+  expect(parsed.tracker.kind).toBe("papan");
 });
 
 test("rejects acceptEdits permission_mode in v1", () => {
@@ -744,7 +769,7 @@ Expected: FAIL.
 import { z } from "zod";
 
 export const TrackerSchema = z.object({
-  kind: z.literal("tok-juara"),
+  kind: z.literal("papan"),
   endpoint: z.string().url(),
   api_key: z.string().nullable().optional(),
   board: z.string().nullable().optional(),
@@ -752,11 +777,14 @@ export const TrackerSchema = z.object({
   terminal_states: z.array(z.string()).min(1),
 });
 
-export const RepoSchema = z.object({
-  url: z.string().min(1),
-  default_branch: z.string().min(1),
-  branch_prefix: z.string().min(0),
-}).optional().nullable();
+export const RepoSchema = z
+  .object({
+    url: z.string().min(1),
+    default_branch: z.string().min(1),
+    branch_prefix: z.string().min(0),
+  })
+  .optional()
+  .nullable();
 
 export const PollingSchema = z.object({
   interval_ms: z.number().int().positive(),
@@ -811,7 +839,7 @@ export type WorkflowFrontMatter = z.infer<typeof WorkflowFrontMatterSchema>;
 
 const DEFAULTS = {
   tracker: {
-    kind: "tok-juara",
+    kind: "papan",
     endpoint: "http://localhost:3001",
     api_key: null,
     board: null,
@@ -880,6 +908,7 @@ git commit -m "feat(dalang): workflow front matter schema with defaults"
 ### Task 6: Workflow loader (YAML + Liquid body split)
 
 **Files:**
+
 - Create: `packages/dalang/src/config/workflow-loader.ts`
 - Create: `packages/dalang/tests/config/workflow-loader.test.ts`
 - Create fixtures: `packages/dalang/tests/fixtures/workflow-valid.md`, `workflow-no-frontmatter.md`, `workflow-empty-prompt.md`, `workflow-malformed.md`
@@ -887,6 +916,7 @@ git commit -m "feat(dalang): workflow front matter schema with defaults"
 - [ ] **Step 1: Create fixture files**
 
 `packages/dalang/tests/fixtures/workflow-valid.md`:
+
 ```
 ---
 tracker:
@@ -900,11 +930,13 @@ Work on {{ issue.identifier }}.
 ```
 
 `packages/dalang/tests/fixtures/workflow-no-frontmatter.md`:
+
 ```
 Just a body, no front matter.
 ```
 
 `packages/dalang/tests/fixtures/workflow-empty-prompt.md`:
+
 ```
 ---
 tracker:
@@ -916,6 +948,7 @@ tracker:
 ```
 
 `packages/dalang/tests/fixtures/workflow-malformed.md`:
+
 ```
 ---
 this: is: not: yaml: [
@@ -935,7 +968,7 @@ const fix = (n: string) => resolve(import.meta.dir, "../fixtures", n);
 
 test("loads valid workflow with front matter and prompt body", async () => {
   const wf = await loadWorkflow(fix("workflow-valid.md"));
-  expect(wf.config.tracker.kind).toBe("tok-juara");
+  expect(wf.config.tracker.kind).toBe("papan");
   expect(wf.promptTemplate).toContain("Work on");
   expect(wf.mtimeMs).toBeGreaterThan(0);
 });
@@ -1007,7 +1040,10 @@ export async function loadWorkflow(path: string): Promise<LoadedWorkflow> {
     const st = await stat(path);
     mtimeMs = st.mtimeMs;
   } catch (err) {
-    throw new WorkflowError("missing_workflow_file", `cannot read workflow at ${path}: ${(err as Error).message}`);
+    throw new WorkflowError(
+      "missing_workflow_file",
+      `cannot read workflow at ${path}: ${(err as Error).message}`,
+    );
   }
 
   let frontMatterText = "";
@@ -1028,7 +1064,10 @@ export async function loadWorkflow(path: string): Promise<LoadedWorkflow> {
     frontMatterText = lines.slice(1, endIdx).join("\n");
     body = lines.slice(endIdx + 1).join("\n");
   } else {
-    throw new WorkflowError("workflow_front_matter_not_a_map", "WORKFLOW.md must start with YAML front matter `---`");
+    throw new WorkflowError(
+      "workflow_front_matter_not_a_map",
+      "WORKFLOW.md must start with YAML front matter `---`",
+    );
   }
 
   let parsed: unknown;
@@ -1045,7 +1084,10 @@ export async function loadWorkflow(path: string): Promise<LoadedWorkflow> {
   const merged = applyDefaults(parsed);
   const validation = WorkflowFrontMatterSchema.safeParse(merged);
   if (!validation.success) {
-    throw new WorkflowError("workflow_validation_error", `front matter invalid: ${validation.error.message}`);
+    throw new WorkflowError(
+      "workflow_validation_error",
+      `front matter invalid: ${validation.error.message}`,
+    );
   }
 
   const trimmedBody = body.trim();
@@ -1074,6 +1116,7 @@ git commit -m "feat(dalang): workflow loader with YAML front matter and prompt b
 ### Task 7: Workflow hot reload + mtime defensive reload
 
 **Files:**
+
 - Create: `packages/dalang/src/config/reload.ts`
 - Create: `packages/dalang/tests/config/reload.test.ts`
 
@@ -1175,13 +1218,19 @@ export class WorkflowReloader {
     return this.workflow;
   }
 
-  onReload(fn: ReloadListener): void { this.listeners.push(fn); }
-  onError(fn: ReloadErrorListener): void { this.errorListeners.push(fn); }
+  onReload(fn: ReloadListener): void {
+    this.listeners.push(fn);
+  }
+  onError(fn: ReloadErrorListener): void {
+    this.errorListeners.push(fn);
+  }
 
   async start(): Promise<void> {
     this.workflow = await loadWorkflow(this.path);
     this.watcher = chokidar.watch(this.path, { ignoreInitial: true });
-    this.watcher.on("change", () => { void this.tryReload(); });
+    this.watcher.on("change", () => {
+      void this.tryReload();
+    });
   }
 
   async checkMtimeReload(): Promise<void> {
@@ -1198,7 +1247,10 @@ export class WorkflowReloader {
       this.workflow = next;
       for (const fn of this.listeners) fn(next);
     } catch (err) {
-      const we = err instanceof WorkflowError ? err : new WorkflowError("workflow_validation_error", (err as Error).message);
+      const we =
+        err instanceof WorkflowError
+          ? err
+          : new WorkflowError("workflow_validation_error", (err as Error).message);
       for (const fn of this.errorListeners) fn(we);
     }
   }
@@ -1229,6 +1281,7 @@ git commit -m "feat(dalang): workflow hot reload with mtime defensive check"
 ### Task 8: Preflight validation + claude auth probe
 
 **Files:**
+
 - Create: `packages/dalang/src/config/validate.ts`
 - Create: `packages/dalang/tests/config/validate.test.ts`
 
@@ -1240,10 +1293,15 @@ import { test, expect } from "bun:test";
 import { applyDefaults } from "../../src/config/schema";
 import { validateForDispatch, ValidationError } from "../../src/config/validate";
 
-const baseConfig = () => applyDefaults({
-  tracker: { endpoint: "http://localhost:3001", active_states: ["Todo"], terminal_states: ["Done"] },
-  workspace: { root: "/tmp/dalang" },
-});
+const baseConfig = () =>
+  applyDefaults({
+    tracker: {
+      endpoint: "http://localhost:3001",
+      active_states: ["Todo"],
+      terminal_states: ["Done"],
+    },
+    workspace: { root: "/tmp/dalang" },
+  });
 
 test("accepts a complete valid config", () => {
   const cfg = baseConfig();
@@ -1301,17 +1359,26 @@ export class ValidationError extends Error {
 }
 
 export function validateForDispatch(cfg: WorkflowFrontMatter): void {
-  if (cfg.tracker.kind !== "tok-juara") {
-    throw new ValidationError("unsupported_tracker_kind", `unsupported tracker kind: ${cfg.tracker.kind}`);
+  if (cfg.tracker.kind !== "papan") {
+    throw new ValidationError(
+      "unsupported_tracker_kind",
+      `unsupported tracker kind: ${cfg.tracker.kind}`,
+    );
   }
   if (cfg.tracker.api_key !== null && cfg.tracker.api_key !== undefined) {
     const resolved = resolveEnvValue(cfg.tracker.api_key);
     if (resolved === null && cfg.tracker.api_key.startsWith("$")) {
-      throw new ValidationError("missing_tracker_api_key", `tracker.api_key resolves to empty: ${cfg.tracker.api_key}`);
+      throw new ValidationError(
+        "missing_tracker_api_key",
+        `tracker.api_key resolves to empty: ${cfg.tracker.api_key}`,
+      );
     }
   }
   if (!cfg.claude.executable_path || cfg.claude.executable_path.trim().length === 0) {
-    throw new ValidationError("missing_claude_executable_path", "claude.executable_path is required");
+    throw new ValidationError(
+      "missing_claude_executable_path",
+      "claude.executable_path is required",
+    );
   }
 }
 
@@ -1341,6 +1408,7 @@ git commit -m "feat(dalang): preflight validation and claude auth probe"
 ### Task 9: Prompt builder (Liquid strict + metadata injection)
 
 **Files:**
+
 - Create: `packages/dalang/src/agent/prompt-builder.ts`
 - Create: `packages/dalang/tests/agent/prompt-builder.test.ts`
 
@@ -1353,16 +1421,24 @@ import { buildFirstTurnPrompt, buildContinuationPrompt } from "../../src/agent/p
 import type { NormalizedIssue } from "../../src/types";
 
 const issue: NormalizedIssue = {
-  id: "i_1", identifier: "JUARA-1", title: "Fix bug", description: "details",
-  priority: 1, state: "Todo", branch_name: null, url: null,
-  labels: ["bug", "p1"], blocked_by: [],
-  created_at: null, updated_at: null,
+  id: "i_1",
+  identifier: "PENTAS-1",
+  title: "Fix bug",
+  description: "details",
+  priority: 1,
+  state: "Todo",
+  branch_name: null,
+  url: null,
+  labels: ["bug", "p1"],
+  blocked_by: [],
+  created_at: null,
+  updated_at: null,
 };
 
 test("first turn prepends issue metadata header", async () => {
   const out = await buildFirstTurnPrompt("Body for {{ issue.identifier }}", issue, null);
-  expect(out).toContain("# Working on JUARA-1: Fix bug");
-  expect(out).toContain("Body for JUARA-1");
+  expect(out).toContain("# Working on PENTAS-1: Fix bug");
+  expect(out).toContain("Body for PENTAS-1");
 });
 
 test("first turn renders attempt variable", async () => {
@@ -1375,7 +1451,9 @@ test("first turn fails on unknown variable", async () => {
 });
 
 test("first turn fails on unknown filter", async () => {
-  await expect(buildFirstTurnPrompt("{{ issue.title | bogus_filter }}", issue, null)).rejects.toThrow();
+  await expect(
+    buildFirstTurnPrompt("{{ issue.title | bogus_filter }}", issue, null),
+  ).rejects.toThrow();
 });
 
 test("first turn iterates labels", async () => {
@@ -1386,7 +1464,7 @@ test("first turn iterates labels", async () => {
 
 test("continuation prompt mentions identifier and turn number, omits original prompt", async () => {
   const out = buildContinuationPrompt(issue, 2, 20);
-  expect(out).toContain("JUARA-1");
+  expect(out).toContain("PENTAS-1");
   expect(out).toContain("turn 2");
   expect(out).not.toContain("Body for");
 });
@@ -1449,6 +1527,7 @@ git commit -m "feat(dalang): liquid prompt builder with metadata header"
 ### Task 10: Tracker adapter interface
 
 **Files:**
+
 - Create: `packages/dalang/src/tracker/adapter.ts`
 
 - [ ] **Step 1: Define interface (no test; pure type)**
@@ -1496,6 +1575,7 @@ git commit -m "feat(dalang): tracker adapter interface"
 ### Task 11: Defensive normalization
 
 **Files:**
+
 - Create: `packages/dalang/src/tracker/normalize.ts`
 - Create: `packages/dalang/tests/tracker/normalize.test.ts`
 
@@ -1508,10 +1588,18 @@ import { normalizeIssue } from "../../src/tracker/normalize";
 
 test("passes through a clean issue", () => {
   const out = normalizeIssue({
-    id: "i1", identifier: "JUARA-1", title: "t", description: "d",
-    priority: 2, state: "Todo", branch_name: null, url: null,
-    labels: ["BUG", "p1"], blocked_by: [],
-    created_at: "2026-04-29T00:00:00Z", updated_at: null,
+    id: "i1",
+    identifier: "PENTAS-1",
+    title: "t",
+    description: "d",
+    priority: 2,
+    state: "Todo",
+    branch_name: null,
+    url: null,
+    labels: ["BUG", "p1"],
+    blocked_by: [],
+    created_at: "2026-04-29T00:00:00Z",
+    updated_at: null,
   });
   expect(out).not.toBeNull();
   expect(out!.labels).toEqual(["bug", "p1"]);
@@ -1519,31 +1607,48 @@ test("passes through a clean issue", () => {
 
 test("priority non-integer becomes null", () => {
   const out = normalizeIssue({
-    id: "i1", identifier: "X-1", title: "t", state: "Todo",
-    priority: 2.5, labels: [], blocked_by: [],
+    id: "i1",
+    identifier: "X-1",
+    title: "t",
+    state: "Todo",
+    priority: 2.5,
+    labels: [],
+    blocked_by: [],
   });
   expect(out!.priority).toBeNull();
 });
 
 test("priority non-numeric becomes null", () => {
   const out = normalizeIssue({
-    id: "i1", identifier: "X-1", title: "t", state: "Todo",
-    priority: "high", labels: [], blocked_by: [],
+    id: "i1",
+    identifier: "X-1",
+    title: "t",
+    state: "Todo",
+    priority: "high",
+    labels: [],
+    blocked_by: [],
   });
   expect(out!.priority).toBeNull();
 });
 
 test("non-string labels are dropped, strings lowercased", () => {
   const out = normalizeIssue({
-    id: "i1", identifier: "X-1", title: "t", state: "Todo",
-    labels: ["FOO", 42, null, "Bar"], blocked_by: [],
+    id: "i1",
+    identifier: "X-1",
+    title: "t",
+    state: "Todo",
+    labels: ["FOO", 42, null, "Bar"],
+    blocked_by: [],
   });
   expect(out!.labels).toEqual(["foo", "bar"]);
 });
 
 test("blocker without id and identifier is dropped", () => {
   const out = normalizeIssue({
-    id: "i1", identifier: "X-1", title: "t", state: "Todo",
+    id: "i1",
+    identifier: "X-1",
+    title: "t",
+    state: "Todo",
     labels: [],
     blocked_by: [
       { id: null, identifier: null, state: "Done" },
@@ -1561,8 +1666,12 @@ test("missing required field returns null", () => {
 
 test("unparseable timestamps become null", () => {
   const out = normalizeIssue({
-    id: "i1", identifier: "X-1", title: "t", state: "Todo",
-    labels: [], blocked_by: [],
+    id: "i1",
+    identifier: "X-1",
+    title: "t",
+    state: "Todo",
+    labels: [],
+    blocked_by: [],
     created_at: "not-a-date",
   });
   expect(out!.created_at).toBeNull();
@@ -1580,7 +1689,9 @@ Expected: FAIL.
 // packages/dalang/src/tracker/normalize.ts
 import type { BlockerRef, NormalizedIssue } from "../types";
 
-function isString(v: unknown): v is string { return typeof v === "string"; }
+function isString(v: unknown): v is string {
+  return typeof v === "string";
+}
 
 function coerceLabels(input: unknown): string[] {
   if (!Array.isArray(input)) return [];
@@ -1655,13 +1766,14 @@ git commit -m "feat(dalang): defensive issue normalization"
 
 ---
 
-### Task 12: REST adapter (wayang client)
+### Task 12: REST adapter (papan client)
 
 **Files:**
+
 - Create: `packages/dalang/src/tracker/rest-adapter.ts`
 - Create: `packages/dalang/tests/tracker/rest-adapter.test.ts`
 
-- [ ] **Step 1: Write failing test (uses Bun.serve as a fake wayang)**
+- [ ] **Step 1: Write failing test (uses Bun.serve as a fake papan)**
 
 ```ts
 // packages/dalang/tests/tracker/rest-adapter.test.ts
@@ -1670,14 +1782,20 @@ import { RestTrackerAdapter } from "../../src/tracker/rest-adapter";
 
 let server: ReturnType<typeof Bun.serve> | null = null;
 let lastRequest: { method: string; url: string; auth: string | null } | null = null;
-let nextResponse: { status: number; body: unknown } = { status: 200, body: { issues: [], next_cursor: null } };
+let nextResponse: { status: number; body: unknown } = {
+  status: 200,
+  body: { issues: [], next_cursor: null },
+};
 
 beforeEach(() => {
   server = Bun.serve({
     port: 0,
     fetch: (req) => {
-      lastRequest = { method: req.method, url: new URL(req.url).pathname + new URL(req.url).search,
-        auth: req.headers.get("authorization") };
+      lastRequest = {
+        method: req.method,
+        url: new URL(req.url).pathname + new URL(req.url).search,
+        auth: req.headers.get("authorization"),
+      };
       return new Response(JSON.stringify(nextResponse.body), {
         status: nextResponse.status,
         headers: { "content-type": "application/json" },
@@ -1686,17 +1804,24 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => { server?.stop(); server = null; lastRequest = null; });
+afterEach(() => {
+  server?.stop();
+  server = null;
+  lastRequest = null;
+});
 
 const baseURL = () => `http://localhost:${server!.port}`;
 
 test("fetchCandidateIssues encodes states and paginates", async () => {
-  nextResponse = { status: 200, body: {
-    issues: [
-      { id: "i1", identifier: "X-1", title: "t1", state: "Todo", labels: [], blocked_by: [] },
-    ],
-    next_cursor: null,
-  }};
+  nextResponse = {
+    status: 200,
+    body: {
+      issues: [
+        { id: "i1", identifier: "X-1", title: "t1", state: "Todo", labels: [], blocked_by: [] },
+      ],
+      next_cursor: null,
+    },
+  };
   const adapter = new RestTrackerAdapter({ endpoint: baseURL(), apiKey: null });
   const issues = await adapter.fetchCandidateIssues(["Todo", "In Progress"]);
   expect(issues).toHaveLength(1);
@@ -1749,17 +1874,36 @@ test("paginates across multiple pages preserving order", async () => {
     port: 0,
     fetch: () => {
       call += 1;
-      if (call === 1) return new Response(JSON.stringify({
-        issues: [{ id: "i1", identifier: "X-1", title: "t", state: "Todo", labels: [], blocked_by: [] }],
-        next_cursor: "cur2",
-      }));
-      return new Response(JSON.stringify({
-        issues: [{ id: "i2", identifier: "X-2", title: "t", state: "Todo", labels: [], blocked_by: [] }],
-        next_cursor: null,
-      }));
+      if (call === 1)
+        return new Response(
+          JSON.stringify({
+            issues: [
+              {
+                id: "i1",
+                identifier: "X-1",
+                title: "t",
+                state: "Todo",
+                labels: [],
+                blocked_by: [],
+              },
+            ],
+            next_cursor: "cur2",
+          }),
+        );
+      return new Response(
+        JSON.stringify({
+          issues: [
+            { id: "i2", identifier: "X-2", title: "t", state: "Todo", labels: [], blocked_by: [] },
+          ],
+          next_cursor: null,
+        }),
+      );
     },
   });
-  const adapter = new RestTrackerAdapter({ endpoint: `http://localhost:${server.port}`, apiKey: null });
+  const adapter = new RestTrackerAdapter({
+    endpoint: `http://localhost:${server.port}`,
+    apiKey: null,
+  });
   const out = await adapter.fetchCandidateIssues(["Todo"]);
   expect(out.map((i) => i.id)).toEqual(["i1", "i2"]);
 });
@@ -1802,7 +1946,7 @@ export class RestTrackerAdapter implements TrackerAdapter {
   }
 
   private headers(): HeadersInit {
-    const h: Record<string, string> = { "accept": "application/json" };
+    const h: Record<string, string> = { accept: "application/json" };
     if (this.apiKey) h["authorization"] = `Bearer ${this.apiKey}`;
     return h;
   }
@@ -1907,7 +2051,7 @@ Expected: PASS, 7 tests.
 
 ```bash
 git add packages/dalang/src/tracker/rest-adapter.ts packages/dalang/tests/tracker/rest-adapter.test.ts
-git commit -m "feat(dalang): REST tracker adapter for wayang"
+git commit -m "feat(dalang): REST tracker adapter for papan"
 ```
 
 ---
@@ -1917,6 +2061,7 @@ git commit -m "feat(dalang): REST tracker adapter for wayang"
 ### Task 13: Hook executor
 
 **Files:**
+
 - Create: `packages/dalang/src/workspace/hooks.ts`
 - Create: `packages/dalang/tests/workspace/hooks.test.ts`
 
@@ -1940,18 +2085,22 @@ test("runs script with workspace as cwd and exposes env", async () => {
     name: "after_create",
     script: 'echo "$ISSUE_IDENTIFIER" > out.txt && pwd > pwd.txt',
     cwd,
-    env: { ISSUE_IDENTIFIER: "JUARA-1" },
+    env: { ISSUE_IDENTIFIER: "PENTAS-1" },
     timeoutMs: 5000,
   });
   expect(result.ok).toBe(true);
-  expect((await readFile(join(cwd, "out.txt"), "utf8")).trim()).toBe("JUARA-1");
+  expect((await readFile(join(cwd, "out.txt"), "utf8")).trim()).toBe("PENTAS-1");
   expect((await readFile(join(cwd, "pwd.txt"), "utf8")).trim()).toBe(cwd);
 });
 
 test("returns ok=false on non-zero exit", async () => {
   const cwd = await tmp();
   const result = await runHook({
-    name: "before_run", script: "exit 17", cwd, env: {}, timeoutMs: 5000,
+    name: "before_run",
+    script: "exit 17",
+    cwd,
+    env: {},
+    timeoutMs: 5000,
   });
   expect(result.ok).toBe(false);
   expect(result.exitCode).toBe(17);
@@ -1960,7 +2109,11 @@ test("returns ok=false on non-zero exit", async () => {
 test("returns timeout=true after timeoutMs", async () => {
   const cwd = await tmp();
   const result = await runHook({
-    name: "after_create", script: "sleep 5", cwd, env: {}, timeoutMs: 200,
+    name: "after_create",
+    script: "sleep 5",
+    cwd,
+    env: {},
+    timeoutMs: 200,
   });
   expect(result.ok).toBe(false);
   expect(result.timedOut).toBe(true);
@@ -1968,10 +2121,13 @@ test("returns timeout=true after timeoutMs", async () => {
 
 test("returns null result for null/empty script", async () => {
   const cwd = await tmp();
-  expect(await runHook({ name: "after_run", script: null, cwd, env: {}, timeoutMs: 1000 }))
-    .toEqual({ ok: true, skipped: true });
-  expect(await runHook({ name: "after_run", script: "", cwd, env: {}, timeoutMs: 1000 }))
-    .toEqual({ ok: true, skipped: true });
+  expect(await runHook({ name: "after_run", script: null, cwd, env: {}, timeoutMs: 1000 })).toEqual(
+    { ok: true, skipped: true },
+  );
+  expect(await runHook({ name: "after_run", script: "", cwd, env: {}, timeoutMs: 1000 })).toEqual({
+    ok: true,
+    skipped: true,
+  });
 });
 ```
 
@@ -2012,7 +2168,10 @@ export async function runHook(opts: RunHookOptions): Promise<HookResult> {
   });
 
   let timedOut = false;
-  const timer = setTimeout(() => { timedOut = true; proc.kill(); }, opts.timeoutMs);
+  const timer = setTimeout(() => {
+    timedOut = true;
+    proc.kill();
+  }, opts.timeoutMs);
 
   const exitCode = await proc.exited;
   clearTimeout(timer);
@@ -2048,6 +2207,7 @@ git commit -m "feat(dalang): bash hook executor with timeout and env"
 ### Task 14: Workspace manager (no-repo path)
 
 **Files:**
+
 - Create: `packages/dalang/src/workspace/workspace-manager.ts`
 - Create: `packages/dalang/tests/workspace/workspace-manager.test.ts`
 
@@ -2069,26 +2229,28 @@ async function tmpRoot(): Promise<string> {
 test("ensures sanitized directory exists with created_now=true on first call", async () => {
   const root = await tmpRoot();
   const wm = new WorkspaceManager({ root });
-  const ws = await wm.ensureWorkspace("JUARA/1");
-  expect(ws.workspace_key).toBe("JUARA_1");
-  expect(ws.path).toBe(join(root, "JUARA_1"));
+  const ws = await wm.ensureWorkspace("PENTAS/1");
+  expect(ws.workspace_key).toBe("PENTAS_1");
+  expect(ws.path).toBe(join(root, "PENTAS_1"));
   expect(ws.created_now).toBe(true);
   expect(existsSync(ws.path)).toBe(true);
 });
 
 test("reuses existing dir with created_now=false", async () => {
   const root = await tmpRoot();
-  await mkdir(join(root, "JUARA-1"), { recursive: true });
+  await mkdir(join(root, "PENTAS-1"), { recursive: true });
   const wm = new WorkspaceManager({ root });
-  const ws = await wm.ensureWorkspace("JUARA-1");
+  const ws = await wm.ensureWorkspace("PENTAS-1");
   expect(ws.created_now).toBe(false);
 });
 
 test("rejects when path collides with an existing non-directory", async () => {
   const root = await tmpRoot();
-  await writeFile(join(root, "JUARA-2"), "x");
+  await writeFile(join(root, "PENTAS-2"), "x");
   const wm = new WorkspaceManager({ root });
-  await expect(wm.ensureWorkspace("JUARA-2")).rejects.toMatchObject({ code: "workspace_create_error" });
+  await expect(wm.ensureWorkspace("PENTAS-2")).rejects.toMatchObject({
+    code: "workspace_create_error",
+  });
 });
 
 test("rejects path traversal attempt outside root", async () => {
@@ -2140,7 +2302,9 @@ export class WorkspaceManager {
     this.root = resolve(opts.root);
   }
 
-  rootPath(): string { return this.root; }
+  rootPath(): string {
+    return this.root;
+  }
 
   pathFor(identifier: string): string {
     const key = sanitizeWorkspaceKey(identifier);
@@ -2179,8 +2343,10 @@ export class WorkspaceManager {
   async assertCwdIsWorkspace(identifier: string, cwd: string): Promise<void> {
     const expected = this.pathFor(identifier);
     if (resolve(cwd) !== expected) {
-      throw new WorkspaceError("workspace_path_outside_root",
-        `expected cwd ${expected}, got ${cwd}`);
+      throw new WorkspaceError(
+        "workspace_path_outside_root",
+        `expected cwd ${expected}, got ${cwd}`,
+      );
     }
   }
 }
@@ -2203,6 +2369,7 @@ git commit -m "feat(dalang): workspace manager (no-repo path)"
 ### Task 15: Git worktree extension
 
 **Files:**
+
 - Create: `packages/dalang/src/workspace/git-worktree.ts`
 - Create: `packages/dalang/tests/workspace/git-worktree.test.ts`
 
@@ -2242,33 +2409,48 @@ async function tmpRoot(): Promise<string> {
 test("first worktree creates branch from default and adds worktree", async () => {
   const src = await setupSourceRepo();
   const root = await tmpRoot();
-  const m = new GitWorktreeManager({ workspaceRoot: root, repoUrl: src, defaultBranch: "main", branchPrefix: "juara/" });
+  const m = new GitWorktreeManager({
+    workspaceRoot: root,
+    repoUrl: src,
+    defaultBranch: "main",
+    branchPrefix: "pentas/",
+  });
   await m.ensureSharedClone();
-  const wsPath = join(root, "JUARA-1");
+  const wsPath = join(root, "PENTAS-1");
   await mkdir(root, { recursive: true });
-  await m.ensureWorktree(wsPath, "juara/JUARA-1");
+  await m.ensureWorktree(wsPath, "pentas/PENTAS-1");
   expect(existsSync(join(wsPath, "README.md"))).toBe(true);
 });
 
 test("reusing worktree path is a no-op (preserves branch)", async () => {
   const src = await setupSourceRepo();
   const root = await tmpRoot();
-  const m = new GitWorktreeManager({ workspaceRoot: root, repoUrl: src, defaultBranch: "main", branchPrefix: "juara/" });
+  const m = new GitWorktreeManager({
+    workspaceRoot: root,
+    repoUrl: src,
+    defaultBranch: "main",
+    branchPrefix: "pentas/",
+  });
   await m.ensureSharedClone();
-  const wsPath = join(root, "JUARA-2");
-  await m.ensureWorktree(wsPath, "juara/JUARA-2");
+  const wsPath = join(root, "PENTAS-2");
+  await m.ensureWorktree(wsPath, "pentas/PENTAS-2");
   await writeFile(join(wsPath, "wip.txt"), "wip");
-  await m.ensureWorktree(wsPath, "juara/JUARA-2"); // reuse
+  await m.ensureWorktree(wsPath, "pentas/PENTAS-2"); // reuse
   expect(existsSync(join(wsPath, "wip.txt"))).toBe(true);
 });
 
 test("removeWorktree cleans dir but leaves branch", async () => {
   const src = await setupSourceRepo();
   const root = await tmpRoot();
-  const m = new GitWorktreeManager({ workspaceRoot: root, repoUrl: src, defaultBranch: "main", branchPrefix: "juara/" });
+  const m = new GitWorktreeManager({
+    workspaceRoot: root,
+    repoUrl: src,
+    defaultBranch: "main",
+    branchPrefix: "pentas/",
+  });
   await m.ensureSharedClone();
-  const wsPath = join(root, "JUARA-3");
-  await m.ensureWorktree(wsPath, "juara/JUARA-3");
+  const wsPath = join(root, "PENTAS-3");
+  await m.ensureWorktree(wsPath, "pentas/PENTAS-3");
   await m.removeWorktree(wsPath);
   expect(existsSync(wsPath)).toBe(false);
 });
@@ -2296,7 +2478,10 @@ export interface GitWorktreeOptions {
 
 export class GitWorktreeError extends Error {}
 
-async function git(cwd: string, args: string[]): Promise<{ ok: boolean; stdout: string; stderr: string; exitCode: number }> {
+async function git(
+  cwd: string,
+  args: string[],
+): Promise<{ ok: boolean; stdout: string; stderr: string; exitCode: number }> {
   const p = Bun.spawn(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
   const exitCode = await p.exited;
   return {
@@ -2320,12 +2505,19 @@ export class GitWorktreeManager {
     return `${this.opts.branchPrefix}${sanitizedKey}`;
   }
 
-  sharedPath(): string { return this.sharedClonePath; }
+  sharedPath(): string {
+    return this.sharedClonePath;
+  }
 
   async ensureSharedClone(): Promise<void> {
     if (existsSync(this.sharedClonePath)) return;
     await mkdir(this.opts.workspaceRoot, { recursive: true });
-    const r = await git(this.opts.workspaceRoot, ["clone", "--bare", this.opts.repoUrl, ".repo.git"]);
+    const r = await git(this.opts.workspaceRoot, [
+      "clone",
+      "--bare",
+      this.opts.repoUrl,
+      ".repo.git",
+    ]);
     if (!r.ok) throw new GitWorktreeError(`clone failed: ${r.stderr}`);
   }
 
@@ -2335,12 +2527,24 @@ export class GitWorktreeManager {
     const fetch = await git(this.sharedClonePath, ["fetch", "origin"]);
     if (!fetch.ok) throw new GitWorktreeError(`fetch failed: ${fetch.stderr}`);
 
-    const branchExists = await git(this.sharedClonePath, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]);
+    const branchExists = await git(this.sharedClonePath, [
+      "show-ref",
+      "--verify",
+      "--quiet",
+      `refs/heads/${branch}`,
+    ]);
     if (branchExists.ok) {
       const r = await git(this.sharedClonePath, ["worktree", "add", workspacePath, branch]);
       if (!r.ok) throw new GitWorktreeError(`worktree add (existing branch) failed: ${r.stderr}`);
     } else {
-      const r = await git(this.sharedClonePath, ["worktree", "add", workspacePath, "-b", branch, `origin/${this.opts.defaultBranch}`]);
+      const r = await git(this.sharedClonePath, [
+        "worktree",
+        "add",
+        workspacePath,
+        "-b",
+        branch,
+        `origin/${this.opts.defaultBranch}`,
+      ]);
       if (!r.ok) throw new GitWorktreeError(`worktree add (new branch) failed: ${r.stderr}`);
     }
   }
@@ -2375,6 +2579,7 @@ git commit -m "feat(dalang): git worktree extension"
 ### Task 16: Initial state factory + helpers
 
 **Files:**
+
 - Create: `packages/dalang/src/orchestrator/state.ts`
 - Create: `packages/dalang/tests/orchestrator/state.test.ts`
 
@@ -2383,13 +2588,27 @@ git commit -m "feat(dalang): git worktree extension"
 ```ts
 // packages/dalang/tests/orchestrator/state.test.ts
 import { test, expect } from "bun:test";
-import { createInitialState, addRunning, removeRunning, accumulateTokens } from "../../src/orchestrator/state";
+import {
+  createInitialState,
+  addRunning,
+  removeRunning,
+  accumulateTokens,
+} from "../../src/orchestrator/state";
 import type { NormalizedIssue, RunningEntry } from "../../src/types";
 
 const issue: NormalizedIssue = {
-  id: "i1", identifier: "X-1", title: "t", description: null, priority: null,
-  state: "Todo", branch_name: null, url: null, labels: [], blocked_by: [],
-  created_at: null, updated_at: null,
+  id: "i1",
+  identifier: "X-1",
+  title: "t",
+  description: null,
+  priority: null,
+  state: "Todo",
+  branch_name: null,
+  url: null,
+  labels: [],
+  blocked_by: [],
+  created_at: null,
+  updated_at: null,
 };
 
 test("creates initial state with defaults", () => {
@@ -2401,10 +2620,13 @@ test("creates initial state with defaults", () => {
 test("addRunning sets entry and adds to claimed", () => {
   const s = createInitialState({ poll_interval_ms: 30000, max_concurrent_agents: 4 });
   const entry: RunningEntry = {
-    issue, identifier: "X-1", workspace_path: "/tmp/X-1",
+    issue,
+    identifier: "X-1",
+    workspace_path: "/tmp/X-1",
     started_at: new Date().toISOString(),
     abort_controller: new AbortController(),
-    retry_attempt: null, session: null,
+    retry_attempt: null,
+    session: null,
   };
   addRunning(s, "i1", entry);
   expect(s.running.has("i1")).toBe(true);
@@ -2414,10 +2636,13 @@ test("addRunning sets entry and adds to claimed", () => {
 test("removeRunning unsets entry and clears claim", () => {
   const s = createInitialState({ poll_interval_ms: 30000, max_concurrent_agents: 4 });
   const entry: RunningEntry = {
-    issue, identifier: "X-1", workspace_path: "/tmp/X-1",
+    issue,
+    identifier: "X-1",
+    workspace_path: "/tmp/X-1",
     started_at: new Date().toISOString(),
     abort_controller: new AbortController(),
-    retry_attempt: null, session: null,
+    retry_attempt: null,
+    session: null,
   };
   addRunning(s, "i1", entry);
   removeRunning(s, "i1");
@@ -2517,6 +2742,7 @@ git commit -m "feat(dalang): orchestrator state operations"
 ### Task 17: Eligibility filtering and dispatch sorting
 
 **Files:**
+
 - Create: `packages/dalang/src/orchestrator/eligibility.ts`
 - Create: `packages/dalang/tests/orchestrator/eligibility.test.ts`
 
@@ -2531,11 +2757,16 @@ import type { NormalizedIssue } from "../../src/types";
 
 function mkIssue(p: Partial<NormalizedIssue>): NormalizedIssue {
   return {
-    id: p.id ?? "id", identifier: p.identifier ?? "X-1", title: p.title ?? "t",
-    description: null, priority: p.priority ?? null,
+    id: p.id ?? "id",
+    identifier: p.identifier ?? "X-1",
+    title: p.title ?? "t",
+    description: null,
+    priority: p.priority ?? null,
     state: p.state ?? "Todo",
-    branch_name: null, url: null,
-    labels: [], blocked_by: p.blocked_by ?? [],
+    branch_name: null,
+    url: null,
+    labels: [],
+    blocked_by: p.blocked_by ?? [],
     created_at: p.created_at ?? null,
     updated_at: null,
   };
@@ -2567,13 +2798,19 @@ test("isEligible: rejects already-running issue", () => {
 
 test("isEligible: Todo with non-terminal blocker not eligible", () => {
   const s = createInitialState({ poll_interval_ms: 30000, max_concurrent_agents: 4 });
-  const issue = mkIssue({ state: "Todo", blocked_by: [{ id: "x", identifier: "X-9", state: "In Progress" }] });
+  const issue = mkIssue({
+    state: "Todo",
+    blocked_by: [{ id: "x", identifier: "X-9", state: "In Progress" }],
+  });
   expect(isEligible(issue, s, { active: ["Todo"], terminal: ["Done"], byState: {} })).toBe(false);
 });
 
 test("isEligible: Todo with all-terminal blockers eligible", () => {
   const s = createInitialState({ poll_interval_ms: 30000, max_concurrent_agents: 4 });
-  const issue = mkIssue({ state: "Todo", blocked_by: [{ id: "x", identifier: "X-9", state: "Done" }] });
+  const issue = mkIssue({
+    state: "Todo",
+    blocked_by: [{ id: "x", identifier: "X-9", state: "Done" }],
+  });
   expect(isEligible(issue, s, { active: ["Todo"], terminal: ["Done"], byState: {} })).toBe(true);
 });
 
@@ -2582,15 +2819,24 @@ test("isEligible: respects per-state concurrency limit", () => {
   // simulate 2 running In Progress
   for (const id of ["a", "b"]) {
     s.running.set(id, {
-      issue: mkIssue({ id, state: "In Progress" }), identifier: id, workspace_path: "/",
-      started_at: "", abort_controller: new AbortController(), retry_attempt: null, session: null,
+      issue: mkIssue({ id, state: "In Progress" }),
+      identifier: id,
+      workspace_path: "/",
+      started_at: "",
+      abort_controller: new AbortController(),
+      retry_attempt: null,
+      session: null,
     });
     s.claimed.add(id);
   }
   const candidate = mkIssue({ id: "c", state: "In Progress" });
-  expect(isEligible(candidate, s, {
-    active: ["In Progress"], terminal: [], byState: { "in progress": 2 },
-  })).toBe(false);
+  expect(
+    isEligible(candidate, s, {
+      active: ["In Progress"],
+      terminal: [],
+      byState: { "in progress": 2 },
+    }),
+  ).toBe(false);
 });
 ```
 
@@ -2675,6 +2921,7 @@ git commit -m "feat(dalang): dispatch eligibility and sort"
 ### Task 18: Retry scheduling (backoff math + timer cancellation)
 
 **Files:**
+
 - Create: `packages/dalang/src/orchestrator/retry.ts`
 - Create: `packages/dalang/tests/orchestrator/retry.test.ts`
 
@@ -2697,8 +2944,12 @@ test("backoff formula doubles per attempt and caps at max", () => {
 test("scheduleRetry stores entry and timer", () => {
   const s = createInitialState({ poll_interval_ms: 30000, max_concurrent_agents: 4 });
   scheduleRetry(s, {
-    issue_id: "i1", identifier: "X-1", attempt: 1, delayMs: 100,
-    error: "boom", onFire: () => {},
+    issue_id: "i1",
+    identifier: "X-1",
+    attempt: 1,
+    delayMs: 100,
+    error: "boom",
+    onFire: () => {},
   });
   expect(s.retry_attempts.has("i1")).toBe(true);
 });
@@ -2707,10 +2958,26 @@ test("scheduling a new retry cancels the existing timer for the same issue", asy
   const s = createInitialState({ poll_interval_ms: 30000, max_concurrent_agents: 4 });
   let firedFirst = false;
   let firedSecond = false;
-  scheduleRetry(s, { issue_id: "i1", identifier: "X-1", attempt: 1, delayMs: 50,
-    error: null, onFire: () => { firedFirst = true; } });
-  scheduleRetry(s, { issue_id: "i1", identifier: "X-1", attempt: 2, delayMs: 50,
-    error: null, onFire: () => { firedSecond = true; } });
+  scheduleRetry(s, {
+    issue_id: "i1",
+    identifier: "X-1",
+    attempt: 1,
+    delayMs: 50,
+    error: null,
+    onFire: () => {
+      firedFirst = true;
+    },
+  });
+  scheduleRetry(s, {
+    issue_id: "i1",
+    identifier: "X-1",
+    attempt: 2,
+    delayMs: 50,
+    error: null,
+    onFire: () => {
+      firedSecond = true;
+    },
+  });
   await new Promise((r) => setTimeout(r, 120));
   expect(firedFirst).toBe(false);
   expect(firedSecond).toBe(true);
@@ -2719,8 +2986,16 @@ test("scheduling a new retry cancels the existing timer for the same issue", asy
 test("cancelRetry clears entry and prevents firing", async () => {
   const s = createInitialState({ poll_interval_ms: 30000, max_concurrent_agents: 4 });
   let fired = false;
-  scheduleRetry(s, { issue_id: "i1", identifier: "X-1", attempt: 1, delayMs: 50,
-    error: null, onFire: () => { fired = true; } });
+  scheduleRetry(s, {
+    issue_id: "i1",
+    identifier: "X-1",
+    attempt: 1,
+    delayMs: 50,
+    error: null,
+    onFire: () => {
+      fired = true;
+    },
+  });
   cancelRetry(s, "i1");
   await new Promise((r) => setTimeout(r, 80));
   expect(fired).toBe(false);
@@ -2801,6 +3076,7 @@ git commit -m "feat(dalang): retry scheduling with cancellation"
 ### Task 19: Reconciliation (stall + tracker refresh)
 
 **Files:**
+
 - Create: `packages/dalang/src/orchestrator/reconcile.ts`
 - Create: `packages/dalang/tests/orchestrator/reconcile.test.ts`
 
@@ -2813,26 +3089,52 @@ import { detectStalls, classifyTrackerRefresh } from "../../src/orchestrator/rec
 import { createInitialState } from "../../src/orchestrator/state";
 import type { NormalizedIssue, RunningEntry } from "../../src/types";
 
-function makeRunning(issue: NormalizedIssue, lastEventAt: string | null, startedAt: string): RunningEntry {
+function makeRunning(
+  issue: NormalizedIssue,
+  lastEventAt: string | null,
+  startedAt: string,
+): RunningEntry {
   return {
-    issue, identifier: issue.identifier, workspace_path: "/tmp",
-    started_at: startedAt, abort_controller: new AbortController(),
+    issue,
+    identifier: issue.identifier,
+    workspace_path: "/tmp",
+    started_at: startedAt,
+    abort_controller: new AbortController(),
     retry_attempt: null,
-    session: lastEventAt ? {
-      session_id: "t-1", thread_id: "t", turn_id: "1",
-      claude_session_pid: null, last_event: "notification",
-      last_event_at: lastEventAt, last_message: null,
-      input_tokens: 0, output_tokens: 0, total_tokens: 0,
-      last_reported_input_tokens: 0, last_reported_output_tokens: 0, last_reported_total_tokens: 0,
-      turn_count: 1,
-    } : null,
+    session: lastEventAt
+      ? {
+          session_id: "t-1",
+          thread_id: "t",
+          turn_id: "1",
+          claude_session_pid: null,
+          last_event: "notification",
+          last_event_at: lastEventAt,
+          last_message: null,
+          input_tokens: 0,
+          output_tokens: 0,
+          total_tokens: 0,
+          last_reported_input_tokens: 0,
+          last_reported_output_tokens: 0,
+          last_reported_total_tokens: 0,
+          turn_count: 1,
+        }
+      : null,
   };
 }
 
 const issue = (state: string): NormalizedIssue => ({
-  id: "i1", identifier: "X-1", title: "t", description: null, priority: null,
-  state, branch_name: null, url: null, labels: [], blocked_by: [],
-  created_at: null, updated_at: null,
+  id: "i1",
+  identifier: "X-1",
+  title: "t",
+  description: null,
+  priority: null,
+  state,
+  branch_name: null,
+  url: null,
+  labels: [],
+  blocked_by: [],
+  created_at: null,
+  updated_at: null,
 });
 
 test("detectStalls uses last_event_at when present", () => {
@@ -2914,7 +3216,10 @@ function inSet(set: string[], v: string): boolean {
   return set.some((x) => x.toLowerCase() === lv);
 }
 
-export function classifyTrackerRefresh(issue: NormalizedIssue, rules: RefreshRules): RefreshClassification {
+export function classifyTrackerRefresh(
+  issue: NormalizedIssue,
+  rules: RefreshRules,
+): RefreshClassification {
   if (inSet(rules.terminal, issue.state)) return { kind: "terminate_with_cleanup" };
   if (inSet(rules.active, issue.state)) return { kind: "update_snapshot" };
   return { kind: "terminate_no_cleanup" };
@@ -2940,6 +3245,7 @@ git commit -m "feat(dalang): reconciliation primitives (stall + classify)"
 ### Task 20: SDK message → runtime event mapper
 
 **Files:**
+
 - Create: `packages/dalang/src/agent/event-mapper.ts`
 - Create: `packages/dalang/tests/agent/event-mapper.test.ts`
 
@@ -2987,7 +3293,8 @@ test("user tool_result → notification", () => {
 
 test("result success → turn_completed with usage", () => {
   const ev = mapSdkMessage({
-    type: "result", subtype: "success",
+    type: "result",
+    subtype: "success",
     usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 },
   });
   expect(ev?.event).toBe("turn_completed");
@@ -3028,7 +3335,9 @@ function truncate(s: string): string {
   return s.slice(0, TRUNC) + `... [truncated ${s.length - TRUNC} bytes]`;
 }
 
-function nowIso(): string { return new Date().toISOString(); }
+function nowIso(): string {
+  return new Date().toISOString();
+}
 
 export function mapSdkMessage(raw: unknown): RuntimeEvent | null {
   if (raw === null || raw === undefined || typeof raw !== "object") return null;
@@ -3044,7 +3353,8 @@ export function mapSdkMessage(raw: unknown): RuntimeEvent | null {
   }
 
   if (type === "assistant") {
-    const content = ((m.message as Record<string, unknown> | undefined)?.content ?? []) as unknown[];
+    const content = ((m.message as Record<string, unknown> | undefined)?.content ??
+      []) as unknown[];
     const parts: string[] = [];
     for (const c of content) {
       if (c === null || typeof c !== "object") continue;
@@ -3060,9 +3370,13 @@ export function mapSdkMessage(raw: unknown): RuntimeEvent | null {
   }
 
   if (type === "user") {
-    const content = ((m.message as Record<string, unknown> | undefined)?.content ?? []) as unknown[];
-    const hasToolResult = content.some((c) =>
-      c !== null && typeof c === "object" && (c as Record<string, unknown>).type === "tool_result"
+    const content = ((m.message as Record<string, unknown> | undefined)?.content ??
+      []) as unknown[];
+    const hasToolResult = content.some(
+      (c) =>
+        c !== null &&
+        typeof c === "object" &&
+        (c as Record<string, unknown>).type === "tool_result",
     );
     if (hasToolResult) {
       return { event: "notification", timestamp: nowIso(), message: "tool_result" };
@@ -3076,7 +3390,11 @@ export function mapSdkMessage(raw: unknown): RuntimeEvent | null {
     if (subtype === "success") {
       return { event: "turn_completed", timestamp: nowIso(), usage };
     }
-    return { event: "turn_ended_with_error", timestamp: nowIso(), reason: typeof subtype === "string" ? subtype : undefined };
+    return {
+      event: "turn_ended_with_error",
+      timestamp: nowIso(),
+      reason: typeof subtype === "string" ? subtype : undefined,
+    };
   }
 
   if (typeof type === "string") {
@@ -3103,6 +3421,7 @@ git commit -m "feat(dalang): SDK message → runtime event mapper"
 ### Task 21: Agent runner (single-turn driver)
 
 **Files:**
+
 - Create: `packages/dalang/src/agent/agent-runner.ts`
 - Create: `packages/dalang/tests/agent/agent-runner.test.ts`
 
@@ -3117,16 +3436,32 @@ import { runAttempt } from "../../src/agent/agent-runner";
 import type { NormalizedIssue, RuntimeEvent } from "../../src/types";
 
 const issue: NormalizedIssue = {
-  id: "i1", identifier: "X-1", title: "t", description: "d", priority: null,
-  state: "Todo", branch_name: null, url: null, labels: [], blocked_by: [],
-  created_at: null, updated_at: null,
+  id: "i1",
+  identifier: "X-1",
+  title: "t",
+  description: "d",
+  priority: null,
+  state: "Todo",
+  branch_name: null,
+  url: null,
+  labels: [],
+  blocked_by: [],
+  created_at: null,
+  updated_at: null,
 };
 
 const baseDeps = (sdkMessages: unknown[]) => ({
   promptTemplate: "Body for {{ issue.identifier }}",
   workspacePath: "/tmp/X-1",
-  config: { permissionMode: "auto", model: "claude-opus-4-7", executablePath: "claude",
-    turnTimeoutMs: 5000, readTimeoutMs: 1000, stallTimeoutMs: 0, maxTurns: 1 },
+  config: {
+    permissionMode: "auto",
+    model: "claude-opus-4-7",
+    executablePath: "claude",
+    turnTimeoutMs: 5000,
+    readTimeoutMs: 1000,
+    stallTimeoutMs: 0,
+    maxTurns: 1,
+  },
   trackerRefresh: async () => issue,
   isActiveState: (s: string) => s === "Todo",
   runQuery: async function* () {
@@ -3139,9 +3474,15 @@ test("runs one turn, emits session_started + turn_completed, accumulates tokens"
   const result = await runAttempt({
     ...baseDeps([
       { type: "system", subtype: "init", session_id: "sess-1" },
-      { type: "result", subtype: "success", usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 } },
+      {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 },
+      },
     ]),
-    issue, attempt: null, onEvent: (e) => events.push(e),
+    issue,
+    attempt: null,
+    onEvent: (e) => events.push(e),
   });
   expect(result.success).toBe(true);
   expect(result.tokens).toEqual({ input_tokens: 10, output_tokens: 5, total_tokens: 15 });
@@ -3157,7 +3498,10 @@ test("aborts cleanly when controller is aborted", async () => {
       { type: "system", subtype: "init", session_id: "sess-1" },
       // no result message; iterator pretends to be slow
     ]),
-    issue, attempt: null, onEvent: (e) => events.push(e), abortSignal: controller.signal,
+    issue,
+    attempt: null,
+    onEvent: (e) => events.push(e),
+    abortSignal: controller.signal,
   });
   expect(result.success).toBe(false);
   expect(result.reason).toBe("turn_cancelled");
@@ -3169,11 +3513,17 @@ test("multi-turn loop continues when issue stays active and turn budget allows",
   const result = await runAttempt({
     ...baseDeps([]),
     config: { ...baseDeps([]).config, maxTurns: 2 },
-    issue, attempt: null, onEvent: (e) => events.push(e),
+    issue,
+    attempt: null,
+    onEvent: (e) => events.push(e),
     runQuery: async function* () {
       turn += 1;
       yield { type: "system", subtype: "init", session_id: `s-${turn}` };
-      yield { type: "result", subtype: "success", usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
     },
   });
   expect(result.success).toBe(true);
@@ -3246,9 +3596,10 @@ export async function runAttempt(deps: RunAttemptDeps): Promise<RunAttemptResult
 
   while (true) {
     turnCount += 1;
-    const prompt = turnCount === 1
-      ? await buildFirstTurnPrompt(deps.promptTemplate, issue, deps.attempt)
-      : buildContinuationPrompt(issue, turnCount, deps.config.maxTurns);
+    const prompt =
+      turnCount === 1
+        ? await buildFirstTurnPrompt(deps.promptTemplate, issue, deps.attempt)
+        : buildContinuationPrompt(issue, turnCount, deps.config.maxTurns);
 
     const turn = await driveOneTurn({
       prompt,
@@ -3266,7 +3617,13 @@ export async function runAttempt(deps: RunAttemptDeps): Promise<RunAttemptResult
     tokens.total_tokens += turn.tokens.total_tokens;
 
     if (!turn.success) {
-      return { success: false, reason: turn.reason, thread_id: threadId, turn_count: turnCount, tokens };
+      return {
+        success: false,
+        reason: turn.reason,
+        thread_id: threadId,
+        turn_count: turnCount,
+        tokens,
+      };
     }
 
     const refreshed = await deps.trackerRefresh(issue.id).catch(() => null);
@@ -3331,12 +3688,15 @@ async function driveOneTurn(opts: DriveOneTurnOptions): Promise<DriveOneTurnResu
       }
       opts.onEvent(evt);
       if (evt.event === "turn_completed") return { success: true, thread_id: threadId, tokens };
-      if (evt.event === "turn_ended_with_error") return { success: false, reason: "turn_failed", thread_id: threadId, tokens };
-      if (evt.event === "turn_input_required") return { success: false, reason: "turn_input_required", thread_id: threadId, tokens };
+      if (evt.event === "turn_ended_with_error")
+        return { success: false, reason: "turn_failed", thread_id: threadId, tokens };
+      if (evt.event === "turn_input_required")
+        return { success: false, reason: "turn_input_required", thread_id: threadId, tokens };
     }
     return { success: false, reason: "subprocess_exit", thread_id: threadId, tokens };
   } catch (err) {
-    if (turnAbort.signal.aborted) return { success: false, reason: "turn_cancelled", thread_id: threadId, tokens };
+    if (turnAbort.signal.aborted)
+      return { success: false, reason: "turn_cancelled", thread_id: threadId, tokens };
     return { success: false, reason: "turn_failed", thread_id: threadId, tokens };
   } finally {
     clearTimeout(turnTimer);
@@ -3363,6 +3723,7 @@ git commit -m "feat(dalang): agent runner with multi-turn loop and abort"
 ### Task 22: Real SDK adapter for `runQuery`
 
 **Files:**
+
 - Create: `packages/dalang/src/agent/sdk-runner.ts`
 - Create: `packages/dalang/tests/agent/sdk-runner.test.ts`
 
@@ -3377,8 +3738,10 @@ import { sdkRunQuery } from "../../src/agent/sdk-runner";
 
 test("sdkRunQuery returns an async iterable (smoke)", () => {
   const it = sdkRunQuery({
-    prompt: "noop", cwd: "/tmp",
-    permissionMode: "auto", model: "claude-opus-4-7",
+    prompt: "noop",
+    cwd: "/tmp",
+    permissionMode: "auto",
+    model: "claude-opus-4-7",
     executablePath: "/nonexistent/path/to/claude",
   });
   expect(typeof (it as AsyncIterable<unknown>)[Symbol.asyncIterator]).toBe("function");
@@ -3438,6 +3801,7 @@ git commit -m "feat(dalang): real Claude Agent SDK runQuery adapter"
 ### Task 23: Structured logger
 
 **Files:**
+
 - Create: `packages/dalang/src/logging/logger.ts`
 - Create: `packages/dalang/tests/logging/logger.test.ts`
 
@@ -3508,6 +3872,7 @@ git commit -m "feat(dalang): pino logger setup"
 ### Task 24: Orchestrator main loop (composition)
 
 **Files:**
+
 - Create: `packages/dalang/src/orchestrator/orchestrator.ts`
 - Create: `packages/dalang/tests/orchestrator/orchestrator.test.ts`
 
@@ -3527,20 +3892,35 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const issue = (id: string, state = "Todo"): NormalizedIssue => ({
-  id, identifier: `X-${id}`, title: "t", description: null, priority: 1,
-  state, branch_name: null, url: null, labels: [], blocked_by: [],
-  created_at: "2026-01-01", updated_at: null,
+  id,
+  identifier: `X-${id}`,
+  title: "t",
+  description: null,
+  priority: 1,
+  state,
+  branch_name: null,
+  url: null,
+  labels: [],
+  blocked_by: [],
+  created_at: "2026-01-01",
+  updated_at: null,
 });
 
 class FakeTracker implements TrackerAdapter {
   candidates: NormalizedIssue[] = [];
   byIds: Record<string, NormalizedIssue> = {};
-  async fetchCandidateIssues(): Promise<NormalizedIssue[]> { return this.candidates; }
-  async fetchIssuesByStates(): Promise<NormalizedIssue[]> { return []; }
+  async fetchCandidateIssues(): Promise<NormalizedIssue[]> {
+    return this.candidates;
+  }
+  async fetchIssuesByStates(): Promise<NormalizedIssue[]> {
+    return [];
+  }
   async fetchIssueStatesByIds(ids: string[]): Promise<NormalizedIssue[]> {
     return ids.map((id) => this.byIds[id]).filter((x): x is NormalizedIssue => Boolean(x));
   }
-  async fetchIssue(id: string): Promise<NormalizedIssue | null> { return this.byIds[id] ?? null; }
+  async fetchIssue(id: string): Promise<NormalizedIssue | null> {
+    return this.byIds[id] ?? null;
+  }
 }
 
 async function tmpRoot(): Promise<string> {
@@ -3554,7 +3934,11 @@ test("tick dispatches eligible issue and runs an attempt to completion", async (
   tracker.byIds["i1"] = issue("i1");
 
   const cfg = applyDefaults({
-    tracker: { endpoint: "http://localhost:1234", active_states: ["Todo"], terminal_states: ["Done"] },
+    tracker: {
+      endpoint: "http://localhost:1234",
+      active_states: ["Todo"],
+      terminal_states: ["Done"],
+    },
     workspace: { root },
     agent: { max_concurrent_agents: 1, max_turns: 1 },
     polling: { interval_ms: 1000 },
@@ -3566,7 +3950,11 @@ test("tick dispatches eligible issue and runs an attempt to completion", async (
     promptTemplate: "Body for {{ issue.identifier }}",
     runQuery: async function* () {
       yield { type: "system", subtype: "init", session_id: "sess-1" };
-      yield { type: "result", subtype: "success", usage: { input_tokens: 5, output_tokens: 5, total_tokens: 10 } };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 5, output_tokens: 5, total_tokens: 10 },
+      };
     },
   });
 
@@ -3594,11 +3982,17 @@ test("tick respects max_concurrent_agents and queues the rest", async () => {
 
   let dispatched = 0;
   const orch = new Orchestrator({
-    tracker, config: cfg, promptTemplate: "x",
+    tracker,
+    config: cfg,
+    promptTemplate: "x",
     runQuery: async function* () {
       dispatched += 1;
       yield { type: "system", subtype: "init", session_id: `s-${dispatched}` };
-      yield { type: "result", subtype: "success", usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
     },
   });
   await orch.tick();
@@ -3697,7 +4091,8 @@ export class Orchestrator {
           terminal: this.cfg.tracker.terminal_states,
           byState: this.cfg.agent.max_concurrent_agents_by_state,
         })
-      ) continue;
+      )
+        continue;
       this.dispatch(issue, null);
     }
   }
@@ -3740,11 +4135,13 @@ export class Orchestrator {
   private dispatch(issue: NormalizedIssue, attempt: number | null): void {
     const controller = new AbortController();
     const entry: RunningEntry = {
-      issue, identifier: issue.identifier,
+      issue,
+      identifier: issue.identifier,
       workspace_path: this.workspaces.pathFor(issue.identifier),
       started_at: new Date().toISOString(),
       abort_controller: controller,
-      retry_attempt: attempt, session: null,
+      retry_attempt: attempt,
+      session: null,
     };
     addRunning(this.state, issue.id, entry);
     const work = this.runWorker(issue, attempt, controller).catch((err) => {
@@ -3772,14 +4169,27 @@ export class Orchestrator {
       ATTEMPT: attempt === null ? "" : String(attempt),
     };
     if (ws.created_now && this.cfg.hooks.after_create) {
-      await runHook({ name: "after_create", script: this.cfg.hooks.after_create, cwd, env, timeoutMs: this.cfg.hooks.timeout_ms });
+      await runHook({
+        name: "after_create",
+        script: this.cfg.hooks.after_create,
+        cwd,
+        env,
+        timeoutMs: this.cfg.hooks.timeout_ms,
+      });
     }
     if (this.cfg.hooks.before_run) {
-      await runHook({ name: "before_run", script: this.cfg.hooks.before_run, cwd, env, timeoutMs: this.cfg.hooks.timeout_ms });
+      await runHook({
+        name: "before_run",
+        script: this.cfg.hooks.before_run,
+        cwd,
+        env,
+        timeoutMs: this.cfg.hooks.timeout_ms,
+      });
     }
 
     const result = await runAttempt({
-      issue, attempt,
+      issue,
+      attempt,
       promptTemplate: this.promptTemplate,
       workspacePath: cwd,
       config: {
@@ -3795,18 +4205,26 @@ export class Orchestrator {
         const r = await this.tracker.fetchIssueStatesByIds([id]).catch(() => []);
         return r[0] ?? null;
       },
-      isActiveState: (s) => this.cfg.tracker.active_states.some((x) => x.toLowerCase() === s.toLowerCase()),
+      isActiveState: (s) =>
+        this.cfg.tracker.active_states.some((x) => x.toLowerCase() === s.toLowerCase()),
       runQuery: this.runQuery,
       onEvent: (e) => {
         const entry = this.state.running.get(issue.id);
         if (!entry) return;
         entry.session = entry.session ?? {
           session_id: `${e.thread_id ?? "?"}-1`,
-          thread_id: e.thread_id ?? "?", turn_id: "1",
-          claude_session_pid: null, last_event: e.event,
-          last_event_at: e.timestamp, last_message: e.message ?? null,
-          input_tokens: 0, output_tokens: 0, total_tokens: 0,
-          last_reported_input_tokens: 0, last_reported_output_tokens: 0, last_reported_total_tokens: 0,
+          thread_id: e.thread_id ?? "?",
+          turn_id: "1",
+          claude_session_pid: null,
+          last_event: e.event,
+          last_event_at: e.timestamp,
+          last_message: e.message ?? null,
+          input_tokens: 0,
+          output_tokens: 0,
+          total_tokens: 0,
+          last_reported_input_tokens: 0,
+          last_reported_output_tokens: 0,
+          last_reported_total_tokens: 0,
           turn_count: 1,
         };
         entry.session.last_event = e.event;
@@ -3818,24 +4236,35 @@ export class Orchestrator {
 
     accumulateTokens(this.state, result.tokens);
     if (this.cfg.hooks.after_run) {
-      await runHook({ name: "after_run", script: this.cfg.hooks.after_run, cwd, env, timeoutMs: this.cfg.hooks.timeout_ms })
-        .catch(() => {});
+      await runHook({
+        name: "after_run",
+        script: this.cfg.hooks.after_run,
+        cwd,
+        env,
+        timeoutMs: this.cfg.hooks.timeout_ms,
+      }).catch(() => {});
     }
     removeRunning(this.state, issue.id);
 
     if (result.success) {
       this.state.completed.add(issue.id);
       scheduleRetry(this.state, {
-        issue_id: issue.id, identifier: issue.identifier,
-        attempt: 1, delayMs: CONTINUATION_RETRY_MS, error: null,
+        issue_id: issue.id,
+        identifier: issue.identifier,
+        attempt: 1,
+        delayMs: CONTINUATION_RETRY_MS,
+        error: null,
         onFire: () => this.handleRetryFire(issue.id),
       });
     } else {
       const nextAttempt = (attempt ?? 0) + 1;
       const delay = computeBackoffMs(nextAttempt, this.cfg.agent.max_retry_backoff_ms);
       scheduleRetry(this.state, {
-        issue_id: issue.id, identifier: issue.identifier,
-        attempt: nextAttempt, delayMs: delay, error: result.reason ?? "worker_failed",
+        issue_id: issue.id,
+        identifier: issue.identifier,
+        attempt: nextAttempt,
+        delayMs: delay,
+        error: result.reason ?? "worker_failed",
         onFire: () => this.handleRetryFire(issue.id),
       });
     }
@@ -3849,8 +4278,10 @@ export class Orchestrator {
       const e = this.state.retry_attempts.get(issueId);
       const next = (e?.attempt ?? 1) + 1;
       scheduleRetry(this.state, {
-        issue_id: issueId, identifier: e?.identifier ?? issueId,
-        attempt: next, delayMs: computeBackoffMs(next, this.cfg.agent.max_retry_backoff_ms),
+        issue_id: issueId,
+        identifier: e?.identifier ?? issueId,
+        attempt: next,
+        delayMs: computeBackoffMs(next, this.cfg.agent.max_retry_backoff_ms),
         error: "retry poll failed",
         onFire: () => this.handleRetryFire(issueId),
       });
@@ -3861,16 +4292,20 @@ export class Orchestrator {
       releaseClaim(this.state, issueId);
       return;
     }
-    if (!isEligible(issue, this.state, {
-      active: this.cfg.tracker.active_states,
-      terminal: this.cfg.tracker.terminal_states,
-      byState: this.cfg.agent.max_concurrent_agents_by_state,
-    })) {
+    if (
+      !isEligible(issue, this.state, {
+        active: this.cfg.tracker.active_states,
+        terminal: this.cfg.tracker.terminal_states,
+        byState: this.cfg.agent.max_concurrent_agents_by_state,
+      })
+    ) {
       const e = this.state.retry_attempts.get(issueId);
       const next = (e?.attempt ?? 1) + 1;
       scheduleRetry(this.state, {
-        issue_id: issueId, identifier: issue.identifier,
-        attempt: next, delayMs: computeBackoffMs(next, this.cfg.agent.max_retry_backoff_ms),
+        issue_id: issueId,
+        identifier: issue.identifier,
+        attempt: next,
+        delayMs: computeBackoffMs(next, this.cfg.agent.max_retry_backoff_ms),
         error: "no available orchestrator slots",
         onFire: () => this.handleRetryFire(issueId),
       });
@@ -3882,13 +4317,20 @@ export class Orchestrator {
   private async cleanupWorkspace(entry: RunningEntry): Promise<void> {
     const cwd = entry.workspace_path;
     const env = {
-      WORKSPACE_PATH: cwd, ISSUE_ID: entry.issue.id,
-      ISSUE_IDENTIFIER: entry.issue.identifier, ISSUE_STATE: entry.issue.state,
+      WORKSPACE_PATH: cwd,
+      ISSUE_ID: entry.issue.id,
+      ISSUE_IDENTIFIER: entry.issue.identifier,
+      ISSUE_STATE: entry.issue.state,
       ATTEMPT: "",
     };
     if (this.cfg.hooks.before_remove) {
-      await runHook({ name: "before_remove", script: this.cfg.hooks.before_remove, cwd, env, timeoutMs: this.cfg.hooks.timeout_ms })
-        .catch(() => {});
+      await runHook({
+        name: "before_remove",
+        script: this.cfg.hooks.before_remove,
+        cwd,
+        env,
+        timeoutMs: this.cfg.hooks.timeout_ms,
+      }).catch(() => {});
     }
     if (this.worktrees) await this.worktrees.removeWorktree(cwd);
     else await this.workspaces.removeWorkspace(entry.issue.identifier);
@@ -3931,6 +4373,7 @@ git commit -m "feat(dalang): orchestrator main loop composition"
 ### Task 25: Snapshot builder + JSON routes
 
 **Files:**
+
 - Create: `packages/dalang/src/http/snapshot.ts`
 - Create: `packages/dalang/src/http/routes.ts`
 - Create: `packages/dalang/tests/http/routes.test.ts`
@@ -4125,12 +4568,15 @@ export async function handleRequest(req: Request, deps: RouteDeps): Promise<Resp
   if (path === "/api/v1/refresh") {
     if (method !== "POST") return new Response(null, { status: 405 });
     void deps.refresh().catch(() => {});
-    return json({
-      queued: true,
-      coalesced: false,
-      requested_at: new Date().toISOString(),
-      operations: ["poll", "reconcile"],
-    }, 202);
+    return json(
+      {
+        queued: true,
+        coalesced: false,
+        requested_at: new Date().toISOString(),
+        operations: ["poll", "reconcile"],
+      },
+      202,
+    );
   }
 
   // /api/v1/:identifier
@@ -4167,6 +4613,7 @@ git commit -m "feat(dalang): HTTP routes, snapshot builder, error envelope"
 ### Task 26: HTTP server + dashboard
 
 **Files:**
+
 - Create: `packages/dalang/src/http/dashboard.ts`
 - Create: `packages/dalang/src/http/server.ts`
 - Create: `packages/dalang/tests/http/server.test.ts`
@@ -4182,8 +4629,10 @@ import { createInitialState } from "../../src/orchestrator/state";
 test("dashboard at / returns HTML 200 and includes counts", async () => {
   const state = createInitialState({ poll_interval_ms: 30000, max_concurrent_agents: 4 });
   const srv = startServer({
-    state, refresh: async () => {},
-    host: "127.0.0.1", port: 0,
+    state,
+    refresh: async () => {},
+    host: "127.0.0.1",
+    port: 0,
   });
   const res = await fetch(`http://127.0.0.1:${srv.port}/`);
   expect(res.status).toBe(200);
@@ -4216,9 +4665,8 @@ export function renderDashboardHtml(state: OrchestratorState): string {
   const running = Array.from(state.running.values());
   const retrying = Array.from(state.retry_attempts.values());
 
-  const rows = (cells: string[][]) => cells
-    .map((row) => `<tr>${row.map((c) => `<td>${escapeHtml(c)}</td>`).join("")}</tr>`)
-    .join("");
+  const rows = (cells: string[][]) =>
+    cells.map((row) => `<tr>${row.map((c) => `<td>${escapeHtml(c)}</td>`).join("")}</tr>`).join("");
 
   return `<!doctype html>
 <html><head><meta charset="utf-8"><title>dalang</title>
@@ -4233,22 +4681,33 @@ h1, h2 { margin: 0.5rem 0; }
 <p>running=${running.length} retrying=${retrying.length} input_tokens=${state.claude_totals.input_tokens} output_tokens=${state.claude_totals.output_tokens} total_tokens=${state.claude_totals.total_tokens}</p>
 <h2>Running</h2>
 <table><thead><tr><th>Issue</th><th>State</th><th>Session</th><th>Turn</th><th>Last event</th></tr></thead>
-<tbody>${rows(running.map((e) => [
-  e.issue.identifier, e.issue.state,
-  e.session?.session_id ?? "—", String(e.session?.turn_count ?? 0),
-  e.session?.last_event ?? "—",
-]))}</tbody></table>
+<tbody>${rows(
+    running.map((e) => [
+      e.issue.identifier,
+      e.issue.state,
+      e.session?.session_id ?? "—",
+      String(e.session?.turn_count ?? 0),
+      e.session?.last_event ?? "—",
+    ]),
+  )}</tbody></table>
 <h2>Retrying</h2>
 <table><thead><tr><th>Issue</th><th>Attempt</th><th>Due</th><th>Error</th></tr></thead>
-<tbody>${rows(retrying.map((r) => [
-  r.identifier, String(r.attempt),
-  new Date(r.due_at_ms).toISOString(), r.error ?? "—",
-]))}</tbody></table>
+<tbody>${rows(
+    retrying.map((r) => [
+      r.identifier,
+      String(r.attempt),
+      new Date(r.due_at_ms).toISOString(),
+      r.error ?? "—",
+    ]),
+  )}</tbody></table>
 </body></html>`;
 }
 
 function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+  return s.replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
+  );
 }
 ```
 
@@ -4291,7 +4750,9 @@ export function startServer(opts: ServerOptions): ServerHandle {
   return {
     port: server.port,
     hostname: host,
-    stop: () => { server.stop(); },
+    stop: () => {
+      server.stop();
+    },
   };
 }
 ```
@@ -4315,6 +4776,7 @@ git commit -m "feat(dalang): HTTP server with HTML dashboard"
 ### Task 27: CLI argument parsing
 
 **Files:**
+
 - Create: `packages/dalang/src/cli/args.ts`
 - Create: `packages/dalang/tests/cli/args.test.ts`
 
@@ -4402,6 +4864,7 @@ git commit -m "feat(dalang): CLI argument parser"
 ### Task 28: Process bootstrap (`src/index.ts`)
 
 **Files:**
+
 - Modify: `packages/dalang/src/index.ts` (replace placeholder)
 - Create: `packages/dalang/tests/cli/bootstrap.test.ts` (smoke)
 
@@ -4432,11 +4895,15 @@ test("loads workflow, validates, starts and stops cleanly", async () => {
   process.env.WS_ROOT = join(dir, "ws");
   const path = join(dir, "WORKFLOW.md");
   await writeFile(path, VALID, "utf8");
-  const boot = new Bootstrap({ workflowPath: path, port: 0, skipAuthProbe: true,
-    runQueryFactory: () => async function* () {
-      yield { type: "system", subtype: "init", session_id: "s" };
-      yield { type: "result", subtype: "success", usage: {} };
-    },
+  const boot = new Bootstrap({
+    workflowPath: path,
+    port: 0,
+    skipAuthProbe: true,
+    runQueryFactory: () =>
+      async function* () {
+        yield { type: "system", subtype: "init", session_id: "s" };
+        yield { type: "result", subtype: "success", usage: {} };
+      },
   });
   await boot.start();
   expect(boot.serverPort()).toBeGreaterThan(0);
@@ -4487,7 +4954,9 @@ export class Bootstrap {
     this.reloader = new WorkflowReloader(opts.workflowPath);
   }
 
-  serverPort(): number { return this.server?.port ?? 0; }
+  serverPort(): number {
+    return this.server?.port ?? 0;
+  }
 
   async start(): Promise<void> {
     await this.reloader.start();
@@ -4503,12 +4972,16 @@ export class Bootstrap {
     });
     const runQuery = this.opts.runQueryFactory ? this.opts.runQueryFactory() : sdkRunQuery;
     this.orch = new Orchestrator({
-      tracker, config: wf.config, promptTemplate: wf.promptTemplate,
-      runQuery, logger: this.log,
+      tracker,
+      config: wf.config,
+      promptTemplate: wf.promptTemplate,
+      runQuery,
+      logger: this.log,
     });
     this.reloader.onReload((next) => {
-      try { validateForDispatch(next.config); }
-      catch (err) {
+      try {
+        validateForDispatch(next.config);
+      } catch (err) {
         this.log.warn({ err: (err as Error).message }, "workflow reload failed validation");
         return;
       }
@@ -4518,7 +4991,9 @@ export class Bootstrap {
     const port = this.opts.port ?? wf.config.server.port;
     this.server = startServer({
       state: this.orch.state,
-      refresh: async () => { await this.orch?.tick(); },
+      refresh: async () => {
+        await this.orch?.tick();
+      },
       port,
     });
     this.scheduleTick(0);
@@ -4563,8 +5038,12 @@ const shutdown = async () => {
   process.exit(0);
 };
 
-process.on("SIGINT", () => { void shutdown(); });
-process.on("SIGTERM", () => { void shutdown(); });
+process.on("SIGINT", () => {
+  void shutdown();
+});
+process.on("SIGTERM", () => {
+  void shutdown();
+});
 
 try {
   await boot.start();
@@ -4613,7 +5092,7 @@ Expected: no diff.
 Run: `bun test`
 Expected: every test in `packages/dalang/tests/**` passes.
 
-- [ ] **Step 5: Manual integration smoke (optional, requires `claude` auth and a running wayang)**
+- [ ] **Step 5: Manual integration smoke (optional, requires `claude` auth and a running papan)**
 
 Create `WORKFLOW.md` at the repo root:
 
@@ -4633,12 +5112,14 @@ You are picking up issue {{ issue.identifier }}: {{ issue.title }}.
 Read the description, plan briefly, then proceed.
 ```
 
-Run (in a separate terminal with wayang running):
+Run (in a separate terminal with papan running):
+
 ```bash
 bun run packages/dalang/src/index.ts ./WORKFLOW.md --port 7474
 ```
 
 Verify in browser at `http://127.0.0.1:7474/`:
+
 - Dashboard loads.
 - `/api/v1/state` returns running/retrying counts.
 
@@ -4666,42 +5147,34 @@ Run after the plan is committed:
 
 ## Summary of tasks
 
-| #  | Task                                                  |
-| -- | ----------------------------------------------------- |
-| 1  | Sanity-check monorepo setup and add the `dalang` package |
-| 2  | Define core domain types                              |
-| 3  | Workspace key sanitization                            |
-| 4  | Env and path resolver                                 |
-| 5  | Workflow front matter schema                          |
-| 6  | Workflow loader                                       |
-| 7  | Hot reload + mtime defensive reload                   |
-| 8  | Preflight validation + claude auth probe              |
-| 9  | Prompt builder (Liquid + metadata header)             |
-| 10 | Tracker adapter interface                             |
-| 11 | Defensive issue normalization                         |
-| 12 | REST adapter (wayang client)                          |
-| 13 | Hook executor                                         |
-| 14 | Workspace manager (no-repo path)                      |
-| 15 | Git worktree extension                                |
-| 16 | Orchestrator state operations                         |
-| 17 | Eligibility filtering and dispatch sorting            |
-| 18 | Retry scheduling                                      |
-| 19 | Reconciliation primitives                             |
-| 20 | SDK message → runtime event mapper                    |
-| 21 | Agent runner (multi-turn driver)                      |
-| 22 | Real SDK adapter for `runQuery`                       |
-| 23 | Structured logger                                     |
-| 24 | Orchestrator main loop composition                    |
-| 25 | HTTP routes + snapshot builder                        |
-| 26 | HTTP server + dashboard                               |
-| 27 | CLI argument parsing                                  |
-| 28 | Process bootstrap + entrypoint                        |
-| 29 | Final harness verification + integration smoke        |
-
-
-
-
-
-
-
-
+| #   | Task                                                     |
+| --- | -------------------------------------------------------- |
+| 1   | Sanity-check monorepo setup and add the `dalang` package |
+| 2   | Define core domain types                                 |
+| 3   | Workspace key sanitization                               |
+| 4   | Env and path resolver                                    |
+| 5   | Workflow front matter schema                             |
+| 6   | Workflow loader                                          |
+| 7   | Hot reload + mtime defensive reload                      |
+| 8   | Preflight validation + claude auth probe                 |
+| 9   | Prompt builder (Liquid + metadata header)                |
+| 10  | Tracker adapter interface                                |
+| 11  | Defensive issue normalization                            |
+| 12  | REST adapter (papan client)                              |
+| 13  | Hook executor                                            |
+| 14  | Workspace manager (no-repo path)                         |
+| 15  | Git worktree extension                                   |
+| 16  | Orchestrator state operations                            |
+| 17  | Eligibility filtering and dispatch sorting               |
+| 18  | Retry scheduling                                         |
+| 19  | Reconciliation primitives                                |
+| 20  | SDK message → runtime event mapper                       |
+| 21  | Agent runner (multi-turn driver)                         |
+| 22  | Real SDK adapter for `runQuery`                          |
+| 23  | Structured logger                                        |
+| 24  | Orchestrator main loop composition                       |
+| 25  | HTTP routes + snapshot builder                           |
+| 26  | HTTP server + dashboard                                  |
+| 27  | CLI argument parsing                                     |
+| 28  | Process bootstrap + entrypoint                           |
+| 29  | Final harness verification + integration smoke           |

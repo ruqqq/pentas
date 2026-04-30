@@ -1,16 +1,16 @@
 #!/usr/bin/env bun
 import { dirname, resolve } from "node:path";
-import { Bootstrap, createLogger, loadWorkflow, resolveTrackerApiKey } from "@tok-juara/dalang";
-import { runWayang } from "@tok-juara/wayang";
+import { Bootstrap, createLogger, loadWorkflow, resolveTrackerApiKey } from "@pentas/dalang";
+import { runPapan } from "@pentas/papan";
 
 interface ParsedArgs {
   workflowPath: string;
   dalangPort: number | null;
-  wayangPort: number | undefined;
+  papanPort: number | undefined;
   dbPath: string | undefined;
 }
 
-const HELP_TEXT = `tok-juara supervisor — runs dalang orchestrator and wayang tracker together.
+const HELP_TEXT = `pentas supervisor — runs dalang orchestrator and papan tracker together.
 
 Usage:
   supervisor [WORKFLOW] [options]
@@ -22,24 +22,24 @@ Arguments:
 Options:
   --workflow <path>        Path to WORKFLOW.md (overrides positional).
   --dalang-port <port>     Port for dalang HTTP surface (0 = auto-pick, default: 0).
-  --wayang-port <port>     Port for wayang HTTP surface (0 = auto-pick, default: 0).
-  --db <path>              Path to wayang sqlite db (default: <workflow dir>/wayang.db,
-                           or $WAYANG_DB_PATH if set).
+  --papan-port <port>     Port for papan HTTP surface (0 = auto-pick, default: 0).
+  --db <path>              Path to papan sqlite db (default: <workflow dir>/papan.db,
+                           or $PAPAN_DB_PATH if set).
   -h, --help               Show this help and exit.
 
 Notes:
-  Wayang's API auth token is read from WORKFLOW.md (tracker.api_key); a value
+  Papan's API auth token is read from WORKFLOW.md (tracker.api_key); a value
   like "$VAR" is resolved from the environment. If null/absent, auth is off
-  on both wayang and dalang.
+  on both papan and dalang.
 
 Environment:
-  WAYANG_DB_PATH           Default db path when --db is not provided.
+  PAPAN_DB_PATH           Default db path when --db is not provided.
 `;
 
 function parseArgs(argv: string[]): ParsedArgs {
   let workflowPath: string | null = null;
   let dalangPort: number | null = null;
-  let wayangPort: number | undefined;
+  let papanPort: number | undefined;
   let dbPath: string | undefined;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
@@ -55,10 +55,10 @@ function parseArgs(argv: string[]): ParsedArgs {
       const n = Number.parseInt(need("--dalang-port"), 10);
       if (!Number.isInteger(n) || n < 0) throw new Error("invalid --dalang-port");
       dalangPort = n;
-    } else if (a === "--wayang-port") {
-      const n = Number.parseInt(need("--wayang-port"), 10);
-      if (!Number.isInteger(n) || n < 0) throw new Error("invalid --wayang-port");
-      wayangPort = n;
+    } else if (a === "--papan-port") {
+      const n = Number.parseInt(need("--papan-port"), 10);
+      if (!Number.isInteger(n) || n < 0) throw new Error("invalid --papan-port");
+      papanPort = n;
     } else if (a === "--db") {
       dbPath = need("--db");
     } else if (a === "--workflow") {
@@ -74,7 +74,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     workflowPath: workflowPath ?? "./WORKFLOW.md",
     // Default: 0 = auto-pick a free port. CLI overrides honored as-is.
     dalangPort: dalangPort ?? 0,
-    wayangPort: wayangPort ?? 0,
+    papanPort: papanPort ?? 0,
     dbPath,
   };
 }
@@ -82,7 +82,7 @@ function parseArgs(argv: string[]): ParsedArgs {
 const args = parseArgs(Bun.argv.slice(2));
 const log = createLogger({ name: "supervisor", level: "info" });
 
-let wayangHandle: ReturnType<typeof runWayang> | null = null;
+let papanHandle: ReturnType<typeof runPapan> | null = null;
 let dalang: Bootstrap | null = null;
 let shuttingDown = false;
 
@@ -90,36 +90,51 @@ const shutdown = async (code = 0) => {
   if (shuttingDown) return;
   shuttingDown = true;
   log.info("shutting down");
-  try { await dalang?.stop(); } catch (err) { log.warn({ err: (err as Error).message }, "dalang stop failed"); }
-  try { wayangHandle?.server.stop(); } catch (err) { log.warn({ err: (err as Error).message }, "wayang stop failed"); }
-  try { wayangHandle?.db.close(); } catch (err) { log.warn({ err: (err as Error).message }, "wayang db close failed"); }
+  try {
+    await dalang?.stop();
+  } catch (err) {
+    log.warn({ err: (err as Error).message }, "dalang stop failed");
+  }
+  try {
+    papanHandle?.server.stop();
+  } catch (err) {
+    log.warn({ err: (err as Error).message }, "papan stop failed");
+  }
+  try {
+    papanHandle?.db.close();
+  } catch (err) {
+    log.warn({ err: (err as Error).message }, "papan db close failed");
+  }
   process.exit(code);
 };
 
-process.on("SIGINT", () => { void shutdown(0); });
-process.on("SIGTERM", () => { void shutdown(0); });
+process.on("SIGINT", () => {
+  void shutdown(0);
+});
+process.on("SIGTERM", () => {
+  void shutdown(0);
+});
 
 try {
   // Default the db to live next to WORKFLOW.md so a project's state travels
-  // with its config. Explicit --db wins; WAYANG_DB_PATH env is honored next.
+  // with its config. Explicit --db wins; PAPAN_DB_PATH env is honored next.
   const resolvedWorkflow = resolve(args.workflowPath);
-  const dbPath = args.dbPath
-    ?? process.env["WAYANG_DB_PATH"]
-    ?? resolve(dirname(resolvedWorkflow), "wayang.db");
+  const dbPath =
+    args.dbPath ?? process.env["PAPAN_DB_PATH"] ?? resolve(dirname(resolvedWorkflow), "papan.db");
 
   // Read tracker.api_key from WORKFLOW.md and use it as the shared token
-  // between dalang and wayang. If null/absent, auth is disabled on both.
+  // between dalang and papan. If null/absent, auth is disabled on both.
   const wf = await loadWorkflow(resolvedWorkflow);
   const apiToken = resolveTrackerApiKey(wf.config.tracker.api_key ?? null);
 
-  // Start wayang first so we know its bound port before configuring dalang.
-  wayangHandle = runWayang({
-    port: args.wayangPort,
+  // Start papan first so we know its bound port before configuring dalang.
+  papanHandle = runPapan({
+    port: args.papanPort,
     dbPath,
     apiToken: apiToken ?? undefined,
   });
-  const wayangPort = wayangHandle.server.port;
-  const trackerEndpoint = `http://127.0.0.1:${wayangPort}`;
+  const papanPort = papanHandle.server.port;
+  const trackerEndpoint = `http://127.0.0.1:${papanPort}`;
 
   dalang = new Bootstrap({
     workflowPath: args.workflowPath,
@@ -131,7 +146,7 @@ try {
   log.info(
     {
       dalang_port: dalang.serverPort(),
-      wayang_port: wayangPort,
+      papan_port: papanPort,
       tracker_endpoint: trackerEndpoint,
       workflow: resolvedWorkflow,
       db: dbPath,

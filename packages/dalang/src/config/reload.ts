@@ -19,13 +19,19 @@ export class WorkflowReloader {
     return this.workflow;
   }
 
-  onReload(fn: ReloadListener): void { this.listeners.push(fn); }
-  onError(fn: ReloadErrorListener): void { this.errorListeners.push(fn); }
+  onReload(fn: ReloadListener): void {
+    this.listeners.push(fn);
+  }
+  onError(fn: ReloadErrorListener): void {
+    this.errorListeners.push(fn);
+  }
 
   async start(): Promise<void> {
     this.workflow = await loadWorkflow(this.path);
     this.watcher = chokidar.watch(this.path, { ignoreInitial: true });
-    this.watcher.on("change", () => { void this.tryReload(); });
+    this.watcher.on("change", () => {
+      void this.tryReload();
+    });
   }
 
   async checkMtimeReload(): Promise<void> {
@@ -37,7 +43,10 @@ export class WorkflowReloader {
         for (const fn of this.listeners) fn(next);
       }
     } catch (err) {
-      const we = err instanceof WorkflowError ? err : new WorkflowError("workflow_validation_error", (err as Error).message);
+      const we =
+        err instanceof WorkflowError
+          ? err
+          : new WorkflowError("workflow_validation_error", (err as Error).message);
       for (const fn of this.errorListeners) fn(we);
     }
   }
@@ -54,7 +63,10 @@ export class WorkflowReloader {
       this.workflow = next;
       for (const fn of this.listeners) fn(next);
     } catch (err) {
-      const we = err instanceof WorkflowError ? err : new WorkflowError("workflow_validation_error", (err as Error).message);
+      const we =
+        err instanceof WorkflowError
+          ? err
+          : new WorkflowError("workflow_validation_error", (err as Error).message);
       for (const fn of this.errorListeners) fn(we);
     }
   }

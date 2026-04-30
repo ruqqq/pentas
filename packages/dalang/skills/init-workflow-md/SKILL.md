@@ -14,11 +14,12 @@ Spec source of truth: `docs/superpowers/specs/2026-04-29-dalang-orchestrator-des
 Ask only for what cannot be inferred. Defaults in parentheses are safe to assume silently.
 
 Required:
+
 1. **Target path** — where should the file land? (Default: `WORKFLOW.md` in the project the agent will operate on, NOT in the dalang repo itself.)
-2. **Tracker endpoint + port** — wayang URL (default `http://localhost:3001`).
+2. **Tracker endpoint + port** — papan URL (default `http://localhost:3001`).
 3. **Repo URL** — the source repo dalang clones into worktrees (e.g. `git@github.com:me/myproject.git`). If absent, omit the whole `repo:` block (Symphony pure-hook mode).
 4. **Default branch** — usually `main`.
-5. **Branch prefix** — e.g. `juara/` or `agent/`.
+5. **Branch prefix** — e.g. `pentas/` or `agent/`.
 6. **Workspace root** — absolute or `~`-prefixed path where worktrees go (default `~/.dalang/workspaces`).
 7. **Active / terminal states** — match the tracker's state names. Defaults: active `[Todo, "In Progress"]`, terminal `[Done, Cancelled, Duplicate]`.
 
@@ -26,28 +27,28 @@ Confirm before writing if any of these are non-obvious.
 
 ## Step 2 — pick safe defaults
 
-| Field | Default | Notes |
-| --- | --- | --- |
-| `tracker.kind` | `tok-juara` | only supported value in v1 |
-| `tracker.api_key` | `$TOK_JUARA_API_KEY` | use `$VAR` indirection; omit on localhost without auth |
-| `tracker.board` | `null` | reserved for future multi-board |
-| `polling.interval_ms` | `30000` | |
-| `agent.max_concurrent_agents` | `4` | lowered from Symphony default 10 (Claude Max session limits) |
-| `agent.max_turns` | `20` | |
-| `agent.max_retry_backoff_ms` | `300000` | |
-| `claude.executable_path` | `claude` | resolves on `PATH` |
-| `claude.model` | `claude-opus-4-7` | |
-| `claude.permission_mode` | `auto` | canonical. NOT `bypassPermissions`. `acceptEdits` is rejected by validation |
-| `claude.turn_timeout_ms` | `3600000` | 1 h |
-| `claude.read_timeout_ms` | `5000` | |
-| `claude.stall_timeout_ms` | `300000` | 5 min; set `<= 0` to disable stall detection |
-| `pr_checks.enabled` | `false` | turns the `Waiting PR Checks` reconciler on; opt-in |
-| `pr_checks.poll_interval_ms` | `60000` | per-issue throttle for `gh pr checks` polls |
-| `pr_checks.failure_budget` | `3` | red-CI bounces tolerated before escalation to `Ready for Human Review` |
-| `pr_checks.rerun_flakes` | `true` | re-run failed checks once before counting as a real failure |
-| `pr_checks.gh_executable` | `gh` | resolves on `PATH`; override if the CLI isn't in PATH |
-| `server.port` | `0` | ephemeral; CLI `--port` wins |
-| `hooks.timeout_ms` | `60000` | |
+| Field                         | Default           | Notes                                                                       |
+| ----------------------------- | ----------------- | --------------------------------------------------------------------------- |
+| `tracker.kind`                | `papan`           | only supported value in v1                                                  |
+| `tracker.api_key`             | `$PENTAS_API_KEY` | use `$VAR` indirection; omit on localhost without auth                      |
+| `tracker.board`               | `null`            | reserved for future multi-board                                             |
+| `polling.interval_ms`         | `30000`           |                                                                             |
+| `agent.max_concurrent_agents` | `4`               | lowered from Symphony default 10 (Claude Max session limits)                |
+| `agent.max_turns`             | `20`              |                                                                             |
+| `agent.max_retry_backoff_ms`  | `300000`          |                                                                             |
+| `claude.executable_path`      | `claude`          | resolves on `PATH`                                                          |
+| `claude.model`                | `claude-opus-4-7` |                                                                             |
+| `claude.permission_mode`      | `auto`            | canonical. NOT `bypassPermissions`. `acceptEdits` is rejected by validation |
+| `claude.turn_timeout_ms`      | `3600000`         | 1 h                                                                         |
+| `claude.read_timeout_ms`      | `5000`            |                                                                             |
+| `claude.stall_timeout_ms`     | `300000`          | 5 min; set `<= 0` to disable stall detection                                |
+| `pr_checks.enabled`           | `false`           | turns the `Waiting PR Checks` reconciler on; opt-in                         |
+| `pr_checks.poll_interval_ms`  | `60000`           | per-issue throttle for `gh pr checks` polls                                 |
+| `pr_checks.failure_budget`    | `3`               | red-CI bounces tolerated before escalation to `Ready for Human Review`      |
+| `pr_checks.rerun_flakes`      | `true`            | re-run failed checks once before counting as a real failure                 |
+| `pr_checks.gh_executable`     | `gh`              | resolves on `PATH`; override if the CLI isn't in PATH                       |
+| `server.port`                 | `0`               | ephemeral; CLI `--port` wins                                                |
+| `hooks.timeout_ms`            | `60000`           |                                                                             |
 
 ## Step 3 — write the file
 
@@ -81,9 +82,9 @@ Root `WORKFLOW.md`:
 ```markdown
 ---
 tracker:
-  kind: tok-juara
+  kind: papan
   endpoint: http://localhost:3001
-  api_key: $TOK_JUARA_API_KEY
+  api_key: $PENTAS_API_KEY
   board: null
   active_states: [Todo, "In Progress"]
   terminal_states: [Done, Cancelled, Duplicate]
@@ -91,7 +92,7 @@ tracker:
 repo:
   url: git@github.com:OWNER/REPO.git
   default_branch: main
-  branch_prefix: juara/
+  branch_prefix: pentas/
 
 polling:
   interval_ms: 30000
@@ -181,10 +182,11 @@ Unknown state `{{ issue.state }}`. Do not modify the workspace. Stop.
 2. Implement with tests.
 3. Run relevant verification.
 4. Commit and push.
-5. Update the issue state using the wayang API.
+5. Update the issue state using the papan API.
 ```
 
 For very small workflows, an inline body is still valid; just put the prompt directly after the front matter instead of using imports.
+
 ```
 
 ## Liquid variables available
@@ -214,7 +216,7 @@ Hooks run as `bash -lc` with `cwd = workspace`. Available env: `WORKSPACE_PATH`,
 | Putting front matter in imported files | Only the root workflow file may have YAML front matter. Imported files are prompt fragments. |
 | Using absolute, URL, or dynamic import paths | Imports must be static relative `.md` files under the root workflow directory. |
 | Forgetting `branch_prefix` | Branches default to `<prefix><sanitized_identifier>`; without a prefix, branch names collide with normal dev branches. |
-| Inlining the api key | Prefer `$TOK_JUARA_API_KEY` so the file is committable. |
+| Inlining the api key | Prefer `$PENTAS_API_KEY` so the file is committable. |
 | Setting `agent.max_concurrent_agents: 10` | Claude Max session limits make 4 the practical ceiling. |
 | Omitting `repo:` while expecting worktrees | Without `repo.*`, dalang only ensures the directory exists; bootstrap must happen in `after_create`. |
 | Setting `pr_checks.enabled: true` without a `Waiting PR Checks` branch in the prompt body | The agent will reach a state with no instructions. Add an explicit case (or a guard that exits cleanly), and update the prompt's pipeline diagram so the agent transitions `Ready for Review → Waiting PR Checks` instead of `Ready for Review → Done`. |
@@ -225,3 +227,4 @@ Hooks run as `bash -lc` with `cwd = workspace`. Available env: `WORKSPACE_PATH`,
 1. Confirm the path with the user and read it back briefly.
 2. Suggest `dalang --workflow <path> --port <p>` (or whatever the project's invocation is) as the next step.
 3. Note that root and imported markdown files are hot-reloaded via chokidar + mtime defensive reload — edits take effect on the next poll tick without restart.
+```

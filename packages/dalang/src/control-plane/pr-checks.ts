@@ -59,9 +59,14 @@ function shortSha(sha: string): string {
 }
 
 export function formatFailureComment(args: {
-  sha: string; attempt: number; budget: number; failures: Check[];
+  sha: string;
+  attempt: number;
+  budget: number;
+  failures: Check[];
 }): string {
-  const lines = [`[pr_checks_failed] sha=${shortSha(args.sha)} attempt=${args.attempt}/${args.budget}`];
+  const lines = [
+    `[pr_checks_failed] sha=${shortSha(args.sha)} attempt=${args.attempt}/${args.budget}`,
+  ];
   for (const f of args.failures) lines.push(`- ${f.name}: ${f.bucket} — ${f.link}`);
   lines.push("", "Bouncing back to In Dev. Read this comment and fix the failures.");
   return lines.join("\n");
@@ -72,7 +77,10 @@ export function formatPassedComment(sha: string): string {
 }
 
 export function formatEscalatedComment(args: {
-  sha: string; attempt: number; budget: number; failures: Check[];
+  sha: string;
+  attempt: number;
+  budget: number;
+  failures: Check[];
 }): string {
   const lines = [
     `[pr_checks_escalated] sha=${shortSha(args.sha)} attempt=${args.attempt}/${args.budget}`,

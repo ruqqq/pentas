@@ -6,8 +6,10 @@ import { createInitialState } from "../../src/orchestrator/state";
 test("dashboard at / returns HTML 200 and includes counts", async () => {
   const state = createInitialState({ poll_interval_ms: 30000, max_concurrent_agents: 4 });
   const srv = startServer({
-    state, refresh: async () => {},
-    host: "127.0.0.1", port: 0,
+    state,
+    refresh: async () => {},
+    host: "127.0.0.1",
+    port: 0,
   });
   const res = await fetch(`http://127.0.0.1:${srv.port}/`);
   expect(res.status).toBe(200);

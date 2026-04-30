@@ -4,15 +4,16 @@ Status: Draft v1
 Date: 2026-04-30
 Author: ruqqq
 Companion specs:
+
 - `2026-04-29-dalang-orchestrator-design.md`
-- `2026-04-29-wayang-tracker-design.md`
+- `2026-04-29-papan-tracker-design.md`
 - `2026-04-30-pr-checks-wait-design.md`
 
 ## 1. Purpose
 
-Decouple `dalang` from `wayang` entirely by replacing the tracker-specific boundary with a control-plane boundary.
+Decouple `dalang` from `papan` entirely by replacing the tracker-specific boundary with a control-plane boundary.
 
-The current `TrackerAdapter` name is too narrow. Dalang does not only track work; it coordinates a workflow against an external control surface: selecting eligible work, enforcing ownership, reading recent activity, writing comments, changing states, and reconciling PR checks. `wayang` remains one control-plane implementation. GitHub Projects v2 becomes the first non-Wayang implementation.
+The current `TrackerAdapter` name is too narrow. Dalang does not only track work; it coordinates a workflow against an external control surface: selecting eligible work, enforcing ownership, reading recent activity, writing comments, changing states, and reconciling PR checks. `papan` remains one control-plane implementation. GitHub Projects v2 becomes the first non-Papan implementation.
 
 GitHub Projects v2 is the target for the GitHub kanban implementation. GitHub's current Projects automation API is GraphQL-based and supports reading project fields, finding single-select options, querying project items, and updating a project item's field value. The adapter uses those Project v2 primitives instead of Projects classic.
 
@@ -22,7 +23,7 @@ GitHub Projects v2 is the target for the GitHub kanban implementation. GitHub's 
 
 - Rename the Dalang boundary from tracker terminology to control-plane terminology.
 - Introduce a `ControlPlaneAdapter` contract with core work-item methods and optional capabilities.
-- Preserve `wayang` behavior through a Wayang control-plane adapter.
+- Preserve `papan` behavior through a Papan control-plane adapter.
 - Add a `github-projects` control-plane adapter for GitHub Projects v2 boards.
 - Make dispatch ownership explicit so Dalang only picks up work assigned to it, labeled for it, or otherwise marked for it.
 - Move PR-check reconciliation behind the control-plane capability surface.
@@ -32,7 +33,7 @@ GitHub Projects v2 is the target for the GitHub kanban implementation. GitHub's 
 
 - Supporting GitHub Projects classic.
 - Dispatching GitHub draft issues or PR project items.
-- Bidirectional synchronization between Wayang and GitHub.
+- Bidirectional synchronization between Papan and GitHub.
 - Webhook-driven dispatch. Polling remains the v1 runtime model.
 - General Jira, Linear, Trello, or other kanban implementations. The design should allow them later.
 
@@ -96,7 +97,7 @@ interface WorkItem {
 }
 ```
 
-`id` is the backend state-mutation target for every adapter. For Wayang this remains the Wayang issue ID. For GitHub Projects this is the Project v2 item ID because state updates target the project item, not the underlying issue. `external_ref` carries the underlying source issue reference when one exists.
+`id` is the backend state-mutation target for every adapter. For Papan this remains the Papan issue ID. For GitHub Projects this is the Project v2 item ID because state updates target the project item, not the underlying issue. `external_ref` carries the underlying source issue reference when one exists.
 
 ## 5. Configuration
 
@@ -104,7 +105,7 @@ The workflow front matter replaces `tracker:` with `control_plane:`.
 
 ```yaml
 control_plane:
-  kind: wayang
+  kind: papan
   active_states: [Todo, "In Dev"]
   terminal_states: [Done, Cancelled]
   ownership:
@@ -124,7 +125,7 @@ type OwnershipRule =
 
 Validation rules:
 
-- `wayang` may default to `ownership.mode: none` because it is a local agent inbox.
+- `papan` may default to `ownership.mode: none` because it is a local agent inbox.
 - Shared external control planes such as `github-projects` require explicit ownership.
 - `ownership.mode: none` on a shared external control plane is valid only when `allow_unowned_dispatch: true` is present.
 - Empty ownership values are invalid for `label`, `assignee`, and `project_field`.
@@ -192,19 +193,19 @@ Only GitHub issue project items are dispatchable in v1.
 
 Recommended mapping:
 
-| WorkItem field | GitHub source |
-| --- | --- |
-| `id` | Project item ID, because state updates target the project item |
-| `identifier` | `OWNER/REPO#NUMBER` |
-| `title` | Issue title |
-| `description` | Issue body |
-| `state` | Project `Status` single-select value |
-| `url` | Issue URL |
-| `external_ref` | Issue node ID or issue number |
-| `internal_ref` | Additional adapter-owned reference if needed |
-| `labels` | Issue labels, lowercased |
-| `created_at` | Issue creation timestamp |
-| `updated_at` | Max of issue updated time and project item updated time when available |
+| WorkItem field | GitHub source                                                          |
+| -------------- | ---------------------------------------------------------------------- |
+| `id`           | Project item ID, because state updates target the project item         |
+| `identifier`   | `OWNER/REPO#NUMBER`                                                    |
+| `title`        | Issue title                                                            |
+| `description`  | Issue body                                                             |
+| `state`        | Project `Status` single-select value                                   |
+| `url`          | Issue URL                                                              |
+| `external_ref` | Issue node ID or issue number                                          |
+| `internal_ref` | Additional adapter-owned reference if needed                           |
+| `labels`       | Issue labels, lowercased                                               |
+| `created_at`   | Issue creation timestamp                                               |
+| `updated_at`   | Max of issue updated time and project item updated time when available |
 
 `branch_name` is resolved in this order:
 
@@ -245,11 +246,11 @@ Dalang behavior:
 3. Fetch work in the configured wait state.
 4. Call `controlPlane.reconcilePrChecks(...)`.
 
-Wayang behavior:
+Papan behavior:
 
-- Preserve today's `gh`-based reconciliation semantics behind the Wayang adapter.
+- Preserve today's `gh`-based reconciliation semantics behind the Papan adapter.
 - Continue using comments for dedupe markers.
-- Update Wayang state through the control-plane adapter.
+- Update Papan state through the control-plane adapter.
 
 GitHub Projects behavior:
 
@@ -279,24 +280,24 @@ Dalang does not inspect GitHub project fields, labels, assignees, or PR checks d
 
 ## 9. Error Handling
 
-| Failure | Behavior |
-| --- | --- |
-| Unsupported `control_plane.kind` | Config validation error |
-| Missing ownership on shared external board | Config validation error |
-| Missing GitHub token env var | Config validation error |
-| GitHub token lacks project or repository access | Startup validation error |
-| Missing status field | Startup validation error |
-| Missing configured status option | Startup validation error |
-| Adapter lacks PR-check capability while enabled | Config validation error |
-| GitHub API rate limit or transient failure | Log warning, skip affected operation, retry next tick |
-| Malformed project item | Skip item and log; do not fail whole tick |
-| Comment or state write fails during PR-check reconciliation | Leave current state unchanged and retry next tick |
+| Failure                                                     | Behavior                                              |
+| ----------------------------------------------------------- | ----------------------------------------------------- |
+| Unsupported `control_plane.kind`                            | Config validation error                               |
+| Missing ownership on shared external board                  | Config validation error                               |
+| Missing GitHub token env var                                | Config validation error                               |
+| GitHub token lacks project or repository access             | Startup validation error                              |
+| Missing status field                                        | Startup validation error                              |
+| Missing configured status option                            | Startup validation error                              |
+| Adapter lacks PR-check capability while enabled             | Config validation error                               |
+| GitHub API rate limit or transient failure                  | Log warning, skip affected operation, retry next tick |
+| Malformed project item                                      | Skip item and log; do not fail whole tick             |
+| Comment or state write fails during PR-check reconciliation | Leave current state unchanged and retry next tick     |
 
 ## 10. Migration Plan
 
 1. Rename types and files from `tracker` to `control-plane` with no behavior change.
 2. Introduce the `control_plane` config key and support `tracker` as a temporary compatibility alias for one migration release.
-3. Move `RestTrackerAdapter` to a Wayang control-plane adapter.
+3. Move `RestTrackerAdapter` to a Papan control-plane adapter.
 4. Move PR-check runner integration behind `ControlPlaneAdapter.reconcilePrChecks`.
 5. Add ownership config and validation.
 6. Add the GitHub Projects adapter and tests.
@@ -307,14 +308,14 @@ Dalang does not inspect GitHub project fields, labels, assignees, or PR checks d
 
 Unit tests:
 
-- Config schema accepts `control_plane.kind = wayang`.
+- Config schema accepts `control_plane.kind = papan`.
 - Config schema accepts `control_plane.kind = github-projects`.
 - External control planes reject missing ownership.
 - `allow_unowned_dispatch: true` permits explicit unowned dispatch.
 - PR checks enabled with an adapter lacking `prChecks` fails validation.
 - Work-item eligibility still honors active, terminal, claimed, running, retry, and concurrency rules.
 
-Wayang adapter tests:
+Papan adapter tests:
 
 - Existing REST adapter tests pass after rename.
 - Comments, history, state update, pagination, and malformed payload behavior remain unchanged.

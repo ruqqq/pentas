@@ -35,6 +35,8 @@ export function startServer(opts: ServerOptions): ServerHandle {
   return {
     port: server.port!,
     hostname: host,
-    stop: () => { server.stop(); },
+    stop: () => {
+      server.stop();
+    },
   };
 }

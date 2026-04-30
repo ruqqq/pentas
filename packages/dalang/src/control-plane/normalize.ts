@@ -1,6 +1,8 @@
 import type { BlockerRef, WorkItem } from "../types";
 
-function isString(v: unknown): v is string { return typeof v === "string"; }
+function isString(v: unknown): v is string {
+  return typeof v === "string";
+}
 
 function coerceLabels(input: unknown): string[] {
   if (!Array.isArray(input)) return [];

@@ -10,9 +10,21 @@ const item = {
   updatedAt: "2026-04-30T02:00:00Z",
   fieldValues: {
     nodes: [
-      { __typename: "ProjectV2ItemFieldSingleSelectValue", name: "In Dev", field: { name: "Status" } },
-      { __typename: "ProjectV2ItemFieldTextValue", text: "feature/custom-branch", field: { name: "Branch" } },
-      { __typename: "ProjectV2ItemFieldSingleSelectValue", name: "Dalang", field: { name: "Agent" } },
+      {
+        __typename: "ProjectV2ItemFieldSingleSelectValue",
+        name: "In Dev",
+        field: { name: "Status" },
+      },
+      {
+        __typename: "ProjectV2ItemFieldTextValue",
+        text: "feature/custom-branch",
+        field: { name: "Branch" },
+      },
+      {
+        __typename: "ProjectV2ItemFieldSingleSelectValue",
+        name: "Dalang",
+        field: { name: "Agent" },
+      },
     ],
   },
   content: {
@@ -50,40 +62,57 @@ test("githubProjectItemToWorkItem maps issue project item", () => {
 });
 
 test("githubProjectItemToWorkItem ignores draft issues and pull requests", () => {
-  expect(githubProjectItemToWorkItem({ ...item, content: { __typename: "DraftIssue" } }, {
-    repository: "acme/app",
-    statusField: "Status",
-    branchField: null,
-  })).toBeNull();
-  expect(githubProjectItemToWorkItem({ ...item, content: { __typename: "PullRequest" } }, {
-    repository: "acme/app",
-    statusField: "Status",
-    branchField: null,
-  })).toBeNull();
+  expect(
+    githubProjectItemToWorkItem(
+      { ...item, content: { __typename: "DraftIssue" } },
+      {
+        repository: "acme/app",
+        statusField: "Status",
+        branchField: null,
+      },
+    ),
+  ).toBeNull();
+  expect(
+    githubProjectItemToWorkItem(
+      { ...item, content: { __typename: "PullRequest" } },
+      {
+        repository: "acme/app",
+        statusField: "Status",
+        branchField: null,
+      },
+    ),
+  ).toBeNull();
 });
 
 test("githubProjectItemToWorkItem skips items with truncated field values", () => {
-  expect(githubProjectItemToWorkItem({
-    ...item,
-    fieldValues: {
-      ...item.fieldValues,
-      pageInfo: { hasNextPage: true, endCursor: "next" },
-    },
-  }, {
-    repository: "acme/app",
-    statusField: "Status",
-    branchField: "Branch",
-  })).toBeNull();
+  expect(
+    githubProjectItemToWorkItem(
+      {
+        ...item,
+        fieldValues: {
+          ...item.fieldValues,
+          pageInfo: { hasNextPage: true, endCursor: "next" },
+        },
+      },
+      {
+        repository: "acme/app",
+        statusField: "Status",
+        branchField: "Branch",
+      },
+    ),
+  ).toBeNull();
 });
 
 test("ownership supports label assignee and project field", () => {
   expect(githubItemMatchesOwnership(item, { mode: "label", value: "dalang" })).toBe(true);
   expect(githubItemMatchesOwnership(item, { mode: "assignee", value: "dalang-bot" })).toBe(true);
-  expect(githubItemMatchesOwnership(item, { mode: "project_field", field: "Agent", value: "Dalang" })).toBe(true);
+  expect(
+    githubItemMatchesOwnership(item, { mode: "project_field", field: "Agent", value: "Dalang" }),
+  ).toBe(true);
   expect(githubItemMatchesOwnership(item, { mode: "label", value: "other" })).toBe(false);
 });
 
 test("deriveBranchName is deterministic", () => {
   expect(deriveBranchName(12, "Fix Checkout!")).toBe("dalang/12-fix-checkout");
-  expect(deriveBranchName(12, "Fix Checkout!", "juara/", "acme/app")).toBe("juara/acme-app-12");
+  expect(deriveBranchName(12, "Fix Checkout!", "pentas/", "acme/app")).toBe("pentas/acme-app-12");
 });

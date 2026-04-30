@@ -27,8 +27,11 @@ export class ValidationError extends Error {
 }
 
 export function validateForDispatch(cfg: WorkflowFrontMatter): void {
-  if (cfg.tracker.kind !== "tok-juara") {
-    throw new ValidationError("unsupported_tracker_kind", `unsupported tracker kind: ${cfg.tracker.kind}`);
+  if (cfg.tracker.kind !== "papan") {
+    throw new ValidationError(
+      "unsupported_tracker_kind",
+      `unsupported tracker kind: ${cfg.tracker.kind}`,
+    );
   }
 
   const provenance = getAliasProvenance(cfg);
@@ -47,8 +50,8 @@ export function validateForDispatch(cfg: WorkflowFrontMatter): void {
   }
 
   const cp = cfg.control_plane;
-  if (cp.kind === "wayang" && !controlPlaneFromTracker && !trackerFromControlPlane) {
-    const conflict = wayangTrackerConflict(cp, cfg.tracker);
+  if (cp.kind === "papan" && !controlPlaneFromTracker && !trackerFromControlPlane) {
+    const conflict = papanTrackerConflict(cp, cfg.tracker);
     if (conflict) {
       throw new ValidationError(
         "conflicting_control_plane_tracker_config",
@@ -57,7 +60,7 @@ export function validateForDispatch(cfg: WorkflowFrontMatter): void {
     }
   }
 
-  if (cp.kind === "wayang") {
+  if (cp.kind === "papan") {
     if (!controlPlaneFromTracker && cp.api_key !== null && cp.api_key !== undefined) {
       const resolved = resolveEnvValue(cp.api_key);
       if (resolved === null && cp.api_key.startsWith("$")) {
@@ -90,15 +93,24 @@ export function validateForDispatch(cfg: WorkflowFrontMatter): void {
 
   if (cfg.agent_provider === "claude") {
     if (!cfg.claude || cfg.claude.executable_path.trim().length === 0) {
-      throw new ValidationError("missing_claude_executable_path", "claude.executable_path is required");
+      throw new ValidationError(
+        "missing_claude_executable_path",
+        "claude.executable_path is required",
+      );
     }
   } else if (cfg.agent_provider === "codex") {
     if (!cfg.codex || cfg.codex.executable_path.trim().length === 0) {
-      throw new ValidationError("missing_codex_executable_path", "codex.executable_path is required");
+      throw new ValidationError(
+        "missing_codex_executable_path",
+        "codex.executable_path is required",
+      );
     }
   } else if (cfg.agent_provider === "opencode") {
     if (!cfg.opencode || cfg.opencode.executable_path.trim().length === 0) {
-      throw new ValidationError("missing_opencode_executable_path", "opencode.executable_path is required");
+      throw new ValidationError(
+        "missing_opencode_executable_path",
+        "opencode.executable_path is required",
+      );
     }
   }
 }
@@ -107,7 +119,10 @@ function validateLegacyTrackerApiKey(cfg: WorkflowFrontMatter): void {
   if (cfg.tracker.api_key !== null && cfg.tracker.api_key !== undefined) {
     const resolved = resolveEnvValue(cfg.tracker.api_key);
     if (resolved === null && cfg.tracker.api_key.startsWith("$")) {
-      throw new ValidationError("missing_tracker_api_key", `tracker.api_key resolves to empty: ${cfg.tracker.api_key}`);
+      throw new ValidationError(
+        "missing_tracker_api_key",
+        `tracker.api_key resolves to empty: ${cfg.tracker.api_key}`,
+      );
     }
   }
 }
@@ -120,15 +135,16 @@ function stringArraysMatch(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((v, i) => v === b[i]);
 }
 
-function wayangTrackerConflict(
-  controlPlane: Extract<WorkflowFrontMatter["control_plane"], { kind: "wayang" }>,
+function papanTrackerConflict(
+  controlPlane: Extract<WorkflowFrontMatter["control_plane"], { kind: "papan" }>,
   tracker: WorkflowFrontMatter["tracker"],
 ): string | null {
   if (controlPlane.endpoint !== tracker.endpoint) return "endpoint";
   if (nullableValue(controlPlane.api_key) !== nullableValue(tracker.api_key)) return "api_key";
   if (nullableValue(controlPlane.board) !== nullableValue(tracker.board)) return "board";
   if (!stringArraysMatch(controlPlane.active_states, tracker.active_states)) return "active_states";
-  if (!stringArraysMatch(controlPlane.terminal_states, tracker.terminal_states)) return "terminal_states";
+  if (!stringArraysMatch(controlPlane.terminal_states, tracker.terminal_states))
+    return "terminal_states";
   return null;
 }
 
@@ -163,7 +179,10 @@ export async function probeCodexAuth(executablePath: string): Promise<string | n
  *
  * Returns null on success, or a human-readable error string on failure.
  */
-export async function probeOpencodeAuth(executablePath: string, model: string): Promise<string | null> {
+export async function probeOpencodeAuth(
+  executablePath: string,
+  model: string,
+): Promise<string | null> {
   const version = Bun.spawn([executablePath, "--version"], { stdout: "pipe", stderr: "pipe" });
   const versionExit = await version.exited;
   if (versionExit !== 0) {
@@ -179,7 +198,7 @@ export async function probeOpencodeAuth(executablePath: string, model: string): 
   const stdout = await new Response(auth.stdout).text();
   if (authExit !== 0) {
     const stderr = await new Response(auth.stderr).text();
-    return `opencode auth probe failed: ${(stderr.trim() || stdout.trim() || `exit code ${authExit}`)}`;
+    return `opencode auth probe failed: ${stderr.trim() || stdout.trim() || `exit code ${authExit}`}`;
   }
   if (!stdout.includes(providerId)) {
     return `opencode auth probe: provider "${providerId}" not authenticated (run \`opencode auth login ${providerId}\`)`;

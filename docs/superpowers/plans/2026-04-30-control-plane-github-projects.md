@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace Dalang's Wayang-specific tracker boundary with a capability-based control-plane boundary, then add a GitHub Projects v2 control-plane adapter with ownership filtering and PR-check reconciliation.
+**Goal:** Replace Dalang's Papan-specific tracker boundary with a capability-based control-plane boundary, then add a GitHub Projects v2 control-plane adapter with ownership filtering and PR-check reconciliation.
 
-**Architecture:** Keep Dalang's scheduler and agent execution generic. Introduce `ControlPlaneAdapter` as the only external work-control interface, preserve Wayang behavior through a renamed adapter, then add a GitHub Projects adapter that owns GitHub GraphQL mapping, ownership filtering, comments, status updates, and PR-check workflow.
+**Architecture:** Keep Dalang's scheduler and agent execution generic. Introduce `ControlPlaneAdapter` as the only external work-control interface, preserve Papan behavior through a renamed adapter, then add a GitHub Projects adapter that owns GitHub GraphQL mapping, ownership filtering, comments, status updates, and PR-check workflow.
 
-**Tech Stack:** Bun, TypeScript, Zod, Bun test, GitHub GraphQL over `fetch`, existing `gh` helper for Wayang PR-check compatibility.
+**Tech Stack:** Bun, TypeScript, Zod, Bun test, GitHub GraphQL over `fetch`, existing `gh` helper for Papan PR-check compatibility.
 
 ---
 
@@ -16,7 +16,7 @@ Create:
 
 - `packages/dalang/src/control-plane/adapter.ts` - control-plane interface, capabilities, ownership, and error types.
 - `packages/dalang/src/control-plane/normalize.ts` - normalized work-item coercion, moved from tracker naming.
-- `packages/dalang/src/control-plane/wayang-adapter.ts` - renamed REST adapter for Wayang.
+- `packages/dalang/src/control-plane/papan-adapter.ts` - renamed REST adapter for Papan.
 - `packages/dalang/src/control-plane/factory.ts` - config-to-adapter creation.
 - `packages/dalang/src/control-plane/github/client.ts` - small GitHub GraphQL/REST client wrapper.
 - `packages/dalang/src/control-plane/github/types.ts` - GitHub response types and adapter config helpers.
@@ -24,7 +24,7 @@ Create:
 - `packages/dalang/src/control-plane/github/normalize.ts` - GitHub project item to `WorkItem` mapping and ownership predicates.
 - `packages/dalang/src/control-plane/github/pr-checks.ts` - GitHub-native PR-check reconciliation.
 - `packages/dalang/tests/control-plane/normalize.test.ts`
-- `packages/dalang/tests/control-plane/wayang-adapter.test.ts`
+- `packages/dalang/tests/control-plane/papan-adapter.test.ts`
 - `packages/dalang/tests/control-plane/factory.test.ts`
 - `packages/dalang/tests/control-plane/github/client.test.ts`
 - `packages/dalang/tests/control-plane/github/normalize.test.ts`
@@ -39,7 +39,7 @@ Modify:
 - `packages/dalang/src/config/workflow-loader.ts` - ensure alias normalization happens after front matter parse.
 - `packages/dalang/src/cli/bootstrap.ts` - build the control-plane adapter through the factory.
 - `packages/dalang/src/orchestrator/orchestrator.ts` - use control-plane names and capability-based PR checks.
-- `packages/dalang/src/orchestrator/pr-checks-runner.ts` - keep as Wayang-compatible helper, no longer called directly by orchestrator.
+- `packages/dalang/src/orchestrator/pr-checks-runner.ts` - keep as Papan-compatible helper, no longer called directly by orchestrator.
 - `packages/dalang/src/agent/agent-runner.ts` - rename tracker prompt context to control-plane prompt context.
 - `packages/dalang/src/agent/prompt-builder.ts` - expose `control_plane` in Liquid context, keep `tracker` alias for one migration release.
 - `packages/dalang/tests/config/schema.test.ts`
@@ -67,6 +67,7 @@ Delete after replacement:
 ### Task 1: Introduce Control-Plane Types and Normalization
 
 **Files:**
+
 - Create: `packages/dalang/src/control-plane/adapter.ts`
 - Create: `packages/dalang/src/control-plane/normalize.ts`
 - Create: `packages/dalang/tests/control-plane/normalize.test.ts`
@@ -93,7 +94,7 @@ test("normalizeWorkItem accepts a complete work item", () => {
     external_ref: "I_kwDO",
     internal_ref: "org/repo#12",
     labels: ["Dalang", "Bug"],
-    blocked_by: [{ id: "i1", identifier: "JUARA-1", state: "Done" }],
+    blocked_by: [{ id: "i1", identifier: "PENTAS-1", state: "Done" }],
     created_at: "2026-04-30T01:02:03.000Z",
     updated_at: "2026-04-30T02:03:04.000Z",
   });
@@ -110,7 +111,7 @@ test("normalizeWorkItem accepts a complete work item", () => {
     external_ref: "I_kwDO",
     internal_ref: "org/repo#12",
     labels: ["dalang", "bug"],
-    blocked_by: [{ id: "i1", identifier: "JUARA-1", state: "Done" }],
+    blocked_by: [{ id: "i1", identifier: "PENTAS-1", state: "Done" }],
     created_at: "2026-04-30T01:02:03.000Z",
     updated_at: "2026-04-30T02:03:04.000Z",
   });
@@ -268,7 +269,9 @@ Create `packages/dalang/src/control-plane/normalize.ts`:
 ```ts
 import type { BlockerRef, WorkItem } from "../types";
 
-function isString(v: unknown): v is string { return typeof v === "string"; }
+function isString(v: unknown): v is string {
+  return typeof v === "string";
+}
 
 function coerceLabels(input: unknown): string[] {
   if (!Array.isArray(input)) return [];
@@ -350,6 +353,7 @@ git commit -m "feat(dalang): introduce control plane types"
 ### Task 2: Add Control-Plane Config and Ownership Validation
 
 **Files:**
+
 - Modify: `packages/dalang/src/config/schema.ts`
 - Modify: `packages/dalang/src/config/validate.ts`
 - Modify: `packages/dalang/src/config/workflow-loader.ts`
@@ -364,10 +368,10 @@ Append to `packages/dalang/tests/config/schema.test.ts`:
 ```ts
 test("applyDefaults exposes control_plane and tracker compatibility alias", () => {
   const cfg = applyDefaults({});
-  expect(cfg.control_plane.kind).toBe("wayang");
+  expect(cfg.control_plane.kind).toBe("papan");
   expect(cfg.control_plane.active_states).toContain("In Dev");
   expect(cfg.control_plane.ownership).toEqual({ mode: "none" });
-  expect(cfg.tracker.kind).toBe("tok-juara");
+  expect(cfg.tracker.kind).toBe("papan");
 });
 
 test("accepts github-projects control plane with label ownership", () => {
@@ -400,10 +404,10 @@ test("accepts github-projects control plane with label ownership", () => {
   expect(parsed.control_plane.kind).toBe("github-projects");
 });
 
-test("maps legacy tracker input to wayang control_plane", () => {
+test("maps legacy tracker input to papan control_plane", () => {
   const cfg = applyDefaults({
     tracker: {
-      kind: "tok-juara",
+      kind: "papan",
       endpoint: "http://localhost:3009",
       api_key: null,
       active_states: ["Todo"],
@@ -411,7 +415,7 @@ test("maps legacy tracker input to wayang control_plane", () => {
     },
   });
   expect(cfg.control_plane).toMatchObject({
-    kind: "wayang",
+    kind: "papan",
     endpoint: "http://localhost:3009",
     active_states: ["Todo"],
     terminal_states: ["Done"],
@@ -490,8 +494,8 @@ export const OwnershipSchema = z.discriminatedUnion("mode", [
   }),
 ]);
 
-export const WayangControlPlaneSchema = z.object({
-  kind: z.literal("wayang"),
+export const PapanControlPlaneSchema = z.object({
+  kind: z.literal("papan"),
   endpoint: z.string().url(),
   api_key: z.string().nullable().optional(),
   board: z.string().nullable().optional(),
@@ -527,7 +531,7 @@ export const GithubProjectsControlPlaneSchema = z.object({
 });
 
 export const ControlPlaneSchema = z.discriminatedUnion("kind", [
-  WayangControlPlaneSchema,
+  PapanControlPlaneSchema,
   GithubProjectsControlPlaneSchema,
 ]);
 ```
@@ -557,34 +561,20 @@ Add a normalized default:
 ```ts
 const DEFAULTS = {
   control_plane: {
-    kind: "wayang",
+    kind: "papan",
     endpoint: "http://localhost:3001",
     api_key: null,
     board: null,
-    active_states: [
-      "Todo",
-      "Plan",
-      "Review Plan",
-      "Ready for Dev",
-      "In Dev",
-      "Ready for Review",
-    ],
+    active_states: ["Todo", "Plan", "Review Plan", "Ready for Dev", "In Dev", "Ready for Review"],
     terminal_states: ["Done", "Cancelled"],
     ownership: { mode: "none" },
   },
   tracker: {
-    kind: "tok-juara",
+    kind: "papan",
     endpoint: "http://localhost:3001",
     api_key: null,
     board: null,
-    active_states: [
-      "Todo",
-      "Plan",
-      "Review Plan",
-      "Ready for Dev",
-      "In Dev",
-      "Ready for Review",
-    ],
+    active_states: ["Todo", "Plan", "Review Plan", "Ready for Dev", "In Dev", "Ready for Review"],
     terminal_states: ["Done", "Cancelled"],
   },
   // keep existing remaining defaults below
@@ -601,11 +591,11 @@ function trackerToControlPlane(raw: unknown): unknown {
   const tracker = r.tracker;
   if (tracker === null || typeof tracker !== "object") return raw;
   const t = tracker as Record<string, unknown>;
-  if (t.kind !== "tok-juara") return raw;
+  if (t.kind !== "papan") return raw;
   return {
     ...r,
     control_plane: {
-      kind: "wayang",
+      kind: "papan",
       endpoint: t.endpoint,
       api_key: t.api_key ?? null,
       board: t.board ?? null,
@@ -622,8 +612,8 @@ Call it at the top of `applyDefaults`:
 ```ts
 export function applyDefaults(raw: unknown): WorkflowFrontMatter {
   const normalizedRaw = trackerToControlPlane(raw);
-  const provider = ((normalizedRaw as { agent_provider?: string } | null | undefined)?.agent_provider
-    ?? DEFAULTS.agent_provider) as "claude" | "codex" | "opencode";
+  const provider = ((normalizedRaw as { agent_provider?: string } | null | undefined)
+    ?.agent_provider ?? DEFAULTS.agent_provider) as "claude" | "codex" | "opencode";
   // existing body uses normalizedRaw instead of raw
   const merged = deepMerge(base as typeof DEFAULTS, normalizedRaw ?? {}) as WorkflowFrontMatter;
   return merged;
@@ -654,33 +644,48 @@ export type ValidationCode =
 At the start of `validateForDispatch`, replace tracker-kind-only validation with:
 
 ```ts
-  const cp = cfg.control_plane;
-  if (cp.kind === "wayang") {
-    if (cp.api_key !== null && cp.api_key !== undefined) {
-      const resolved = resolveEnvValue(cp.api_key);
-      if (resolved === null && cp.api_key.startsWith("$")) {
-        throw new ValidationError("missing_control_plane_api_key", `control_plane.api_key resolves to empty: ${cp.api_key}`);
-      }
+const cp = cfg.control_plane;
+if (cp.kind === "papan") {
+  if (cp.api_key !== null && cp.api_key !== undefined) {
+    const resolved = resolveEnvValue(cp.api_key);
+    if (resolved === null && cp.api_key.startsWith("$")) {
+      throw new ValidationError(
+        "missing_control_plane_api_key",
+        `control_plane.api_key resolves to empty: ${cp.api_key}`,
+      );
     }
-  } else if (cp.kind === "github-projects") {
-    const resolved = resolveEnvValue(cp.token);
-    if (resolved === null && cp.token.startsWith("$")) {
-      throw new ValidationError("missing_control_plane_api_key", `control_plane.token resolves to empty: ${cp.token}`);
-    }
-    if (cp.ownership.mode === "none" && cp.ownership.allow_unowned_dispatch !== true) {
-      throw new ValidationError("missing_control_plane_ownership", "github-projects requires ownership or allow_unowned_dispatch=true");
-    }
-  } else {
-    throw new ValidationError("unsupported_control_plane_kind", `unsupported control plane kind: ${(cp as { kind?: string }).kind}`);
   }
+} else if (cp.kind === "github-projects") {
+  const resolved = resolveEnvValue(cp.token);
+  if (resolved === null && cp.token.startsWith("$")) {
+    throw new ValidationError(
+      "missing_control_plane_api_key",
+      `control_plane.token resolves to empty: ${cp.token}`,
+    );
+  }
+  if (cp.ownership.mode === "none" && cp.ownership.allow_unowned_dispatch !== true) {
+    throw new ValidationError(
+      "missing_control_plane_ownership",
+      "github-projects requires ownership or allow_unowned_dispatch=true",
+    );
+  }
+} else {
+  throw new ValidationError(
+    "unsupported_control_plane_kind",
+    `unsupported control plane kind: ${(cp as { kind?: string }).kind}`,
+  );
+}
 ```
 
 Keep the legacy `cfg.tracker` check only for compatibility diagnostics:
 
 ```ts
-  if (cfg.tracker.kind !== "tok-juara") {
-    throw new ValidationError("unsupported_tracker_kind", `unsupported tracker kind: ${cfg.tracker.kind}`);
-  }
+if (cfg.tracker.kind !== "papan") {
+  throw new ValidationError(
+    "unsupported_tracker_kind",
+    `unsupported tracker kind: ${cfg.tracker.kind}`,
+  );
+}
 ```
 
 - [ ] **Step 5: Update workflow loader test fixture expectations**
@@ -688,7 +693,7 @@ Keep the legacy `cfg.tracker` check only for compatibility diagnostics:
 In `packages/dalang/tests/config/workflow-loader.test.ts`, add an assertion next to existing tracker assertions:
 
 ```ts
-expect(wf.config.control_plane.kind).toBe("wayang");
+expect(wf.config.control_plane.kind).toBe("papan");
 expect(wf.config.control_plane.active_states).toEqual(wf.config.tracker.active_states);
 ```
 
@@ -707,11 +712,12 @@ git commit -m "feat(dalang): add control plane config"
 
 ---
 
-### Task 3: Rename Wayang REST Adapter and Wire Orchestrator to Control Plane
+### Task 3: Rename Papan REST Adapter and Wire Orchestrator to Control Plane
 
 **Files:**
-- Create: `packages/dalang/src/control-plane/wayang-adapter.ts`
-- Create: `packages/dalang/tests/control-plane/wayang-adapter.test.ts`
+
+- Create: `packages/dalang/src/control-plane/papan-adapter.ts`
+- Create: `packages/dalang/tests/control-plane/papan-adapter.test.ts`
 - Modify: `packages/dalang/src/cli/bootstrap.ts`
 - Modify: `packages/dalang/src/orchestrator/orchestrator.ts`
 - Modify: `packages/dalang/src/orchestrator/reconcile.ts`
@@ -726,55 +732,55 @@ git commit -m "feat(dalang): add control plane config"
 
 - [ ] **Step 1: Move REST adapter test under control-plane naming**
 
-Copy the full contents of `packages/dalang/tests/tracker/rest-adapter.test.ts` to `packages/dalang/tests/control-plane/wayang-adapter.test.ts`, then make these replacements in the new file:
+Copy the full contents of `packages/dalang/tests/tracker/rest-adapter.test.ts` to `packages/dalang/tests/control-plane/papan-adapter.test.ts`, then make these replacements in the new file:
 
 ```ts
-import { WayangControlPlaneAdapter } from "../../src/control-plane/wayang-adapter";
+import { PapanControlPlaneAdapter } from "../../src/control-plane/papan-adapter";
 ```
 
 Replace every `new RestTrackerAdapter(` with:
 
 ```ts
-new WayangControlPlaneAdapter(
+new PapanControlPlaneAdapter(
 ```
 
 Rename these method calls:
 
 ```ts
-fetchCandidateIssues(["Todo"])
+fetchCandidateIssues(["Todo"]);
 ```
 
 to:
 
 ```ts
-fetchDispatchableWork({ activeStates: ["Todo"], ownership: { mode: "none" } })
+fetchDispatchableWork({ activeStates: ["Todo"], ownership: { mode: "none" } });
 ```
 
 Rename:
 
 ```ts
-fetchIssuesByStates(["Todo"])
-fetchIssueStatesByIds(["i1", "i2"])
-fetchIssue("issue-1")
+fetchIssuesByStates(["Todo"]);
+fetchIssueStatesByIds(["i1", "i2"]);
+fetchIssue("issue-1");
 ```
 
 to:
 
 ```ts
-fetchWorkByStates(["Todo"])
-refreshWork(["i1", "i2"])
-fetchWorkItem("issue-1")
+fetchWorkByStates(["Todo"]);
+refreshWork(["i1", "i2"]);
+fetchWorkItem("issue-1");
 ```
 
 - [ ] **Step 2: Run moved test to verify it fails**
 
-Run: `bun test packages/dalang/tests/control-plane/wayang-adapter.test.ts`
+Run: `bun test packages/dalang/tests/control-plane/papan-adapter.test.ts`
 
-Expected: FAIL with an import error for `wayang-adapter`.
+Expected: FAIL with an import error for `papan-adapter`.
 
-- [ ] **Step 3: Implement Wayang control-plane adapter**
+- [ ] **Step 3: Implement Papan control-plane adapter**
 
-Create `packages/dalang/src/control-plane/wayang-adapter.ts` by moving the old REST adapter implementation and applying these changes:
+Create `packages/dalang/src/control-plane/papan-adapter.ts` by moving the old REST adapter implementation and applying these changes:
 
 ```ts
 import type { ControlPlaneComment, ControlPlaneHistoryEntry, WorkItem } from "../types";
@@ -782,7 +788,7 @@ import type { ControlPlaneAdapter, DispatchQuery } from "./adapter";
 import { ControlPlaneError } from "./adapter";
 import { normalizeWorkItem } from "./normalize";
 
-export interface WayangControlPlaneConfig {
+export interface PapanControlPlaneConfig {
   endpoint: string;
   apiKey: string | null;
   timeoutMs?: number;
@@ -793,20 +799,20 @@ interface IssuesPage {
   next_cursor: string | null;
 }
 
-export class WayangControlPlaneAdapter implements ControlPlaneAdapter {
+export class PapanControlPlaneAdapter implements ControlPlaneAdapter {
   readonly capabilities = { history: true, prChecks: true } as const;
   private readonly endpoint: string;
   private readonly apiKey: string | null;
   private readonly timeoutMs: number;
 
-  constructor(cfg: WayangControlPlaneConfig) {
+  constructor(cfg: PapanControlPlaneConfig) {
     this.endpoint = cfg.endpoint.replace(/\/$/, "");
     this.apiKey = cfg.apiKey;
     this.timeoutMs = cfg.timeoutMs ?? 30000;
   }
 
   private headers(): Record<string, string> {
-    const h: Record<string, string> = { "accept": "application/json" };
+    const h: Record<string, string> = { accept: "application/json" };
     if (this.apiKey) h["authorization"] = `Bearer ${this.apiKey}`;
     return h;
   }
@@ -819,7 +825,10 @@ export class WayangControlPlaneAdapter implements ControlPlaneAdapter {
     try {
       res = await fetch(url, { headers: this.headers(), signal: controller.signal });
     } catch (err) {
-      throw new ControlPlaneError("control_plane_request_error", `${url}: ${(err as Error).message}`);
+      throw new ControlPlaneError(
+        "control_plane_request_error",
+        `${url}: ${(err as Error).message}`,
+      );
     } finally {
       clearTimeout(t);
     }
@@ -829,7 +838,10 @@ export class WayangControlPlaneAdapter implements ControlPlaneAdapter {
     try {
       return await res.json();
     } catch (err) {
-      throw new ControlPlaneError("control_plane_malformed_payload", `${url}: ${(err as Error).message}`);
+      throw new ControlPlaneError(
+        "control_plane_malformed_payload",
+        `${url}: ${(err as Error).message}`,
+      );
     }
   }
 
@@ -847,8 +859,15 @@ export class WayangControlPlaneAdapter implements ControlPlaneAdapter {
     const params = new URLSearchParams();
     for (const id of ids) params.append("id", id);
     const body = await this.getJson(`/api/v1/issues/by-ids?${params.toString()}`);
-    if (body === null || typeof body !== "object" || !Array.isArray((body as { issues?: unknown }).issues)) {
-      throw new ControlPlaneError("control_plane_malformed_payload", "by-ids: expected { issues: [] }");
+    if (
+      body === null ||
+      typeof body !== "object" ||
+      !Array.isArray((body as { issues?: unknown }).issues)
+    ) {
+      throw new ControlPlaneError(
+        "control_plane_malformed_payload",
+        "by-ids: expected { issues: [] }",
+      );
     }
     return (body as { issues: unknown[] }).issues.flatMap((raw) => {
       const n = normalizeWorkItem(raw);
@@ -864,8 +883,15 @@ export class WayangControlPlaneAdapter implements ControlPlaneAdapter {
   async listComments(workItemId: string): Promise<ControlPlaneComment[]> {
     const path = `/api/v1/issues/${encodeURIComponent(workItemId)}/comments`;
     const data = await this.getJson(path);
-    if (typeof data !== "object" || data === null || !Array.isArray((data as { comments?: unknown }).comments)) {
-      throw new ControlPlaneError("control_plane_malformed_payload", `${this.endpoint}${path}: comments not array`);
+    if (
+      typeof data !== "object" ||
+      data === null ||
+      !Array.isArray((data as { comments?: unknown }).comments)
+    ) {
+      throw new ControlPlaneError(
+        "control_plane_malformed_payload",
+        `${this.endpoint}${path}: comments not array`,
+      );
     }
     return (data as { comments: ControlPlaneComment[] }).comments;
   }
@@ -873,14 +899,28 @@ export class WayangControlPlaneAdapter implements ControlPlaneAdapter {
   async listHistory(workItemId: string): Promise<ControlPlaneHistoryEntry[]> {
     const path = `/api/v1/issues/${encodeURIComponent(workItemId)}/history`;
     const data = await this.getJson(path);
-    if (typeof data !== "object" || data === null || !Array.isArray((data as { history?: unknown }).history)) {
-      throw new ControlPlaneError("control_plane_malformed_payload", `${this.endpoint}${path}: history not array`);
+    if (
+      typeof data !== "object" ||
+      data === null ||
+      !Array.isArray((data as { history?: unknown }).history)
+    ) {
+      throw new ControlPlaneError(
+        "control_plane_malformed_payload",
+        `${this.endpoint}${path}: history not array`,
+      );
     }
     return (data as { history: ControlPlaneHistoryEntry[] }).history;
   }
 
-  async addComment(workItemId: string, body: string, author: "user" | "agent" = "agent"): Promise<void> {
-    await this.writeJson(`/api/v1/issues/${encodeURIComponent(workItemId)}/comments`, "POST", { body, author });
+  async addComment(
+    workItemId: string,
+    body: string,
+    author: "user" | "agent" = "agent",
+  ): Promise<void> {
+    await this.writeJson(`/api/v1/issues/${encodeURIComponent(workItemId)}/comments`, "POST", {
+      body,
+      author,
+    });
   }
 
   async updateState(workItemId: string, state: string): Promise<void> {
@@ -906,11 +946,21 @@ export class WayangControlPlaneAdapter implements ControlPlaneAdapter {
   }
 
   private assertPage(body: unknown): IssuesPage {
-    if (body === null || typeof body !== "object" || !Array.isArray((body as { issues?: unknown }).issues)) {
-      throw new ControlPlaneError("control_plane_malformed_payload", "expected { issues: [], next_cursor }");
+    if (
+      body === null ||
+      typeof body !== "object" ||
+      !Array.isArray((body as { issues?: unknown }).issues)
+    ) {
+      throw new ControlPlaneError(
+        "control_plane_malformed_payload",
+        "expected { issues: [], next_cursor }",
+      );
     }
     const next = (body as { next_cursor?: unknown }).next_cursor;
-    return { issues: (body as { issues: unknown[] }).issues, next_cursor: typeof next === "string" ? next : null };
+    return {
+      issues: (body as { issues: unknown[] }).issues,
+      next_cursor: typeof next === "string" ? next : null,
+    };
   }
 
   private async writeJson(path: string, method: "POST" | "PATCH", payload: unknown): Promise<void> {
@@ -954,9 +1004,9 @@ import type { ControlPlaneAdapter } from "../control-plane/adapter";
 Change `tracker: TrackerAdapter` to `controlPlane: ControlPlaneAdapter` in `OrchestratorOptions`, constructor fields, and all private references. Rename calls:
 
 ```ts
-this.tracker.fetchCandidateIssues(this.cfg.tracker.active_states)
-this.tracker.fetchIssuesByStates(["Waiting PR Checks"])
-this.tracker.fetchIssueStatesByIds(ids)
+this.tracker.fetchCandidateIssues(this.cfg.tracker.active_states);
+this.tracker.fetchIssuesByStates(["Waiting PR Checks"]);
+this.tracker.fetchIssueStatesByIds(ids);
 ```
 
 to:
@@ -965,34 +1015,38 @@ to:
 this.controlPlane.fetchDispatchableWork({
   activeStates: this.cfg.control_plane.active_states,
   ownership: this.cfg.control_plane.ownership,
-})
-this.controlPlane.fetchWorkByStates(["Waiting PR Checks"])
-this.controlPlane.refreshWork(ids)
+});
+this.controlPlane.fetchWorkByStates(["Waiting PR Checks"]);
+this.controlPlane.refreshWork(ids);
 ```
 
 Use `this.cfg.control_plane.active_states` and `this.cfg.control_plane.terminal_states` for eligibility and refresh classification.
 
-- [ ] **Step 5: Update bootstrap to use Wayang adapter directly**
+- [ ] **Step 5: Update bootstrap to use Papan adapter directly**
 
 In `packages/dalang/src/cli/bootstrap.ts`, replace the adapter import:
 
 ```ts
-import { WayangControlPlaneAdapter } from "../control-plane/wayang-adapter";
+import { PapanControlPlaneAdapter } from "../control-plane/papan-adapter";
 ```
 
 Replace the construction block with:
 
 ```ts
-    const cp = wf.config.control_plane;
-    if (cp.kind !== "wayang") {
-      throw new ValidationError("unsupported_control_plane_kind", `bootstrap only supports wayang before the control-plane factory task: ${cp.kind}`);
-    }
-    const controlPlane = new WayangControlPlaneAdapter({
-      endpoint: this.opts.trackerEndpoint ?? cp.endpoint,
-      apiKey: this.opts.trackerApiKey !== undefined
-        ? resolveTrackerApiKey(this.opts.trackerApiKey)
-        : resolveTrackerApiKey(cp.api_key ?? null),
-    });
+const cp = wf.config.control_plane;
+if (cp.kind !== "papan") {
+  throw new ValidationError(
+    "unsupported_control_plane_kind",
+    `bootstrap only supports papan before the control-plane factory task: ${cp.kind}`,
+  );
+}
+const controlPlane = new PapanControlPlaneAdapter({
+  endpoint: this.opts.trackerEndpoint ?? cp.endpoint,
+  apiKey:
+    this.opts.trackerApiKey !== undefined
+      ? resolveTrackerApiKey(this.opts.trackerApiKey)
+      : resolveTrackerApiKey(cp.api_key ?? null),
+});
 ```
 
 Pass `controlPlane` into `new Orchestrator`.
@@ -1017,7 +1071,7 @@ Keep comment and state methods unchanged.
 Run:
 
 ```bash
-bun test packages/dalang/tests/control-plane/wayang-adapter.test.ts packages/dalang/tests/orchestrator/orchestrator.test.ts packages/dalang/tests/orchestrator/reconcile.test.ts
+bun test packages/dalang/tests/control-plane/papan-adapter.test.ts packages/dalang/tests/orchestrator/orchestrator.test.ts packages/dalang/tests/orchestrator/reconcile.test.ts
 ```
 
 Expected: PASS.
@@ -1044,7 +1098,8 @@ git commit -m "refactor(dalang): rename tracker adapter to control plane"
 ### Task 4: Move PR Checks Behind Control-Plane Capability
 
 **Files:**
-- Modify: `packages/dalang/src/control-plane/wayang-adapter.ts`
+
+- Modify: `packages/dalang/src/control-plane/papan-adapter.ts`
 - Modify: `packages/dalang/src/orchestrator/orchestrator.ts`
 - Modify: `packages/dalang/src/orchestrator/pr-checks-runner.ts`
 - Modify: `packages/dalang/tests/orchestrator/orchestrator.test.ts`
@@ -1085,9 +1140,9 @@ Run: `bun test packages/dalang/tests/orchestrator/orchestrator.test.ts -t "deleg
 
 Expected: FAIL because the orchestrator still calls `runPrChecksReconciler` directly.
 
-- [ ] **Step 3: Implement Wayang adapter PR-check delegation**
+- [ ] **Step 3: Implement Papan adapter PR-check delegation**
 
-In `packages/dalang/src/control-plane/wayang-adapter.ts`, import the runner:
+In `packages/dalang/src/control-plane/papan-adapter.ts`, import the runner:
 
 ```ts
 import type { OrchestratorState } from "../types";
@@ -1106,7 +1161,7 @@ Add an optional state setter and method:
 
   async reconcilePrChecks(args: PrChecksReconcileArgs): Promise<void> {
     if (!this.prChecksState) {
-      throw new ControlPlaneError("control_plane_validation_error", "Wayang PR-check reconciliation requires attached orchestrator state");
+      throw new ControlPlaneError("control_plane_validation_error", "Papan PR-check reconciliation requires attached orchestrator state");
     }
     await runPrChecksReconciler({
       issues: args.work,
@@ -1130,37 +1185,43 @@ Add an optional state setter and method:
 In `packages/dalang/src/orchestrator/orchestrator.ts`, replace the direct runner call with:
 
 ```ts
-    if (this.cfg.pr_checks.enabled) {
-      if (!this.controlPlane.capabilities.prChecks || !this.controlPlane.reconcilePrChecks) {
-        this.log.warn({ kind: this.cfg.control_plane.kind }, "control plane does not support pr_checks; skipping");
-      } else {
-        let waiting: WorkItem[] = [];
-        try {
-          const waitState = this.cfg.control_plane.kind === "github-projects" && this.cfg.control_plane.pr_checks
-            ? this.cfg.control_plane.pr_checks.wait_state
-            : "Waiting PR Checks";
-          waiting = await this.controlPlane.fetchWorkByStates([waitState]);
-        } catch (err) {
-          this.log.warn({ err: (err as Error).message }, "pr_checks fetch failed; skipping");
-        }
-        await this.controlPlane.reconcilePrChecks({
-          work: waiting,
-          config: this.cfg.pr_checks,
-          repoCwd: process.cwd(),
-          now: () => new Date(),
-        }).catch((err) => {
-          this.log.warn({ err: (err as Error).message }, "pr_checks reconcile failed");
-        });
-      }
+if (this.cfg.pr_checks.enabled) {
+  if (!this.controlPlane.capabilities.prChecks || !this.controlPlane.reconcilePrChecks) {
+    this.log.warn(
+      { kind: this.cfg.control_plane.kind },
+      "control plane does not support pr_checks; skipping",
+    );
+  } else {
+    let waiting: WorkItem[] = [];
+    try {
+      const waitState =
+        this.cfg.control_plane.kind === "github-projects" && this.cfg.control_plane.pr_checks
+          ? this.cfg.control_plane.pr_checks.wait_state
+          : "Waiting PR Checks";
+      waiting = await this.controlPlane.fetchWorkByStates([waitState]);
+    } catch (err) {
+      this.log.warn({ err: (err as Error).message }, "pr_checks fetch failed; skipping");
     }
+    await this.controlPlane
+      .reconcilePrChecks({
+        work: waiting,
+        config: this.cfg.pr_checks,
+        repoCwd: process.cwd(),
+        now: () => new Date(),
+      })
+      .catch((err) => {
+        this.log.warn({ err: (err as Error).message }, "pr_checks reconcile failed");
+      });
+  }
+}
 ```
 
-- [ ] **Step 5: Attach state in bootstrap for Wayang**
+- [ ] **Step 5: Attach state in bootstrap for Papan**
 
 In `packages/dalang/src/cli/bootstrap.ts`, after `this.orch = new Orchestrator(...)`, add:
 
 ```ts
-    controlPlane.attachPrChecksState(this.orch.state);
+controlPlane.attachPrChecksState(this.orch.state);
 ```
 
 - [ ] **Step 6: Run PR-check tests**
@@ -1176,7 +1237,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add packages/dalang/src/control-plane/wayang-adapter.ts packages/dalang/src/orchestrator/orchestrator.ts packages/dalang/src/orchestrator/pr-checks-runner.ts packages/dalang/src/cli/bootstrap.ts packages/dalang/tests/orchestrator/orchestrator.test.ts packages/dalang/tests/orchestrator/pr-checks-runner.test.ts
+git add packages/dalang/src/control-plane/papan-adapter.ts packages/dalang/src/orchestrator/orchestrator.ts packages/dalang/src/orchestrator/pr-checks-runner.ts packages/dalang/src/cli/bootstrap.ts packages/dalang/tests/orchestrator/orchestrator.test.ts packages/dalang/tests/orchestrator/pr-checks-runner.test.ts
 git commit -m "feat(dalang): delegate pr checks through control plane"
 ```
 
@@ -1185,6 +1246,7 @@ git commit -m "feat(dalang): delegate pr checks through control plane"
 ### Task 5: Add Control-Plane Factory and Bootstrap GitHub Kind
 
 **Files:**
+
 - Create: `packages/dalang/src/control-plane/factory.ts`
 - Create: `packages/dalang/tests/control-plane/factory.test.ts`
 - Modify: `packages/dalang/src/cli/bootstrap.ts`
@@ -1197,13 +1259,17 @@ Create `packages/dalang/tests/control-plane/factory.test.ts`:
 import { test, expect } from "bun:test";
 import { createControlPlaneAdapter } from "../../src/control-plane/factory";
 import { applyDefaults } from "../../src/config/schema";
-import { WayangControlPlaneAdapter } from "../../src/control-plane/wayang-adapter";
+import { PapanControlPlaneAdapter } from "../../src/control-plane/papan-adapter";
 import { GithubProjectsControlPlaneAdapter } from "../../src/control-plane/github/adapter";
 
-test("factory creates Wayang control plane", () => {
+test("factory creates Papan control plane", () => {
   const cfg = applyDefaults({});
-  const adapter = createControlPlaneAdapter({ config: cfg, trackerEndpoint: null, trackerApiKey: undefined });
-  expect(adapter).toBeInstanceOf(WayangControlPlaneAdapter);
+  const adapter = createControlPlaneAdapter({
+    config: cfg,
+    trackerEndpoint: null,
+    trackerApiKey: undefined,
+  });
+  expect(adapter).toBeInstanceOf(PapanControlPlaneAdapter);
 });
 
 test("factory creates GitHub Projects control plane", () => {
@@ -1221,7 +1287,11 @@ test("factory creates GitHub Projects control plane", () => {
       ownership: { mode: "label", value: "dalang" },
     },
   });
-  const adapter = createControlPlaneAdapter({ config: cfg, trackerEndpoint: null, trackerApiKey: undefined });
+  const adapter = createControlPlaneAdapter({
+    config: cfg,
+    trackerEndpoint: null,
+    trackerApiKey: undefined,
+  });
   expect(adapter).toBeInstanceOf(GithubProjectsControlPlaneAdapter);
 });
 ```
@@ -1254,13 +1324,29 @@ export interface GithubProjectsAdapterConfig {
 export class GithubProjectsControlPlaneAdapter implements ControlPlaneAdapter {
   readonly capabilities = { history: true, prChecks: true } as const;
   constructor(readonly cfg: GithubProjectsAdapterConfig) {}
-  async fetchDispatchableWork(_query: DispatchQuery): Promise<WorkItem[]> { return []; }
-  async fetchWorkByStates(_states: string[]): Promise<WorkItem[]> { return []; }
-  async refreshWork(_ids: string[]): Promise<WorkItem[]> { return []; }
-  async fetchWorkItem(_id: string): Promise<WorkItem | null> { return null; }
-  async listComments(_workItemId: string): Promise<ControlPlaneComment[]> { return []; }
-  async listHistory(_workItemId: string): Promise<ControlPlaneHistoryEntry[]> { return []; }
-  async addComment(_workItemId: string, _body: string, _author: "user" | "agent" = "agent"): Promise<void> {}
+  async fetchDispatchableWork(_query: DispatchQuery): Promise<WorkItem[]> {
+    return [];
+  }
+  async fetchWorkByStates(_states: string[]): Promise<WorkItem[]> {
+    return [];
+  }
+  async refreshWork(_ids: string[]): Promise<WorkItem[]> {
+    return [];
+  }
+  async fetchWorkItem(_id: string): Promise<WorkItem | null> {
+    return null;
+  }
+  async listComments(_workItemId: string): Promise<ControlPlaneComment[]> {
+    return [];
+  }
+  async listHistory(_workItemId: string): Promise<ControlPlaneHistoryEntry[]> {
+    return [];
+  }
+  async addComment(
+    _workItemId: string,
+    _body: string,
+    _author: "user" | "agent" = "agent",
+  ): Promise<void> {}
   async updateState(_workItemId: string, _state: string): Promise<void> {}
   async reconcilePrChecks(_args: PrChecksReconcileArgs): Promise<void> {}
 }
@@ -1275,7 +1361,7 @@ import type { WorkflowFrontMatter } from "../config/schema";
 import { resolveEnvValue } from "../config/env-resolver";
 import { resolveTrackerApiKey } from "../orchestrator/orchestrator";
 import type { ControlPlaneAdapter } from "./adapter";
-import { WayangControlPlaneAdapter } from "./wayang-adapter";
+import { PapanControlPlaneAdapter } from "./papan-adapter";
 import { GithubProjectsControlPlaneAdapter } from "./github/adapter";
 
 export interface CreateControlPlaneArgs {
@@ -1286,12 +1372,13 @@ export interface CreateControlPlaneArgs {
 
 export function createControlPlaneAdapter(args: CreateControlPlaneArgs): ControlPlaneAdapter {
   const cp = args.config.control_plane;
-  if (cp.kind === "wayang") {
-    return new WayangControlPlaneAdapter({
+  if (cp.kind === "papan") {
+    return new PapanControlPlaneAdapter({
       endpoint: args.trackerEndpoint ?? cp.endpoint,
-      apiKey: args.trackerApiKey !== undefined
-        ? resolveTrackerApiKey(args.trackerApiKey)
-        : resolveTrackerApiKey(cp.api_key ?? null),
+      apiKey:
+        args.trackerApiKey !== undefined
+          ? resolveTrackerApiKey(args.trackerApiKey)
+          : resolveTrackerApiKey(cp.api_key ?? null),
     });
   }
   const token = resolveEnvValue(cp.token) ?? cp.token;
@@ -1314,25 +1401,25 @@ In `packages/dalang/src/cli/bootstrap.ts`, import:
 
 ```ts
 import { createControlPlaneAdapter } from "../control-plane/factory";
-import { WayangControlPlaneAdapter } from "../control-plane/wayang-adapter";
+import { PapanControlPlaneAdapter } from "../control-plane/papan-adapter";
 ```
 
 Replace direct construction with:
 
 ```ts
-    const controlPlane = createControlPlaneAdapter({
-      config: wf.config,
-      trackerEndpoint: this.opts.trackerEndpoint ?? null,
-      trackerApiKey: this.opts.trackerApiKey,
-    });
+const controlPlane = createControlPlaneAdapter({
+  config: wf.config,
+  trackerEndpoint: this.opts.trackerEndpoint ?? null,
+  trackerApiKey: this.opts.trackerApiKey,
+});
 ```
 
 After orchestrator construction:
 
 ```ts
-    if (controlPlane instanceof WayangControlPlaneAdapter) {
-      controlPlane.attachPrChecksState(this.orch.state);
-    }
+if (controlPlane instanceof PapanControlPlaneAdapter) {
+  controlPlane.attachPrChecksState(this.orch.state);
+}
 ```
 
 - [ ] **Step 6: Run tests**
@@ -1357,6 +1444,7 @@ git commit -m "feat(dalang): add control plane factory"
 ### Task 6: Implement GitHub Client, Project Metadata Resolution, and Startup Probe
 
 **Files:**
+
 - Create: `packages/dalang/src/control-plane/github/client.ts`
 - Create: `packages/dalang/src/control-plane/github/types.ts`
 - Create: `packages/dalang/tests/control-plane/github/client.test.ts`
@@ -1463,20 +1551,32 @@ export class GithubClient {
         body: JSON.stringify({ query, variables }),
       });
     } catch (err) {
-      throw new ControlPlaneError("control_plane_request_error", `github graphql: ${(err as Error).message}`);
+      throw new ControlPlaneError(
+        "control_plane_request_error",
+        `github graphql: ${(err as Error).message}`,
+      );
     }
     const body = await this.readJson(res, "github graphql");
     if (!res.ok) {
-      throw new ControlPlaneError("control_plane_status_error", `github graphql: HTTP ${res.status}`);
+      throw new ControlPlaneError(
+        "control_plane_status_error",
+        `github graphql: HTTP ${res.status}`,
+      );
     }
     if (body && typeof body === "object" && Array.isArray((body as { errors?: unknown }).errors)) {
-      const msg = (body as { errors: Array<{ message?: string }> }).errors.map((e) => e.message ?? "unknown").join("; ");
+      const msg = (body as { errors: Array<{ message?: string }> }).errors
+        .map((e) => e.message ?? "unknown")
+        .join("; ");
       throw new ControlPlaneError("control_plane_status_error", `github graphql: ${msg}`);
     }
     return (body as { data: T }).data;
   }
 
-  async restJson<T = unknown>(path: string, method: "GET" | "POST" | "PATCH", payload?: unknown): Promise<T> {
+  async restJson<T = unknown>(
+    path: string,
+    method: "GET" | "POST" | "PATCH",
+    payload?: unknown,
+  ): Promise<T> {
     const url = `${this.apiBaseUrl}${path}`;
     let res: Response;
     try {
@@ -1486,7 +1586,10 @@ export class GithubClient {
         body: payload === undefined ? undefined : JSON.stringify(payload),
       });
     } catch (err) {
-      throw new ControlPlaneError("control_plane_request_error", `${url}: ${(err as Error).message}`);
+      throw new ControlPlaneError(
+        "control_plane_request_error",
+        `${url}: ${(err as Error).message}`,
+      );
     }
     const body = await this.readJson(res, url);
     if (!res.ok) {
@@ -1500,7 +1603,10 @@ export class GithubClient {
       const text = await res.text();
       return text.length === 0 ? null : JSON.parse(text);
     } catch (err) {
-      throw new ControlPlaneError("control_plane_malformed_payload", `${context}: ${(err as Error).message}`);
+      throw new ControlPlaneError(
+        "control_plane_malformed_payload",
+        `${context}: ${(err as Error).message}`,
+      );
     }
   }
 }
@@ -1547,7 +1653,10 @@ export class GithubProjectsControlPlaneAdapter implements ControlPlaneAdapter {
   private readonly client: GithubClient;
   private metadata: GithubProjectMetadata | null = null;
 
-  constructor(readonly cfg: GithubProjectsAdapterConfig, client?: GithubClient) {
+  constructor(
+    readonly cfg: GithubProjectsAdapterConfig,
+    client?: GithubClient,
+  ) {
     this.client = client ?? new GithubClient({ token: cfg.token });
   }
 
@@ -1590,6 +1699,7 @@ git commit -m "feat(dalang): add github control plane client"
 ### Task 7: Implement GitHub Project Item Normalization and Ownership
 
 **Files:**
+
 - Create: `packages/dalang/src/control-plane/github/normalize.ts`
 - Create: `packages/dalang/tests/control-plane/github/normalize.test.ts`
 - Modify: `packages/dalang/src/control-plane/github/adapter.ts`
@@ -1600,16 +1710,32 @@ Create `packages/dalang/tests/control-plane/github/normalize.test.ts`:
 
 ```ts
 import { test, expect } from "bun:test";
-import { githubProjectItemToWorkItem, githubItemMatchesOwnership, deriveBranchName } from "../../../src/control-plane/github/normalize";
+import {
+  githubProjectItemToWorkItem,
+  githubItemMatchesOwnership,
+  deriveBranchName,
+} from "../../../src/control-plane/github/normalize";
 
 const item = {
   id: "PVTI_1",
   updatedAt: "2026-04-30T02:00:00Z",
   fieldValues: {
     nodes: [
-      { __typename: "ProjectV2ItemFieldSingleSelectValue", name: "In Dev", field: { name: "Status" } },
-      { __typename: "ProjectV2ItemFieldTextValue", text: "feature/custom-branch", field: { name: "Branch" } },
-      { __typename: "ProjectV2ItemFieldSingleSelectValue", name: "Dalang", field: { name: "Agent" } },
+      {
+        __typename: "ProjectV2ItemFieldSingleSelectValue",
+        name: "In Dev",
+        field: { name: "Status" },
+      },
+      {
+        __typename: "ProjectV2ItemFieldTextValue",
+        text: "feature/custom-branch",
+        field: { name: "Branch" },
+      },
+      {
+        __typename: "ProjectV2ItemFieldSingleSelectValue",
+        name: "Dalang",
+        field: { name: "Agent" },
+      },
     ],
   },
   content: {
@@ -1646,22 +1772,34 @@ test("githubProjectItemToWorkItem maps issue project item", () => {
 });
 
 test("githubProjectItemToWorkItem ignores draft issues and pull requests", () => {
-  expect(githubProjectItemToWorkItem({ ...item, content: { __typename: "DraftIssue" } }, {
-    repository: "acme/app",
-    statusField: "Status",
-    branchField: null,
-  })).toBeNull();
-  expect(githubProjectItemToWorkItem({ ...item, content: { __typename: "PullRequest" } }, {
-    repository: "acme/app",
-    statusField: "Status",
-    branchField: null,
-  })).toBeNull();
+  expect(
+    githubProjectItemToWorkItem(
+      { ...item, content: { __typename: "DraftIssue" } },
+      {
+        repository: "acme/app",
+        statusField: "Status",
+        branchField: null,
+      },
+    ),
+  ).toBeNull();
+  expect(
+    githubProjectItemToWorkItem(
+      { ...item, content: { __typename: "PullRequest" } },
+      {
+        repository: "acme/app",
+        statusField: "Status",
+        branchField: null,
+      },
+    ),
+  ).toBeNull();
 });
 
 test("ownership supports label assignee and project field", () => {
   expect(githubItemMatchesOwnership(item, { mode: "label", value: "dalang" })).toBe(true);
   expect(githubItemMatchesOwnership(item, { mode: "assignee", value: "dalang-bot" })).toBe(true);
-  expect(githubItemMatchesOwnership(item, { mode: "project_field", field: "Agent", value: "Dalang" })).toBe(true);
+  expect(
+    githubItemMatchesOwnership(item, { mode: "project_field", field: "Agent", value: "Dalang" }),
+  ).toBe(true);
   expect(githubItemMatchesOwnership(item, { mode: "label", value: "other" })).toBe(false);
 });
 
@@ -1701,7 +1839,11 @@ function lowerNames(raw: unknown): string[] {
 
 function assigneeLogins(raw: unknown): string[] {
   return nodes(raw).flatMap((x) => {
-    if (x !== null && typeof x === "object" && typeof (x as { login?: unknown }).login === "string") {
+    if (
+      x !== null &&
+      typeof x === "object" &&
+      typeof (x as { login?: unknown }).login === "string"
+    ) {
       return [(x as { login: string }).login.toLowerCase()];
     }
     return [];
@@ -1716,7 +1858,11 @@ function fieldValues(item: unknown): Array<Record<string, unknown>> {
 
 function fieldName(v: Record<string, unknown>): string | null {
   const field = v.field;
-  if (field !== null && typeof field === "object" && typeof (field as { name?: unknown }).name === "string") {
+  if (
+    field !== null &&
+    typeof field === "object" &&
+    typeof (field as { name?: unknown }).name === "string"
+  ) {
     return (field as { name: string }).name;
   }
   return null;
@@ -1737,7 +1883,11 @@ function textValue(item: unknown, field: string): string | null {
 }
 
 export function deriveBranchName(number: number, title: string): string {
-  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48);
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 48);
   return `dalang/${number}-${slug || "issue"}`;
 }
 
@@ -1751,7 +1901,13 @@ export function githubProjectItemToWorkItem(
   if (content === null || typeof content !== "object") return null;
   const c = content as Record<string, unknown>;
   if (c.__typename !== "Issue") return null;
-  if (typeof i.id !== "string" || typeof c.id !== "string" || typeof c.number !== "number" || typeof c.title !== "string") return null;
+  if (
+    typeof i.id !== "string" ||
+    typeof c.id !== "string" ||
+    typeof c.number !== "number" ||
+    typeof c.title !== "string"
+  )
+    return null;
   const state = singleSelectValue(item, cfg.statusField);
   if (!state) return null;
   const branch = cfg.branchField ? textValue(item, cfg.branchField) : null;
@@ -1771,7 +1927,11 @@ export function githubProjectItemToWorkItem(
     labels: lowerNames(c.labels),
     blocked_by: [],
     created_at: typeof c.createdAt === "string" ? new Date(c.createdAt).toISOString() : null,
-    updated_at: [issueUpdated, itemUpdated].filter((x): x is string => typeof x === "string").sort().at(-1) ?? null,
+    updated_at:
+      [issueUpdated, itemUpdated]
+        .filter((x): x is string => typeof x === "string")
+        .sort()
+        .at(-1) ?? null,
   };
 }
 
@@ -1781,8 +1941,10 @@ export function githubItemMatchesOwnership(item: unknown, ownership: OwnershipRu
   const content = (item as { content?: unknown }).content;
   if (content === null || typeof content !== "object") return false;
   const c = content as Record<string, unknown>;
-  if (ownership.mode === "label") return lowerNames(c.labels).includes(ownership.value.toLowerCase());
-  if (ownership.mode === "assignee") return assigneeLogins(c.assignees).includes(ownership.value.toLowerCase());
+  if (ownership.mode === "label")
+    return lowerNames(c.labels).includes(ownership.value.toLowerCase());
+  if (ownership.mode === "assignee")
+    return assigneeLogins(c.assignees).includes(ownership.value.toLowerCase());
   return singleSelectValue(item, ownership.field)?.toLowerCase() === ownership.value.toLowerCase();
 }
 ```
@@ -1805,6 +1967,7 @@ git commit -m "feat(dalang): normalize github project items"
 ### Task 8: Implement GitHub Adapter Reads and Writes
 
 **Files:**
+
 - Modify: `packages/dalang/src/control-plane/github/adapter.ts`
 - Modify: `packages/dalang/tests/control-plane/github/adapter.test.ts`
 
@@ -1821,28 +1984,37 @@ class FakeClient extends GithubClient {
   queries: Array<{ query: string; variables: Record<string, unknown> }> = [];
   restCalls: Array<{ path: string; method: string; payload: unknown }> = [];
   responses: unknown[] = [];
-  constructor() { super({ token: "token" }); }
+  constructor() {
+    super({ token: "token" });
+  }
   override async graphql<T>(query: string, variables: Record<string, unknown>): Promise<T> {
     this.queries.push({ query, variables });
     return this.responses.shift() as T;
   }
-  override async restJson<T>(path: string, method: "GET" | "POST" | "PATCH", payload?: unknown): Promise<T> {
+  override async restJson<T>(
+    path: string,
+    method: "GET" | "POST" | "PATCH",
+    payload?: unknown,
+  ): Promise<T> {
     this.restCalls.push({ path, method, payload });
     return { ok: true } as T;
   }
 }
 
 function adapter(client: FakeClient): GithubProjectsControlPlaneAdapter {
-  return new GithubProjectsControlPlaneAdapter({
-    ownerType: "organization",
-    owner: "acme",
-    projectNumber: 1,
-    repository: "acme/app",
-    token: "token",
-    statusField: "Status",
-    branchField: null,
-    ownership: { mode: "label", value: "dalang" },
-  }, client);
+  return new GithubProjectsControlPlaneAdapter(
+    {
+      ownerType: "organization",
+      owner: "acme",
+      projectNumber: 1,
+      repository: "acme/app",
+      token: "token",
+      statusField: "Status",
+      branchField: null,
+      ownership: { mode: "label", value: "dalang" },
+    },
+    client,
+  );
 }
 
 test("fetchDispatchableWork resolves metadata and filters by ownership", async () => {
@@ -1854,7 +2026,12 @@ test("fetchDispatchableWork resolves metadata and filters by ownership", async (
           id: "PVT_1",
           fields: {
             nodes: [
-              { __typename: "ProjectV2SingleSelectField", id: "FIELD_STATUS", name: "Status", options: [{ id: "OPT_TODO", name: "Todo" }] },
+              {
+                __typename: "ProjectV2SingleSelectField",
+                id: "FIELD_STATUS",
+                name: "Status",
+                options: [{ id: "OPT_TODO", name: "Todo" }],
+              },
             ],
           },
         },
@@ -1867,7 +2044,15 @@ test("fetchDispatchableWork resolves metadata and filters by ownership", async (
             {
               id: "PVTI_1",
               updatedAt: "2026-04-30T02:00:00Z",
-              fieldValues: { nodes: [{ __typename: "ProjectV2ItemFieldSingleSelectValue", name: "Todo", field: { name: "Status" } }] },
+              fieldValues: {
+                nodes: [
+                  {
+                    __typename: "ProjectV2ItemFieldSingleSelectValue",
+                    name: "Todo",
+                    field: { name: "Status" },
+                  },
+                ],
+              },
               content: {
                 __typename: "Issue",
                 id: "ISSUE_1",
@@ -1898,18 +2083,26 @@ test("fetchDispatchableWork resolves metadata and filters by ownership", async (
 
 test("updateState writes project status option", async () => {
   const client = new FakeClient();
-  client.responses.push({
-    organization: {
-      projectV2: {
-        id: "PVT_1",
-        fields: {
-          nodes: [
-            { __typename: "ProjectV2SingleSelectField", id: "FIELD_STATUS", name: "Status", options: [{ id: "OPT_DONE", name: "Done" }] },
-          ],
+  client.responses.push(
+    {
+      organization: {
+        projectV2: {
+          id: "PVT_1",
+          fields: {
+            nodes: [
+              {
+                __typename: "ProjectV2SingleSelectField",
+                id: "FIELD_STATUS",
+                name: "Status",
+                options: [{ id: "OPT_DONE", name: "Done" }],
+              },
+            ],
+          },
         },
       },
     },
-  }, { updateProjectV2ItemFieldValue: { projectV2Item: { id: "PVTI_1" } } });
+    { updateProjectV2ItemFieldValue: { projectV2Item: { id: "PVTI_1" } } },
+  );
   await adapter(client).updateState("PVTI_1", "Done");
   expect(client.queries.at(-1)!.variables).toMatchObject({
     projectId: "PVT_1",
@@ -2154,6 +2347,7 @@ git commit -m "feat(dalang): implement github project adapter"
 ### Task 9: Implement GitHub-Native PR Checks Capability
 
 **Files:**
+
 - Create: `packages/dalang/src/control-plane/github/pr-checks.ts`
 - Create: `packages/dalang/tests/control-plane/github/pr-checks.test.ts`
 - Modify: `packages/dalang/src/control-plane/github/adapter.ts`
@@ -2203,10 +2397,25 @@ test("passed checks comment and move to pass state", async () => {
     },
     now: () => new Date("2026-04-30T00:00:00Z"),
     listComments: async () => comments,
-    addComment: async (_id, body) => { comments.push({ id: String(comments.length + 1), author: "agent", body, created_at: new Date().toISOString() }); },
-    updateState: async (_id, state) => { states.push(state); },
-    resolvePullRequest: async () => ({ number: 9, url: "https://github.com/acme/app/pull/9", sha: "abc123" }),
-    fetchChecks: async () => [{ name: "build", state: "SUCCESS", bucket: "pass", link: "https://ci/build" }],
+    addComment: async (_id, body) => {
+      comments.push({
+        id: String(comments.length + 1),
+        author: "agent",
+        body,
+        created_at: new Date().toISOString(),
+      });
+    },
+    updateState: async (_id, state) => {
+      states.push(state);
+    },
+    resolvePullRequest: async () => ({
+      number: 9,
+      url: "https://github.com/acme/app/pull/9",
+      sha: "abc123",
+    }),
+    fetchChecks: async () => [
+      { name: "build", state: "SUCCESS", bucket: "pass", link: "https://ci/build" },
+    ],
     markReady: async () => {},
   });
   expect(comments[0]!.body).toContain("[pr_checks_passed] sha=abc123");
@@ -2215,7 +2424,12 @@ test("passed checks comment and move to pass state", async () => {
 
 test("failed checks bounce until failure budget then escalate", async () => {
   const comments: ControlPlaneComment[] = [
-    { id: "1", author: "agent", body: "[pr_checks_failed] sha=abc123 attempt=1/2", created_at: "2026-04-30T00:00:00Z" },
+    {
+      id: "1",
+      author: "agent",
+      body: "[pr_checks_failed] sha=abc123 attempt=1/2",
+      created_at: "2026-04-30T00:00:00Z",
+    },
   ];
   const states: string[] = [];
   await reconcileGithubPrChecks({
@@ -2232,10 +2446,25 @@ test("failed checks bounce until failure budget then escalate", async () => {
     },
     now: () => new Date("2026-04-30T00:00:00Z"),
     listComments: async () => comments,
-    addComment: async (_id, body) => { comments.push({ id: String(comments.length + 1), author: "agent", body, created_at: new Date().toISOString() }); },
-    updateState: async (_id, state) => { states.push(state); },
-    resolvePullRequest: async () => ({ number: 9, url: "https://github.com/acme/app/pull/9", sha: "abc123" }),
-    fetchChecks: async () => [{ name: "build", state: "FAILURE", bucket: "fail", link: "https://ci/build" }],
+    addComment: async (_id, body) => {
+      comments.push({
+        id: String(comments.length + 1),
+        author: "agent",
+        body,
+        created_at: new Date().toISOString(),
+      });
+    },
+    updateState: async (_id, state) => {
+      states.push(state);
+    },
+    resolvePullRequest: async () => ({
+      number: 9,
+      url: "https://github.com/acme/app/pull/9",
+      sha: "abc123",
+    }),
+    fetchChecks: async () => [
+      { name: "build", state: "FAILURE", bucket: "fail", link: "https://ci/build" },
+    ],
     markReady: async () => {},
   });
   expect(comments.at(-1)!.body).toContain("[pr_checks_escalated] sha=abc123 attempt=2/2");
@@ -2255,7 +2484,13 @@ Create `packages/dalang/src/control-plane/github/pr-checks.ts`:
 
 ```ts
 import type { ControlPlaneComment, WorkItem } from "../../types";
-import { decideAction, formatEscalatedComment, formatFailureComment, formatNoPrComment, formatPassedComment } from "../../orchestrator/pr-checks";
+import {
+  decideAction,
+  formatEscalatedComment,
+  formatFailureComment,
+  formatNoPrComment,
+  formatPassedComment,
+} from "../../orchestrator/pr-checks";
 
 export interface GithubCheck {
   name: string;
@@ -2293,9 +2528,15 @@ export interface GithubPrChecksArgs {
 
 function summaryFromGithubChecks(checks: GithubCheck[]) {
   return {
-    pending: checks.filter((c) => c.bucket === "pending").map((c) => ({ name: c.name, state: c.state, bucket: c.bucket, link: c.link })),
-    failures: checks.filter((c) => c.bucket === "fail" || c.bucket === "cancel").map((c) => ({ name: c.name, state: c.state, bucket: c.bucket, link: c.link })),
-    passed: checks.filter((c) => c.bucket === "pass").map((c) => ({ name: c.name, state: c.state, bucket: c.bucket, link: c.link })),
+    pending: checks
+      .filter((c) => c.bucket === "pending")
+      .map((c) => ({ name: c.name, state: c.state, bucket: c.bucket, link: c.link })),
+    failures: checks
+      .filter((c) => c.bucket === "fail" || c.bucket === "cancel")
+      .map((c) => ({ name: c.name, state: c.state, bucket: c.bucket, link: c.link })),
+    passed: checks
+      .filter((c) => c.bucket === "pass")
+      .map((c) => ({ name: c.name, state: c.state, bucket: c.bucket, link: c.link })),
   };
 }
 
@@ -2320,20 +2561,26 @@ export async function reconcileGithubPrChecks(args: GithubPrChecksArgs): Promise
     });
     if (action.kind === "noop" || action.kind === "rerun") continue;
     if (action.kind === "failed_bounce") {
-      await args.addComment(item.id, formatFailureComment({
-        sha: action.sha,
-        attempt: action.attempt,
-        budget: args.config.failure_budget,
-        failures: action.failures,
-      }));
+      await args.addComment(
+        item.id,
+        formatFailureComment({
+          sha: action.sha,
+          attempt: action.attempt,
+          budget: args.config.failure_budget,
+          failures: action.failures,
+        }),
+      );
       await args.updateState(item.id, args.config.fail_state);
     } else if (action.kind === "escalate") {
-      await args.addComment(item.id, formatEscalatedComment({
-        sha: action.sha,
-        attempt: action.attempt,
-        budget: args.config.failure_budget,
-        failures: action.failures,
-      }));
+      await args.addComment(
+        item.id,
+        formatEscalatedComment({
+          sha: action.sha,
+          attempt: action.attempt,
+          budget: args.config.failure_budget,
+          failures: action.failures,
+        }),
+      );
       await args.updateState(item.id, args.config.escalation_state);
     } else if (action.kind === "passed") {
       await args.markReady(pr);
@@ -2429,6 +2676,7 @@ git commit -m "feat(dalang): add github pr check reconciliation"
 ### Task 10: Rename Prompt Context and Preserve Migration Alias
 
 **Files:**
+
 - Modify: `packages/dalang/src/agent/prompt-builder.ts`
 - Modify: `packages/dalang/src/agent/agent-runner.ts`
 - Modify: `packages/dalang/src/orchestrator/orchestrator.ts`
@@ -2474,15 +2722,15 @@ export type TrackerPromptContext = ControlPlanePromptContext;
 In `buildFirstTurnPrompt`, change the render context:
 
 ```ts
-  const rendered = await liquid.parseAndRender(template, {
-    issue,
-    work_item: issue,
-    attempt,
-    control_plane: tracker,
-    tracker,
-    recent_comments,
-    recent_history,
-  });
+const rendered = await liquid.parseAndRender(template, {
+  issue,
+  work_item: issue,
+  attempt,
+  control_plane: tracker,
+  tracker,
+  recent_comments,
+  recent_history,
+});
 ```
 
 The argument name can remain `tracker` for this task if changing it would churn more files; exported context names must be control-plane-first.
@@ -2492,13 +2740,23 @@ The argument name can remain `tracker` for this task if changing it would churn 
 In `packages/dalang/src/agent/agent-runner.ts`, replace:
 
 ```ts
-import { buildFirstTurnPrompt, buildContinuationPrompt, type TrackerPromptContext, type RecentActivity } from "./prompt-builder";
+import {
+  buildFirstTurnPrompt,
+  buildContinuationPrompt,
+  type TrackerPromptContext,
+  type RecentActivity,
+} from "./prompt-builder";
 ```
 
 with:
 
 ```ts
-import { buildFirstTurnPrompt, buildContinuationPrompt, type ControlPlanePromptContext, type RecentActivity } from "./prompt-builder";
+import {
+  buildFirstTurnPrompt,
+  buildContinuationPrompt,
+  type ControlPlanePromptContext,
+  type RecentActivity,
+} from "./prompt-builder";
 ```
 
 Change `tracker: TrackerPromptContext;` to:
@@ -2510,7 +2768,13 @@ controlPlane: ControlPlanePromptContext;
 During the call:
 
 ```ts
-prompt = await buildFirstTurnPrompt(deps.promptTemplate, issue, deps.attempt, deps.controlPlane, activity);
+prompt = await buildFirstTurnPrompt(
+  deps.promptTemplate,
+  issue,
+  deps.attempt,
+  deps.controlPlane,
+  activity,
+);
 ```
 
 - [ ] **Step 5: Update orchestrator runAttempt call**
@@ -2518,9 +2782,9 @@ prompt = await buildFirstTurnPrompt(deps.promptTemplate, issue, deps.attempt, de
 In `packages/dalang/src/orchestrator/orchestrator.ts`, replace the `tracker:` prompt context with:
 
 ```ts
-      controlPlane: this.cfg.control_plane.kind === "wayang"
+      controlPlane: this.cfg.control_plane.kind === "papan"
         ? {
-            kind: "wayang",
+            kind: "papan",
             endpoint: this.cfg.control_plane.endpoint,
             api_key: resolveTrackerApiKey(this.cfg.control_plane.api_key ?? null),
           }
@@ -2553,6 +2817,7 @@ git commit -m "feat(dalang): expose control plane prompt context"
 ### Task 11: Documentation, Compatibility Cleanup, and Full Verification
 
 **Files:**
+
 - Modify: `README.md`
 - Modify: `docs/superpowers/specs/2026-04-29-dalang-orchestrator-design.md`
 - Modify: `docs/superpowers/specs/2026-04-30-pr-checks-wait-design.md`
@@ -2567,7 +2832,7 @@ In `packages/dalang/src/index.ts` and `packages/dalang/src/lib.ts`, replace trac
 ```ts
 export * from "./control-plane/adapter";
 export * from "./control-plane/normalize";
-export * from "./control-plane/wayang-adapter";
+export * from "./control-plane/papan-adapter";
 export * from "./control-plane/factory";
 export * from "./control-plane/github/adapter";
 ```
@@ -2580,7 +2845,7 @@ In `packages/dalang/README.md`, change the workflow block from:
 
 ```yaml
 tracker:
-  kind: tok-juara
+  kind: papan
   endpoint: http://localhost:3001
 ```
 
@@ -2588,7 +2853,7 @@ to:
 
 ```yaml
 control_plane:
-  kind: wayang
+  kind: papan
   endpoint: http://localhost:3001
   api_key: null
   active_states: [Todo, "In Dev"]
@@ -2630,13 +2895,13 @@ control_plane:
 In `docs/superpowers/specs/2026-04-29-dalang-orchestrator-design.md`, add a short note near the scope section:
 
 ```md
-Update: `2026-04-30-control-plane-github-projects-design.md` supersedes the original tracker-only v1 boundary. Dalang now uses a control-plane adapter boundary; Wayang is one adapter and GitHub Projects v2 is the first external kanban adapter.
+Update: `2026-04-30-control-plane-github-projects-design.md` supersedes the original tracker-only v1 boundary. Dalang now uses a control-plane adapter boundary; Papan is one adapter and GitHub Projects v2 is the first external kanban adapter.
 ```
 
 In `docs/superpowers/specs/2026-04-30-pr-checks-wait-design.md`, add:
 
 ```md
-Update: PR-check reconciliation is now a control-plane capability. The Wayang adapter preserves the behavior described here; GitHub Projects implements the same behavior natively against GitHub issues, PRs, checks, and Project v2 status fields.
+Update: PR-check reconciliation is now a control-plane capability. The Papan adapter preserves the behavior described here; GitHub Projects implements the same behavior natively against GitHub issues, PRs, checks, and Project v2 status fields.
 ```
 
 - [ ] **Step 4: Run repository-wide searches**
@@ -2680,10 +2945,10 @@ git commit -m "docs(dalang): document control plane adapters"
 
 ## Final Review Checklist
 
-- [ ] `control_plane.kind = wayang` remains behavior-compatible with the old Wayang tracker path.
-- [ ] `tracker` input still maps to Wayang for one migration release.
+- [ ] `control_plane.kind = papan` remains behavior-compatible with the old Papan tracker path.
+- [ ] `tracker` input still maps to Papan for one migration release.
 - [ ] Dalang orchestrator does not import GitHub-specific modules.
-- [ ] Dalang orchestrator does not import Wayang-specific modules outside bootstrap/factory wiring.
+- [ ] Dalang orchestrator does not import Papan-specific modules outside bootstrap/factory wiring.
 - [ ] External control planes require explicit ownership unless `allow_unowned_dispatch: true` is set.
 - [ ] GitHub Projects adapter ignores draft issues and PR project items.
 - [ ] GitHub Projects adapter updates Project v2 `Status`, not the GitHub issue open/closed state.

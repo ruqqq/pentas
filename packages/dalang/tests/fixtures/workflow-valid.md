@@ -6,4 +6,5 @@ tracker:
 workspace:
   root: /tmp/dalang
 ---
+
 Work on {{ issue.identifier }}.

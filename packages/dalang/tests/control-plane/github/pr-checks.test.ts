@@ -44,13 +44,28 @@ test("passed checks comment and move to pass state", async () => {
     now: () => new Date("2026-04-30T00:00:00Z"),
     listComments: async () => comments,
     addComment: async (_id, body) => {
-      comments.push({ id: String(comments.length + 1), author: "agent", body, created_at: new Date().toISOString() });
+      comments.push({
+        id: String(comments.length + 1),
+        author: "agent",
+        body,
+        created_at: new Date().toISOString(),
+      });
     },
-    updateState: async (_id, state) => { states.push(state); },
-    resolvePullRequest: async () => ({ number: 9, url: "https://github.com/acme/app/pull/9", sha: "abc123" }),
-    fetchChecks: async () => [{ name: "build", state: "SUCCESS", bucket: "pass", link: "https://ci/build" }],
+    updateState: async (_id, state) => {
+      states.push(state);
+    },
+    resolvePullRequest: async () => ({
+      number: 9,
+      url: "https://github.com/acme/app/pull/9",
+      sha: "abc123",
+    }),
+    fetchChecks: async () => [
+      { name: "build", state: "SUCCESS", bucket: "pass", link: "https://ci/build" },
+    ],
     rerunFailedChecks: async () => 0,
-    markReady: async () => { ready = true; },
+    markReady: async () => {
+      ready = true;
+    },
   });
 
   expect(comments[0]!.body).toContain("[pr_checks_passed] sha=abc123");
@@ -69,13 +84,28 @@ test("passed checks still move state when markReady fails", async () => {
     now: () => new Date("2026-04-30T00:00:00Z"),
     listComments: async () => comments,
     addComment: async (_id, body) => {
-      comments.push({ id: String(comments.length + 1), author: "agent", body, created_at: new Date().toISOString() });
+      comments.push({
+        id: String(comments.length + 1),
+        author: "agent",
+        body,
+        created_at: new Date().toISOString(),
+      });
     },
-    updateState: async (_id, state) => { states.push(state); },
-    resolvePullRequest: async () => ({ number: 9, url: "https://github.com/acme/app/pull/9", sha: "abc123" }),
-    fetchChecks: async () => [{ name: "build", state: "SUCCESS", bucket: "pass", link: "https://ci/build" }],
+    updateState: async (_id, state) => {
+      states.push(state);
+    },
+    resolvePullRequest: async () => ({
+      number: 9,
+      url: "https://github.com/acme/app/pull/9",
+      sha: "abc123",
+    }),
+    fetchChecks: async () => [
+      { name: "build", state: "SUCCESS", bucket: "pass", link: "https://ci/build" },
+    ],
     rerunFailedChecks: async () => 0,
-    markReady: async () => { throw new Error("already ready"); },
+    markReady: async () => {
+      throw new Error("already ready");
+    },
   });
 
   expect(states).toEqual(["Ready for Human Review"]);
@@ -84,7 +114,12 @@ test("passed checks still move state when markReady fails", async () => {
 
 test("failed checks bounce until failure budget then escalate", async () => {
   const comments: ControlPlaneComment[] = [
-    { id: "1", author: "agent", body: "[pr_checks_failed] sha=oldsha1 attempt=1/2", created_at: "2026-04-30T00:00:00Z" },
+    {
+      id: "1",
+      author: "agent",
+      body: "[pr_checks_failed] sha=oldsha1 attempt=1/2",
+      created_at: "2026-04-30T00:00:00Z",
+    },
   ];
   const states: string[] = [];
 
@@ -95,11 +130,24 @@ test("failed checks bounce until failure budget then escalate", async () => {
     now: () => new Date("2026-04-30T00:00:00Z"),
     listComments: async () => comments,
     addComment: async (_id, body) => {
-      comments.push({ id: String(comments.length + 1), author: "agent", body, created_at: new Date().toISOString() });
+      comments.push({
+        id: String(comments.length + 1),
+        author: "agent",
+        body,
+        created_at: new Date().toISOString(),
+      });
     },
-    updateState: async (_id, state) => { states.push(state); },
-    resolvePullRequest: async () => ({ number: 9, url: "https://github.com/acme/app/pull/9", sha: "abc123" }),
-    fetchChecks: async () => [{ name: "build", state: "FAILURE", bucket: "fail", link: "https://ci/build" }],
+    updateState: async (_id, state) => {
+      states.push(state);
+    },
+    resolvePullRequest: async () => ({
+      number: 9,
+      url: "https://github.com/acme/app/pull/9",
+      sha: "abc123",
+    }),
+    fetchChecks: async () => [
+      { name: "build", state: "FAILURE", bucket: "fail", link: "https://ci/build" },
+    ],
     rerunFailedChecks: async () => 0,
     markReady: async () => {},
   });
@@ -118,11 +166,24 @@ test("state-changing failures do not post marker before state mutation succeeds"
     now: () => new Date("2026-04-30T00:00:00Z"),
     listComments: async () => comments,
     addComment: async (_id, body) => {
-      comments.push({ id: String(comments.length + 1), author: "agent", body, created_at: new Date().toISOString() });
+      comments.push({
+        id: String(comments.length + 1),
+        author: "agent",
+        body,
+        created_at: new Date().toISOString(),
+      });
     },
-    updateState: async () => { throw new Error("project write failed"); },
-    resolvePullRequest: async () => ({ number: 9, url: "https://github.com/acme/app/pull/9", sha: "abc123" }),
-    fetchChecks: async () => [{ name: "build", state: "FAILURE", bucket: "fail", link: "https://ci/build" }],
+    updateState: async () => {
+      throw new Error("project write failed");
+    },
+    resolvePullRequest: async () => ({
+      number: 9,
+      url: "https://github.com/acme/app/pull/9",
+      sha: "abc123",
+    }),
+    fetchChecks: async () => [
+      { name: "build", state: "FAILURE", bucket: "fail", link: "https://ci/build" },
+    ],
     rerunFailedChecks: async () => 0,
     markReady: async () => {},
   });
@@ -142,11 +203,24 @@ test("rerun flakes posts rerun marker without moving state", async () => {
     now: () => new Date("2026-04-30T00:00:00Z"),
     listComments: async () => comments,
     addComment: async (_id, body) => {
-      comments.push({ id: String(comments.length + 1), author: "agent", body, created_at: new Date().toISOString() });
+      comments.push({
+        id: String(comments.length + 1),
+        author: "agent",
+        body,
+        created_at: new Date().toISOString(),
+      });
     },
-    updateState: async (_id, state) => { states.push(state); },
-    resolvePullRequest: async () => ({ number: 9, url: "https://github.com/acme/app/pull/9", sha: "abc123" }),
-    fetchChecks: async () => [{ name: "build", state: "FAILURE", bucket: "fail", link: "https://ci/build", runId: 123 }],
+    updateState: async (_id, state) => {
+      states.push(state);
+    },
+    resolvePullRequest: async () => ({
+      number: 9,
+      url: "https://github.com/acme/app/pull/9",
+      sha: "abc123",
+    }),
+    fetchChecks: async () => [
+      { name: "build", state: "FAILURE", bucket: "fail", link: "https://ci/build", runId: 123 },
+    ],
     rerunFailedChecks: async (_pr, checks) => {
       rerunCount = checks.length;
       return checks.length;
@@ -199,9 +273,17 @@ test("wait state comparison is case-insensitive", async () => {
     now: () => new Date("2026-04-30T00:00:00Z"),
     listComments: async () => [],
     addComment: async () => {},
-    updateState: async (_id, state) => { states.push(state); },
-    resolvePullRequest: async () => ({ number: 9, url: "https://github.com/acme/app/pull/9", sha: "abc123" }),
-    fetchChecks: async () => [{ name: "build", state: "SUCCESS", bucket: "pass", link: "https://ci/build" }],
+    updateState: async (_id, state) => {
+      states.push(state);
+    },
+    resolvePullRequest: async () => ({
+      number: 9,
+      url: "https://github.com/acme/app/pull/9",
+      sha: "abc123",
+    }),
+    fetchChecks: async () => [
+      { name: "build", state: "SUCCESS", bucket: "pass", link: "https://ci/build" },
+    ],
     rerunFailedChecks: async () => 0,
     markReady: async () => {},
   });

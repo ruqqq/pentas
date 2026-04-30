@@ -1,7 +1,13 @@
 // packages/dalang/src/cli/bootstrap.ts
 import { resolve } from "node:path";
 import { WorkflowReloader } from "../config/reload";
-import { validateForDispatch, probeClaudeAuth, probeCodexAuth, probeOpencodeAuth, ValidationError } from "../config/validate";
+import {
+  validateForDispatch,
+  probeClaudeAuth,
+  probeCodexAuth,
+  probeOpencodeAuth,
+  ValidationError,
+} from "../config/validate";
 import { Orchestrator } from "../orchestrator/orchestrator";
 import { createControlPlaneAdapter } from "../control-plane/factory";
 import { sdkRunQuery } from "../agent/sdk-runner";
@@ -18,9 +24,9 @@ export interface BootstrapOptions {
   skipAuthProbe?: boolean;
   runQueryFactory?: () => RunQuery;
   logger?: Logger;
-  /** If set, overrides workflow's Wayang control-plane endpoint (e.g. for in-process wayang). */
+  /** If set, overrides workflow's Papan control-plane endpoint (e.g. for in-process papan). */
   trackerEndpoint?: string;
-  /** If set, overrides workflow's Wayang control-plane api_key. */
+  /** If set, overrides workflow's Papan control-plane api_key. */
   trackerApiKey?: string | null;
 }
 
@@ -39,7 +45,9 @@ export class Bootstrap {
     this.reloader = new WorkflowReloader(opts.workflowPath);
   }
 
-  serverPort(): number { return this.server?.port ?? 0; }
+  serverPort(): number {
+    return this.server?.port ?? 0;
+  }
 
   async checkWorkflowReload(): Promise<void> {
     await this.reloader.checkMtimeReload();
@@ -54,7 +62,10 @@ export class Bootstrap {
         const err = await probeCodexAuth(wf.config.codex!.executable_path);
         if (err) throw new ValidationError("codex_auth_inactive", err);
       } else if (wf.config.agent_provider === "opencode") {
-        const err = await probeOpencodeAuth(wf.config.opencode!.executable_path, wf.config.opencode!.model);
+        const err = await probeOpencodeAuth(
+          wf.config.opencode!.executable_path,
+          wf.config.opencode!.model,
+        );
         if (err) {
           // The probe distinguishes binary failure from missing-provider-auth in its message,
           // so map the message prefix to the right ValidationCode.
@@ -82,8 +93,11 @@ export class Bootstrap {
           ? opencodeRunQuery
           : sdkRunQuery;
     this.orch = new Orchestrator({
-      controlPlane, config: wf.config, promptTemplate: wf.promptTemplate,
-      runQuery, logger: this.log,
+      controlPlane,
+      config: wf.config,
+      promptTemplate: wf.promptTemplate,
+      runQuery,
+      logger: this.log,
     });
     const initialProvider = wf.config.agent_provider;
     const initialControlPlaneKind = wf.config.control_plane.kind;
@@ -110,8 +124,9 @@ export class Bootstrap {
         );
         return;
       }
-      try { validateForDispatch(next.config); }
-      catch (err) {
+      try {
+        validateForDispatch(next.config);
+      } catch (err) {
         this.log.warn({ err: (err as Error).message }, "workflow reload failed validation");
         return;
       }
@@ -121,7 +136,9 @@ export class Bootstrap {
     const port = this.opts.port ?? wf.config.server.port;
     this.server = startServer({
       state: this.orch.state,
-      refresh: async () => { await this.orch?.tick(); },
+      refresh: async () => {
+        await this.orch?.tick();
+      },
       port,
     });
     this.scheduleTick(0);

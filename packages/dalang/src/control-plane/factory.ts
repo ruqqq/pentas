@@ -2,7 +2,7 @@ import type { WorkflowFrontMatter } from "../config/schema";
 import { resolveEnvValue, resolveTrackerApiKey } from "../config/env-resolver";
 import type { ControlPlaneAdapter } from "./adapter";
 import { GithubProjectsControlPlaneAdapter } from "./github/adapter";
-import { WayangControlPlaneAdapter } from "./wayang-adapter";
+import { PapanControlPlaneAdapter } from "./papan-adapter";
 
 export interface CreateControlPlaneArgs {
   config: WorkflowFrontMatter;
@@ -12,12 +12,13 @@ export interface CreateControlPlaneArgs {
 
 export function createControlPlaneAdapter(args: CreateControlPlaneArgs): ControlPlaneAdapter {
   const cp = args.config.control_plane;
-  if (cp.kind === "wayang") {
-    return new WayangControlPlaneAdapter({
+  if (cp.kind === "papan") {
+    return new PapanControlPlaneAdapter({
       endpoint: args.trackerEndpoint ?? cp.endpoint,
-      apiKey: args.trackerApiKey !== undefined
-        ? resolveTrackerApiKey(args.trackerApiKey)
-        : resolveTrackerApiKey(cp.api_key ?? null),
+      apiKey:
+        args.trackerApiKey !== undefined
+          ? resolveTrackerApiKey(args.trackerApiKey)
+          : resolveTrackerApiKey(cp.api_key ?? null),
     });
   }
 

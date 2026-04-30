@@ -14,7 +14,7 @@ test("normalizeWorkItem accepts a complete work item", () => {
     external_ref: "I_kwDO",
     internal_ref: "org/repo#12",
     labels: ["Dalang", "Bug"],
-    blocked_by: [{ id: "i1", identifier: "JUARA-1", state: "Done" }],
+    blocked_by: [{ id: "i1", identifier: "PENTAS-1", state: "Done" }],
     created_at: "2026-04-30T01:02:03.000Z",
     updated_at: "2026-04-30T02:03:04.000Z",
   });
@@ -31,7 +31,7 @@ test("normalizeWorkItem accepts a complete work item", () => {
     external_ref: "I_kwDO",
     internal_ref: "org/repo#12",
     labels: ["dalang", "bug"],
-    blocked_by: [{ id: "i1", identifier: "JUARA-1", state: "Done" }],
+    blocked_by: [{ id: "i1", identifier: "PENTAS-1", state: "Done" }],
     created_at: "2026-04-30T01:02:03.000Z",
     updated_at: "2026-04-30T02:03:04.000Z",
   });

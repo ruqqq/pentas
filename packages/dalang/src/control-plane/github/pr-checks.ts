@@ -113,21 +113,27 @@ export async function reconcileGithubPrChecks(args: GithubPrChecksArgs): Promise
         lastAction = "rerun";
       } else if (action.kind === "failed_bounce") {
         await args.updateState(item.id, args.config.fail_state);
-        await args.addComment(item.id, formatFailureComment({
-          sha: action.sha,
-          attempt: action.attempt,
-          budget: args.config.failure_budget,
-          failures: action.failures,
-        }));
+        await args.addComment(
+          item.id,
+          formatFailureComment({
+            sha: action.sha,
+            attempt: action.attempt,
+            budget: args.config.failure_budget,
+            failures: action.failures,
+          }),
+        );
         lastAction = "failed";
       } else if (action.kind === "escalate") {
         await args.updateState(item.id, args.config.escalation_state);
-        await args.addComment(item.id, formatEscalatedComment({
-          sha: action.sha,
-          attempt: action.attempt,
-          budget: args.config.failure_budget,
-          failures: action.failures,
-        }));
+        await args.addComment(
+          item.id,
+          formatEscalatedComment({
+            sha: action.sha,
+            attempt: action.attempt,
+            budget: args.config.failure_budget,
+            failures: action.failures,
+          }),
+        );
         lastAction = "escalated";
       } else if (action.kind === "passed") {
         await args.markReady(pr).catch(() => {});

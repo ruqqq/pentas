@@ -3,7 +3,7 @@ import { test, expect } from "bun:test";
 import { sanitizeWorkspaceKey } from "../../src/workspace/sanitize";
 
 test("preserves allowed characters", () => {
-  expect(sanitizeWorkspaceKey("JUARA-12.3_a")).toBe("JUARA-12.3_a");
+  expect(sanitizeWorkspaceKey("PENTAS-12.3_a")).toBe("PENTAS-12.3_a");
 });
 
 test("replaces disallowed characters with _", () => {

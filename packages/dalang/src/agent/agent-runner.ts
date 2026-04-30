@@ -66,7 +66,10 @@ export type OpencodeRunQueryOptions = CommonRunQueryOptions & {
   codex?: never;
 };
 
-export type RunQueryOptions = ClaudeRunQueryOptions | CodexRunQueryOptions | OpencodeRunQueryOptions;
+export type RunQueryOptions =
+  | ClaudeRunQueryOptions
+  | CodexRunQueryOptions
+  | OpencodeRunQueryOptions;
 
 export type RunQuery = (opts: RunQueryOptions) => AsyncIterable<unknown>;
 
@@ -106,7 +109,13 @@ export async function runAttempt(deps: RunAttemptDeps): Promise<RunAttemptResult
       const activity = deps.fetchRecentActivity
         ? await deps.fetchRecentActivity(issue).catch(() => ({ comments: [], history: [] }))
         : { comments: [], history: [] };
-      prompt = await buildFirstTurnPrompt(deps.promptTemplate, issue, deps.attempt, deps.controlPlane, activity);
+      prompt = await buildFirstTurnPrompt(
+        deps.promptTemplate,
+        issue,
+        deps.attempt,
+        deps.controlPlane,
+        activity,
+      );
     } else {
       prompt = buildContinuationPrompt(issue, turnCount, deps.config.maxTurns);
     }
@@ -127,7 +136,13 @@ export async function runAttempt(deps: RunAttemptDeps): Promise<RunAttemptResult
     tokens.total_tokens += turn.tokens.total_tokens;
 
     if (!turn.success) {
-      return { success: false, reason: turn.reason, thread_id: threadId, turn_count: turnCount, tokens };
+      return {
+        success: false,
+        reason: turn.reason,
+        thread_id: threadId,
+        turn_count: turnCount,
+        tokens,
+      };
     }
 
     const refreshed = await deps.trackerRefresh(issue.id).catch(() => null);
@@ -194,9 +209,11 @@ async function driveOneTurn(opts: DriveOneTurnOptions): Promise<DriveOneTurnResu
         return { success: false, reason: "turn_cancelled", thread_id: threadId, tokens };
       }
       const evt =
-        opts.config.provider === "codex"    ? mapCodexEvent(raw) :
-        opts.config.provider === "opencode" ? mapOpencodeEvent(raw) :
-        mapSdkMessage(raw);
+        opts.config.provider === "codex"
+          ? mapCodexEvent(raw)
+          : opts.config.provider === "opencode"
+            ? mapOpencodeEvent(raw)
+            : mapSdkMessage(raw);
       if (!evt) continue;
       if (evt.event === "session_started" && evt.thread_id) threadId = evt.thread_id;
       if (evt.event === "turn_completed" && evt.usage) {
@@ -206,8 +223,10 @@ async function driveOneTurn(opts: DriveOneTurnOptions): Promise<DriveOneTurnResu
       }
       opts.onEvent(evt);
       if (evt.event === "turn_completed") return { success: true, thread_id: threadId, tokens };
-      if (evt.event === "turn_ended_with_error") return { success: false, reason: "turn_failed", thread_id: threadId, tokens };
-      if (evt.event === "turn_input_required") return { success: false, reason: "turn_input_required", thread_id: threadId, tokens };
+      if (evt.event === "turn_ended_with_error")
+        return { success: false, reason: "turn_failed", thread_id: threadId, tokens };
+      if (evt.event === "turn_input_required")
+        return { success: false, reason: "turn_input_required", thread_id: threadId, tokens };
     }
     // If the outer abort signal is present, wait for any pending abort timer to fire
     // before deciding if this is a cancellation or a subprocess exit.
@@ -216,7 +235,10 @@ async function driveOneTurn(opts: DriveOneTurnOptions): Promise<DriveOneTurnResu
         const done = () => resolve();
         opts.abortSignal!.addEventListener("abort", done, { once: true });
         // Fallback: resolve after a short window so we don't block forever
-        setTimeout(() => { opts.abortSignal!.removeEventListener("abort", done); resolve(); }, 50);
+        setTimeout(() => {
+          opts.abortSignal!.removeEventListener("abort", done);
+          resolve();
+        }, 50);
       });
     }
     if (turnAbort.signal.aborted) {
@@ -224,7 +246,8 @@ async function driveOneTurn(opts: DriveOneTurnOptions): Promise<DriveOneTurnResu
     }
     return { success: false, reason: "subprocess_exit", thread_id: threadId, tokens };
   } catch (err) {
-    if (turnAbort.signal.aborted) return { success: false, reason: "turn_cancelled", thread_id: threadId, tokens };
+    if (turnAbort.signal.aborted)
+      return { success: false, reason: "turn_cancelled", thread_id: threadId, tokens };
     return { success: false, reason: "turn_failed", thread_id: threadId, tokens };
   } finally {
     clearTimeout(turnTimeout);

@@ -6,24 +6,24 @@ Author: ruqqq
 
 ## 1. Purpose
 
-`dalang` is a long-running daemon that orchestrates coding agents to work items from a control plane. Wayang is the original local control-plane implementation; GitHub Projects v2 is also supported through the control-plane adapter boundary. It is a tok-juara-flavored implementation of the [Symphony Service Specification](https://github.com/openai/symphony/blob/main/SPEC.md), with three substitutions:
+`dalang` is a long-running daemon that orchestrates coding agents to work items from a control plane. Papan is the original local control-plane implementation; GitHub Projects v2 is also supported through the control-plane adapter boundary. It is a pentas-flavored implementation of the [Symphony Service Specification](https://github.com/openai/symphony/blob/main/SPEC.md), with three substitutions:
 
 - Codex app-server → **Claude Agent SDK** (subscription-auth, model `claude-opus-4-7`, permission mode `auto`).
-- Linear → **wayang** (custom tracker; REST adapter; designed in a separate spec).
+- Linear → **papan** (custom tracker; REST adapter; designed in a separate spec).
 - Symphony's repo-agnostic posture → **single-repo + git-worktree** convenience layer, exposed as a documented Symphony extension.
 
-Conformance posture: dalang aims to be Symphony-extension-clean. A WORKFLOW.md authored for dalang can be loaded by a stock Symphony implementation; only the dalang-specific extension keys (`repo.*`, `claude.*`) and the tracker kind `tok-juara` would be unrecognized.
+Conformance posture: dalang aims to be Symphony-extension-clean. A WORKFLOW.md authored for dalang can be loaded by a stock Symphony implementation; only the dalang-specific extension keys (`repo.*`, `claude.*`) and the tracker kind `papan` would be unrecognized.
 
 ## 2. Scope
 
 ### In scope (v1)
 
-- Polling daemon with bounded concurrency, retries, and reconciliation against `wayang`.
+- Polling daemon with bounded concurrency, retries, and reconciliation against `papan`.
 - Per-issue git worktrees off a shared local clone.
 - Claude Agent SDK-driven worker sessions with multi-turn continuation on a single thread.
 - Hot-reloadable `WORKFLOW.md` (YAML front matter + Liquid prompt body).
 - Structured JSON logs and an HTTP observability surface (`/api/v1/state`, `/api/v1/:identifier`, `/api/v1/refresh`, `/`).
-- Bun-native monorepo workspace; `dalang` and `wayang` live as sibling packages.
+- Bun-native monorepo workspace; `dalang` and `papan` live as sibling packages.
 - PR-checks waiting state — see `2026-04-30-pr-checks-wait-design.md`. Adds a non-agent reconciler that polls `gh pr checks` for issues parked in `Waiting PR Checks`, posts results back as comments, and bounces or escalates based on a budget.
 - Alternative agent provider — see `2026-04-30-codex-provider-design.md` for OpenAI Codex as a per-workflow `agent_provider` choice alongside Claude.
 
@@ -33,20 +33,20 @@ Conformance posture: dalang aims to be Symphony-extension-clean. A WORKFLOW.md a
 - SSH worker pool (Symphony Appendix A).
 - Multi-repo per orchestrator instance.
 - tmux integration (HTTP log surface replaces it).
-- Pluggable tracker adapters beyond `tok-juara`.
-- Tracker write APIs in the orchestrator itself (writes happen via Claude tool use against the wayang REST API).
+- Pluggable tracker adapters beyond `pentas`.
+- Tracker write APIs in the orchestrator itself (writes happen via Claude tool use against the papan REST API).
 
 ## 3. Repository Layout
 
 ```
-tok-juara/
+pentas/
 ├── packages/
 │   ├── dalang/              # this spec
 │   │   ├── src/
 │   │   ├── tests/
 │   │   ├── package.json
 │   │   └── tsconfig.json
-│   └── wayang/              # designed in separate spec; stub here
+│   └── papan/              # designed in separate spec; stub here
 ├── docs/
 │   └── superpowers/specs/
 ├── package.json             # bun workspaces root
@@ -134,25 +134,25 @@ Symphony §5 verbatim, with substitutions and one extension block.
 ```yaml
 ---
 tracker:
-  kind: tok-juara                       # only supported value in v1
+  kind: papan                       # only supported value in v1
   endpoint: http://localhost:3001
-  api_key: $TOK_JUARA_API_KEY           # optional in v1; localhost may run unauthenticated
+  api_key: $PENTAS_API_KEY           # optional in v1; localhost may run unauthenticated
   board: null                           # OPTIONAL scope id (Symphony's project_slug analogue).
-                                        # v1 wayang is single-board; this is reserved for future
+                                        # v1 papan is single-board; this is reserved for future
                                         # multi-board support. dalang passes it through to the
                                         # tracker adapter when set, and skips preflight validation
                                         # when null.
   active_states: [Todo, "In Progress"]
   terminal_states: [Done, Cancelled, Duplicate]
 
-# Extension key (tok-juara). Symphony stock implementations ignore this block.
+# Extension key (pentas). Symphony stock implementations ignore this block.
 # When absent, dalang falls back to Symphony's pure hook-driven workspace model:
 # the workspace is a sanitized empty directory and `after_create` is responsible for
 # any repo bootstrap (e.g., `git clone .`).
 repo:
   url: git@github.com:me/myproject.git  # source clone; mirrored locally
   default_branch: main
-  branch_prefix: juara/                 # branch = <prefix><sanitized_identifier>
+  branch_prefix: pentas/                 # branch = <prefix><sanitized_identifier>
 
 polling:
   interval_ms: 30000
@@ -208,7 +208,7 @@ Workflow:
 2. Implement the change.
 3. Run tests and ensure they pass.
 4. Commit, push, and open a PR via `gh`.
-5. Update the issue state to `In Review` via the wayang API.
+5. Update the issue state to `In Review` via the papan API.
 ```
 
 ### 6.2 Hooks contract
@@ -219,7 +219,7 @@ The following env vars are exported:
 
 - `WORKSPACE_PATH` — absolute path to the per-issue workspace
 - `ISSUE_ID` — stable tracker-internal id
-- `ISSUE_IDENTIFIER` — human-readable key (e.g. `JUARA-12`)
+- `ISSUE_IDENTIFIER` — human-readable key (e.g. `PENTAS-12`)
 - `ISSUE_STATE` — current normalized state name
 - `ATTEMPT` — empty on first run, integer on retry/continuation
 - `BRANCH` — `<repo.branch_prefix><sanitized_identifier>` if `repo.*` is configured
@@ -279,7 +279,7 @@ When `repo.*` is **absent**, dalang's workspace manager only ensures the directo
 │  │  (pino)      │            ▼                                 │
 │  └──────────────┘   ┌──────────────────┐  ┌──────────────────┐ │
 │                     │ WorkspaceManager │  │ TrackerAdapter   │ │
-│                     │ (git worktree)   │  │ (REST → wayang)  │ │
+│                     │ (git worktree)   │  │ (REST → papan)  │ │
 │                     └────────┬─────────┘  └────────┬─────────┘ │
 │                              │                     │           │
 │                              ▼                     │           │
@@ -292,7 +292,7 @@ When `repo.*` is **absent**, dalang's workspace manager only ensures the directo
                                                      │ HTTP/JSON
                                                      ▼
                                             ┌────────────────┐
-                                            │ wayang (bun)   │
+                                            │ papan (bun)   │
                                             │ separate spec  │
                                             └────────────────┘
 ```
@@ -303,7 +303,7 @@ When `repo.*` is **absent**, dalang's workspace manager only ensures the directo
 
 2. **Config Layer** — typed getters over `WorkflowDefinition.config`. Resolves `$VAR` indirection, expands `~` for path values, normalizes `workspace.root` to absolute. Supplies defaults from §6.1.
 
-3. **TrackerAdapter** — REST client against wayang. Methods:
+3. **TrackerAdapter** — REST client against papan. Methods:
    - `fetchCandidateIssues()` — issues in `tracker.active_states`
    - `fetchIssuesByStates(states)` — used by startup terminal cleanup
    - `fetchIssueStatesByIds(ids)` — used by reconciliation
@@ -346,7 +346,7 @@ Symphony §8 verbatim. Tick sequence:
    - **Tracker state refresh:** `fetchIssueStatesByIds(running_ids)`. For each: terminal → terminate + cleanup workspace; active → update in-memory snapshot; neither → terminate without cleanup. State-refresh failure → keep workers running, retry next tick.
 2. Run dispatch preflight validation:
    - workflow file is loadable, parsed, and front matter is a map
-   - `tracker.kind == "tok-juara"` (only supported value in v1)
+   - `tracker.kind == "papan"` (only supported value in v1)
    - `tracker.api_key` is non-empty after `$VAR` resolution if its `$VAR` form is used (literal value or absent → no check)
    - `tracker.board` is documented but **not** preflight-required in v1 (no project/board scope concept; reserved for future)
    - `claude.executable_path` is non-empty and the binary is resolvable on PATH
@@ -484,9 +484,9 @@ User-input-required signals from the SDK are treated as **failure** (Symphony §
 - `claude.turn_timeout_ms` — total budget for one turn; exceeded → `abort()` + `turn_timeout` event.
 - `claude.stall_timeout_ms` — orchestrator-enforced based on event inactivity.
 
-## 11. Tracker Contract (Stub for wayang Spec)
+## 11. Tracker Contract (Stub for papan Spec)
 
-dalang treats the tracker through a typed adapter interface. The wayang implementation is designed in a separate spec, but the contract is fixed here.
+dalang treats the tracker through a typed adapter interface. The papan implementation is designed in a separate spec, but the contract is fixed here.
 
 ### 11.1 REST endpoints (consumed by dalang)
 
@@ -523,7 +523,7 @@ interface NormalizedIssue {
 }
 ```
 
-**Defensive normalization in the dalang adapter (Symphony §11.3):** even though wayang is expected to produce normalized issues, the dalang adapter applies a defensive pass to insulate against tracker-side schema drift:
+**Defensive normalization in the dalang adapter (Symphony §11.3):** even though papan is expected to produce normalized issues, the dalang adapter applies a defensive pass to insulate against tracker-side schema drift:
 
 - `labels` are coerced to lowercase strings; non-string entries are dropped.
 - `priority` is integer-only — non-integer numeric values become `null`, and non-numeric values become `null`.
@@ -537,7 +537,7 @@ interface NormalizedIssue {
 
 ### 11.4 Endpoints out of scope for dalang
 
-The following exist in wayang for the **agent** to call (via tool use), not for dalang:
+The following exist in papan for the **agent** to call (via tool use), not for dalang:
 
 ```
 PATCH /api/v1/issues/:id           # state transitions, field updates
@@ -596,7 +596,7 @@ Restart recovery (Symphony §14.3): no retry timers or live sessions survive pro
 
 dalang targets **trusted local environments** (operator's own machine, single-user). Default `permission_mode: auto` provides Claude Code's built-in safety checks (destructive/exfil action blocking). Operators running against externally-controlled tracker content SHOULD harden further:
 
-- Restrict the `wayang` API to a known issue scope.
+- Restrict the `papan` API to a known issue scope.
 - Run dalang under a dedicated OS user with restricted file access.
 - Use `permission_mode: bypassPermissions` only on isolated test machines.
 
@@ -634,10 +634,10 @@ Mapped from Symphony §17.
   - **defensive reload**: mtime-changed file is re-loaded at the start of a tick even when no chokidar event was observed
   - missing/invalid YAML returns typed errors
   - defaults applied for missing optional fields
-  - `tracker.kind` enforces `tok-juara`
+  - `tracker.kind` enforces `papan`
   - `$VAR` resolution (tracker key, path values)
   - `~` path expansion
-  - prompt renders with `issue`, `attempt`, and `tracker` (`tracker.endpoint` and resolved `tracker.api_key`, so the template can build PATCH calls against wayang without hardcoding the URL)
+  - prompt renders with `issue`, `attempt`, and `tracker` (`tracker.endpoint` and resolved `tracker.api_key`, so the template can build PATCH calls against papan without hardcoding the URL)
   - prompt rendering fails on unknown variables/filters
   - **empty prompt body** triggers `workflow_empty_prompt` and blocks dispatch
   - prompt template can iterate `issue.labels` and `issue.blocked_by`
@@ -706,17 +706,17 @@ Mapped from Symphony §17.
 
 ### Integration (`RUN_INTEGRATION=1`)
 
-- Real wayang instance, full poll-dispatch-run cycle on a synthetic issue.
+- Real papan instance, full poll-dispatch-run cycle on a synthetic issue.
 - Real Claude Max subscription session (skipped in CI without auth).
 - Worktree lifecycle on a real test repo.
 
 ## 17. Definition of Done (v1)
 
-- [ ] Bun workspace skeleton (`packages/dalang`, `packages/wayang` stub).
+- [ ] Bun workspace skeleton (`packages/dalang`, `packages/papan` stub).
 - [ ] `WORKFLOW.md` loader + typed config layer + hot reload.
 - [ ] `chokidar` watcher with last-good-config fallback **and** mtime-based defensive reload at tick start.
 - [ ] `liquidjs` strict prompt rendering.
-- [ ] `RestTrackerAdapter` against the wayang contract.
+- [ ] `RestTrackerAdapter` against the papan contract.
 - [ ] Workspace manager with `repo.*` extension worktree path + plain-dir fallback.
 - [ ] Hook execution with timeouts and env injection.
 - [ ] Orchestrator with single-authority state, dispatch loop, retry queue, reconciliation, stall detection.
@@ -739,7 +739,7 @@ Concise list for review/audit:
 | #   | Item                                                                                                                                                                                    | Type           |
 | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
 | 1   | Codex app-server → Claude Agent SDK (in-process)                                                                                                                                        | Substitution   |
-| 2   | Linear → wayang (REST adapter)                                                                                                                                                          | Substitution   |
+| 2   | Linear → papan (REST adapter)                                                                                                                                                           | Substitution   |
 | 3   | `codex.*` block → `claude.*` block (`executable_path`, `model`, `permission_mode`, timeouts)                                                                                            | Substitution   |
 | 4   | `repo.*` extension block (worktree convenience)                                                                                                                                         | Addition       |
 | 5   | `permission_mode: auto` as committed default; `acceptEdits` rejected in v1                                                                                                              | Tightening     |
@@ -760,7 +760,7 @@ Concise list for review/audit:
 
 - Persistence layer (SQLite) for retry-queue durability across restarts.
 - tmux or web-based attach-and-steer UI for live operator intervention.
-- MCP server for the agent to call wayang (`PATCH /issues/:id`, `POST /comments`) with typed schemas.
+- MCP server for the agent to call papan (`PATCH /issues/:id`, `POST /comments`) with typed schemas.
 - Multi-repo support (per-issue `repo` field).
 - SSH worker pool (Symphony Appendix A).
 - Pluggable tracker adapters (e.g., GitHub Issues, Linear).

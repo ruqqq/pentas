@@ -4,18 +4,28 @@ import { buildFirstTurnPrompt, buildContinuationPrompt } from "../../src/agent/p
 import type { NormalizedIssue, TrackerComment, TrackerHistoryEntry } from "../../src/types";
 
 const issue: NormalizedIssue = {
-  id: "i_1", identifier: "JUARA-1", title: "Fix bug", description: "details",
-  priority: 1, state: "Todo", branch_name: null, url: null, external_ref: null, internal_ref: null,
-  labels: ["bug", "p1"], blocked_by: [],
-  created_at: null, updated_at: null,
+  id: "i_1",
+  identifier: "PENTAS-1",
+  title: "Fix bug",
+  description: "details",
+  priority: 1,
+  state: "Todo",
+  branch_name: null,
+  url: null,
+  external_ref: null,
+  internal_ref: null,
+  labels: ["bug", "p1"],
+  blocked_by: [],
+  created_at: null,
+  updated_at: null,
 };
 
-const tracker = { kind: "wayang", endpoint: "http://localhost:3002", api_key: null };
+const tracker = { kind: "papan", endpoint: "http://localhost:3002", api_key: null };
 
 test("first turn prepends issue metadata header", async () => {
   const out = await buildFirstTurnPrompt("Body for {{ issue.identifier }}", issue, null, tracker);
-  expect(out).toContain("# Working on JUARA-1: Fix bug");
-  expect(out).toContain("Body for JUARA-1");
+  expect(out).toContain("# Working on PENTAS-1: Fix bug");
+  expect(out).toContain("Body for PENTAS-1");
 });
 
 test("first turn renders attempt variable", async () => {
@@ -24,9 +34,10 @@ test("first turn renders attempt variable", async () => {
 });
 
 test("first turn renders tracker endpoint and api_key", async () => {
-  const tpl = "PATCH {{ tracker.endpoint }}/api/v1/issues/{{ issue.id }}{% if tracker.api_key %} bearer={{ tracker.api_key }}{% endif %}";
+  const tpl =
+    "PATCH {{ tracker.endpoint }}/api/v1/issues/{{ issue.id }}{% if tracker.api_key %} bearer={{ tracker.api_key }}{% endif %}";
   const out = await buildFirstTurnPrompt(tpl, issue, null, {
-    kind: "wayang",
+    kind: "papan",
     endpoint: "http://localhost:3002",
     api_key: "secret",
   });
@@ -48,7 +59,9 @@ test("first turn fails on unknown variable", async () => {
 });
 
 test("first turn fails on unknown filter", async () => {
-  await expect(buildFirstTurnPrompt("{{ issue.title | bogus_filter }}", issue, null, tracker)).rejects.toThrow();
+  await expect(
+    buildFirstTurnPrompt("{{ issue.title | bogus_filter }}", issue, null, tracker),
+  ).rejects.toThrow();
 });
 
 test("first turn iterates labels", async () => {
@@ -83,7 +96,8 @@ test("first turn exposes recent_history newest-first, capped to 5", async () => 
     actor: "agent",
     at: `2026-01-0${i + 1}T00:00:00Z`,
   }));
-  const tpl = "{% for h in recent_history %}<{{ h.id }}:{{ h.kind }}:{{ h.from_value }}->{{ h.to_value }}>{% endfor %}";
+  const tpl =
+    "{% for h in recent_history %}<{{ h.id }}:{{ h.kind }}:{{ h.from_value }}->{{ h.to_value }}>{% endfor %}";
   const out = await buildFirstTurnPrompt(tpl, issue, null, tracker, { comments: [], history });
   expect(out).toContain("<h6:state_changed:S5->S6>");
   expect(out).toContain("<h2:state_changed:S1->S2>");
@@ -98,7 +112,7 @@ test("first turn defaults recent_comments and recent_history to empty arrays", a
 
 test("continuation prompt mentions identifier and turn number, omits original prompt", async () => {
   const out = buildContinuationPrompt(issue, 2, 20);
-  expect(out).toContain("JUARA-1");
+  expect(out).toContain("PENTAS-1");
   expect(out).toContain("turn 2");
   expect(out).not.toContain("Body for");
 });

@@ -4,20 +4,41 @@ import { WorkflowFrontMatterSchema, applyDefaults } from "../../src/config/schem
 
 test("accepts a complete valid front matter", () => {
   const raw = {
-    tracker: { kind: "tok-juara", endpoint: "http://localhost:3001", project: null,
-      active_states: ["Todo", "In Progress"], terminal_states: ["Done"] },
+    tracker: {
+      kind: "papan",
+      endpoint: "http://localhost:3001",
+      project: null,
+      active_states: ["Todo", "In Progress"],
+      terminal_states: ["Done"],
+    },
     polling: { interval_ms: 5000 },
     workspace: { root: "/tmp/dalang" },
     hooks: { timeout_ms: 60000 },
-    agent: { max_concurrent_agents: 2, max_turns: 5, max_retry_backoff_ms: 60000,
-      max_concurrent_agents_by_state: {} },
-    claude: { executable_path: "claude", model: "claude-opus-4-7",
-      permission_mode: "auto", turn_timeout_ms: 60000, read_timeout_ms: 5000, stall_timeout_ms: 30000 },
+    agent: {
+      max_concurrent_agents: 2,
+      max_turns: 5,
+      max_retry_backoff_ms: 60000,
+      max_concurrent_agents_by_state: {},
+    },
+    claude: {
+      executable_path: "claude",
+      model: "claude-opus-4-7",
+      permission_mode: "auto",
+      turn_timeout_ms: 60000,
+      read_timeout_ms: 5000,
+      stall_timeout_ms: 30000,
+    },
     server: { port: 0 },
-    pr_checks: { enabled: false, poll_interval_ms: 60000, failure_budget: 3, rerun_flakes: true, gh_executable: "gh" },
+    pr_checks: {
+      enabled: false,
+      poll_interval_ms: 60000,
+      failure_budget: 3,
+      rerun_flakes: true,
+      gh_executable: "gh",
+    },
   };
   const parsed = WorkflowFrontMatterSchema.parse(raw);
-  expect(parsed.tracker.kind).toBe("tok-juara");
+  expect(parsed.tracker.kind).toBe("papan");
 });
 
 test("rejects acceptEdits permission_mode in v1", () => {
@@ -136,13 +157,16 @@ test("applyDefaults fills opencode block when agent_provider=opencode and omits 
   expect(result.opencode?.model).toBe("google/gemini-2.5-pro");
 });
 
-test("agent_provider accepts \"opencode\"", () => {
-  const cfg = applyDefaults({ agent_provider: "opencode", opencode: { model: "anthropic/claude-sonnet-4-6" } });
+test('agent_provider accepts "opencode"', () => {
+  const cfg = applyDefaults({
+    agent_provider: "opencode",
+    opencode: { model: "anthropic/claude-sonnet-4-6" },
+  });
   const parsed = WorkflowFrontMatterSchema.safeParse(cfg);
   expect(parsed.success).toBe(true);
 });
 
-test("agent_provider=\"opencode\" without opencode block fails superRefine", () => {
+test('agent_provider="opencode" without opencode block fails superRefine', () => {
   const cfg = applyDefaults({ agent_provider: "opencode" });
   delete (cfg as Record<string, unknown>).opencode;
   const parsed = WorkflowFrontMatterSchema.safeParse(cfg);
@@ -160,10 +184,10 @@ test("opencode.model must be in provider/model form", () => {
 
 test("applyDefaults exposes control_plane and tracker compatibility alias", () => {
   const cfg = applyDefaults({});
-  expect(cfg.control_plane.kind).toBe("wayang");
+  expect(cfg.control_plane.kind).toBe("papan");
   expect(cfg.control_plane.active_states).toContain("In Dev");
   expect(cfg.control_plane.ownership).toEqual({ mode: "none" });
-  expect(cfg.tracker.kind).toBe("tok-juara");
+  expect(cfg.tracker.kind).toBe("papan");
 });
 
 test("accepts github-projects control plane with label ownership", () => {
@@ -223,14 +247,15 @@ test("defaults omitted github-projects pr_checks fields", () => {
 
   const parsed = WorkflowFrontMatterSchema.parse(cfg);
   expect(parsed.control_plane.kind).toBe("github-projects");
-  if (parsed.control_plane.kind !== "github-projects") throw new Error("expected github-projects control plane");
+  if (parsed.control_plane.kind !== "github-projects")
+    throw new Error("expected github-projects control plane");
   expect(parsed.control_plane.pr_checks?.poll_interval_ms).toBe(60000);
 });
 
-test("maps legacy tracker input to wayang control_plane", () => {
+test("maps legacy tracker input to papan control_plane", () => {
   const cfg = applyDefaults({
     tracker: {
-      kind: "tok-juara",
+      kind: "papan",
       endpoint: "http://localhost:3009",
       api_key: null,
       active_states: ["Todo"],
@@ -238,17 +263,17 @@ test("maps legacy tracker input to wayang control_plane", () => {
     },
   });
   expect(cfg.control_plane).toMatchObject({
-    kind: "wayang",
+    kind: "papan",
     endpoint: "http://localhost:3009",
     active_states: ["Todo"],
     terminal_states: ["Done"],
   });
 });
 
-test("direct schema parse maps legacy tracker input to wayang control_plane", () => {
+test("direct schema parse maps legacy tracker input to papan control_plane", () => {
   const parsed = WorkflowFrontMatterSchema.parse({
     tracker: {
-      kind: "tok-juara",
+      kind: "papan",
       endpoint: "http://localhost:3010",
       api_key: null,
       active_states: ["Doing"],
@@ -282,7 +307,7 @@ test("direct schema parse maps legacy tracker input to wayang control_plane", ()
   });
 
   expect(parsed.control_plane).toMatchObject({
-    kind: "wayang",
+    kind: "papan",
     endpoint: "http://localhost:3010",
     active_states: ["Doing"],
     terminal_states: ["Done"],
@@ -294,7 +319,7 @@ test("rejects explicit invalid control_plane instead of treating it as absent", 
     const cfg = applyDefaults({
       control_plane: controlPlane,
       tracker: {
-        kind: "tok-juara",
+        kind: "papan",
         endpoint: "http://localhost:3010",
         api_key: null,
         active_states: ["Todo"],
@@ -314,12 +339,12 @@ test("rejects explicit invalid tracker instead of treating it as absent", () => 
   }
 });
 
-test("maps wayang control_plane input to tracker compatibility alias when tracker omitted", () => {
+test("maps papan control_plane input to tracker compatibility alias when tracker omitted", () => {
   const cfg = applyDefaults({
     control_plane: {
-      kind: "wayang",
+      kind: "papan",
       endpoint: "http://localhost:3011",
-      api_key: "wayang-key",
+      api_key: "papan-key",
       board: "ops",
       active_states: ["Queued", "Building"],
       terminal_states: ["Shipped", "Dropped"],
@@ -328,9 +353,9 @@ test("maps wayang control_plane input to tracker compatibility alias when tracke
   });
 
   expect(cfg.tracker).toEqual({
-    kind: "tok-juara",
+    kind: "papan",
     endpoint: "http://localhost:3011",
-    api_key: "wayang-key",
+    api_key: "papan-key",
     board: "ops",
     active_states: ["Queued", "Building"],
     terminal_states: ["Shipped", "Dropped"],

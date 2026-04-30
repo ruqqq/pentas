@@ -3,11 +3,11 @@
 Status: Draft v1
 Date: 2026-04-30
 Author: ruqqq
-Supersedes: none. Extends `2026-04-29-dalang-orchestrator-design.md` and `2026-04-29-wayang-tracker-design.md`.
+Supersedes: none. Extends `2026-04-29-dalang-orchestrator-design.md` and `2026-04-29-papan-tracker-design.md`.
 
 ## 1. Purpose
 
-Add an orchestrator-driven state where dalang waits for GitHub PR checks to settle, posts results back to the control-plane work item as comments, and either escalates to a human or bounces the item back to `In Dev` for the agent to fix — all without holding an agent worker slot during the wait. Wayang preserves the original `gh`-backed behavior; GitHub Projects implements the same state/comment protocol natively against GitHub issues, PRs, checks, and Project v2 status fields.
+Add an orchestrator-driven state where dalang waits for GitHub PR checks to settle, posts results back to the control-plane work item as comments, and either escalates to a human or bounces the item back to `In Dev` for the agent to fix — all without holding an agent worker slot during the wait. Papan preserves the original `gh`-backed behavior; GitHub Projects implements the same state/comment protocol natively against GitHub issues, PRs, checks, and Project v2 status fields.
 
 ## 2. Motivation
 
@@ -17,14 +17,14 @@ Today the agent opens a PR, marks the ticket `Ready for Review`, and dalang tran
 
 - Watching arbitrary external workflows (the only signal is `gh pr checks`).
 - Running the rerun-on-flake fix loop ourselves; we only re-trigger failed checks once and re-poll.
-- Persisting check state across dalang restarts. Restarted dalang re-derives state from wayang + GitHub on its next tick.
+- Persisting check state across dalang restarts. Restarted dalang re-derives state from papan + GitHub on its next tick.
 - Replacing the human-driven `Ready for Human Review` step. That state is still where things park for review.
 
 ## 4. State Machine Changes
 
 ### 4.1 New canonical state
 
-Add `Waiting PR Checks` to `wayang`'s `IssueState` union, between `Ready for Review` and `Ready for Human Review` in `ALL_STATES`. It is **not** in `ACTIVE_STATES` for the dispatcher (no agent should be picked up for a ticket in this state) but it **is** active from the orchestrator's perspective — dalang has work to do.
+Add `Waiting PR Checks` to `papan`'s `IssueState` union, between `Ready for Review` and `Ready for Human Review` in `ALL_STATES`. It is **not** in `ACTIVE_STATES` for the dispatcher (no agent should be picked up for a ticket in this state) but it **is** active from the orchestrator's perspective — dalang has work to do.
 
 ```
 Todo → Plan → Review Plan → Ready for Dev → In Dev → Ready for Review
@@ -44,7 +44,7 @@ Todo → Plan → Review Plan → Ready for Dev → In Dev → Ready for Review
 
 The agent's WORKFLOW.md prompt must instruct: after `gh pr create`, set ticket state to `Waiting PR Checks` (not `Ready for Review`). `Ready for Review` becomes a transient state agents pass through implicitly — kept in the union to avoid breaking existing tickets, but unused on the happy path going forward.
 
-This is a workflow-prompt change, **not** a code change in dalang or wayang. It travels via the user's external `WORKFLOW.md`.
+This is a workflow-prompt change, **not** a code change in dalang or papan. It travels via the user's external `WORKFLOW.md`.
 
 ## 5. Orchestrator Changes (dalang)
 
@@ -124,7 +124,7 @@ Re-triggered 2 failed checks. Will re-poll.
 
 ### 5.7 Per-SHA dedupe
 
-Before posting `[pr_checks_failed]` or `[pr_checks_passed]`, scan recent comments on the issue. If the latest tagged comment for this kind has the same `sha=<headRefOid>`, skip the action — we've already handled this SHA. This prevents duplicate state changes when the next tick fires before a state change propagates back from wayang.
+Before posting `[pr_checks_failed]` or `[pr_checks_passed]`, scan recent comments on the issue. If the latest tagged comment for this kind has the same `sha=<headRefOid>`, skip the action — we've already handled this SHA. This prevents duplicate state changes when the next tick fires before a state change propagates back from papan.
 
 ## 6. Tracker Adapter Changes
 
@@ -136,7 +136,8 @@ listComments(issueId: string): Promise<TrackerComment[]>;
 updateState(issueId: string, state: string): Promise<void>;
 ```
 
-Existing wayang routes already cover these:
+Existing papan routes already cover these:
+
 - `POST /api/v1/issues/:id/comments` — body `{ author, body }`
 - `GET /api/v1/issues/:id/comments` — returns `{ comments: [...] }`
 - `PATCH /api/v1/issues/:id` — body includes `state`
@@ -160,12 +161,12 @@ New `pr_checks` block in `WorkflowFrontMatterSchema`:
 
 ```yaml
 pr_checks:
-  enabled: true              # gate the entire feature; default false for backwards compat
-  poll_interval_ms: 60000    # how often to re-check pending PRs (separate from main poll)
+  enabled: true # gate the entire feature; default false for backwards compat
+  poll_interval_ms: 60000 # how often to re-check pending PRs (separate from main poll)
   failure_budget: 3
   rerun_flakes: true
   gh_executable: "gh"
-  bot_author: "dalang"       # used as comment author
+  bot_author: "dalang" # used as comment author
 ```
 
 `enabled: false` (default) means dalang ignores `Waiting PR Checks` issues entirely — they sit there until a human moves them. This keeps the change drop-in.
@@ -177,14 +178,17 @@ pr_checks:
 `OrchestratorState` gets a new field:
 
 ```ts
-pr_checks_polls: Map<string /*issueId*/, {
-  last_polled_at: string;      // ISO; throttle next poll
-  last_seen_sha: string | null;
-  last_action: "pending" | "rerun" | "failed" | "passed" | "escalated" | "no_pr" | null;
-}>;
+pr_checks_polls: Map<
+  string /*issueId*/,
+  {
+    last_polled_at: string; // ISO; throttle next poll
+    last_seen_sha: string | null;
+    last_action: "pending" | "rerun" | "failed" | "passed" | "escalated" | "no_pr" | null;
+  }
+>;
 ```
 
-This is purely a throttle/dedupe cache; durable truth lives in wayang comments + state. Restart loses this map; that's fine — the comment dedupe in §5.7 ensures correctness.
+This is purely a throttle/dedupe cache; durable truth lives in papan comments + state. Restart loses this map; that's fine — the comment dedupe in §5.7 ensures correctness.
 
 ## 9. Observability
 
@@ -194,24 +198,24 @@ This is purely a throttle/dedupe cache; durable truth lives in wayang comments +
 
 ## 10. Failure Modes
 
-| Failure | Behaviour |
-|---|---|
-| `gh` not found / not authed | Log `tracker_request_error`-style warning; skip this tick; do **not** count toward budget. |
-| `gh pr list` returns empty | `[pr_checks_no_pr]`, bounce to `In Dev`, **counts** toward budget. |
-| wayang write fails | Log; retry on next tick. No state change happens — counter stays put. |
-| Checks pending for >24h | No special handling in v1; human will notice. (Future: stall-on-pending threshold.) |
+| Failure                                       | Behaviour                                                                                             |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `gh` not found / not authed                   | Log `tracker_request_error`-style warning; skip this tick; do **not** count toward budget.            |
+| `gh pr list` returns empty                    | `[pr_checks_no_pr]`, bounce to `In Dev`, **counts** toward budget.                                    |
+| papan write fails                             | Log; retry on next tick. No state change happens — counter stays put.                                 |
+| Checks pending for >24h                       | No special handling in v1; human will notice. (Future: stall-on-pending threshold.)                   |
 | Budget tampered with (user deletes a comment) | Counter is now lower; agent gets another bounce. Acceptable in v1; user can also manually move state. |
 
 ## 11. Test Strategy
 
-- **wayang**: state union test — `Waiting PR Checks` is a valid state and does not appear in `ACTIVE_STATES`.
+- **papan**: state union test — `Waiting PR Checks` is a valid state and does not appear in `ACTIVE_STATES`.
 - **dalang**: `gh` is faked with a configurable shell stub (script that emits canned JSON based on env). Real `Bun.spawn`, no mocking the system under test.
 - Comment-counter logic gets unit tests over a fake comment list.
-- End-to-end: spin up wayang HTTP server (existing test pattern), run one orchestrator tick with a fake `gh` that returns red, assert (a) `[pr_checks_failed]` comment is present, (b) state moved to `In Dev`, (c) counter increments on a second tick.
+- End-to-end: spin up papan HTTP server (existing test pattern), run one orchestrator tick with a fake `gh` that returns red, assert (a) `[pr_checks_failed]` comment is present, (b) state moved to `In Dev`, (c) counter increments on a second tick.
 
 ## 12. Migration & Rollout
 
-1. Ship the wayang state addition (no-op behaviour change — humans can pick it manually but no agent depends on it).
+1. Ship the papan state addition (no-op behaviour change — humans can pick it manually but no agent depends on it).
 2. Ship dalang reconciler with `pr_checks.enabled` defaulting to `false`. No behavioral change.
 3. Update the user's external `WORKFLOW.md` to set state to `Waiting PR Checks` after `gh pr create`, and flip `pr_checks.enabled = true`.
 

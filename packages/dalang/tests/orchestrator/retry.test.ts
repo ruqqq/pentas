@@ -14,8 +14,12 @@ test("backoff formula doubles per attempt and caps at max", () => {
 test("scheduleRetry stores entry and timer", () => {
   const s = createInitialState({ poll_interval_ms: 30000, max_concurrent_agents: 4 });
   scheduleRetry(s, {
-    issue_id: "i1", identifier: "X-1", attempt: 1, delayMs: 100,
-    error: "boom", onFire: () => {},
+    issue_id: "i1",
+    identifier: "X-1",
+    attempt: 1,
+    delayMs: 100,
+    error: "boom",
+    onFire: () => {},
   });
   expect(s.retry_attempts.has("i1")).toBe(true);
 });
@@ -24,10 +28,26 @@ test("scheduling a new retry cancels the existing timer for the same issue", asy
   const s = createInitialState({ poll_interval_ms: 30000, max_concurrent_agents: 4 });
   let firedFirst = false;
   let firedSecond = false;
-  scheduleRetry(s, { issue_id: "i1", identifier: "X-1", attempt: 1, delayMs: 50,
-    error: null, onFire: () => { firedFirst = true; } });
-  scheduleRetry(s, { issue_id: "i1", identifier: "X-1", attempt: 2, delayMs: 50,
-    error: null, onFire: () => { firedSecond = true; } });
+  scheduleRetry(s, {
+    issue_id: "i1",
+    identifier: "X-1",
+    attempt: 1,
+    delayMs: 50,
+    error: null,
+    onFire: () => {
+      firedFirst = true;
+    },
+  });
+  scheduleRetry(s, {
+    issue_id: "i1",
+    identifier: "X-1",
+    attempt: 2,
+    delayMs: 50,
+    error: null,
+    onFire: () => {
+      firedSecond = true;
+    },
+  });
   await new Promise((r) => setTimeout(r, 120));
   expect(firedFirst).toBe(false);
   expect(firedSecond).toBe(true);
@@ -36,8 +56,16 @@ test("scheduling a new retry cancels the existing timer for the same issue", asy
 test("cancelRetry clears entry and prevents firing", async () => {
   const s = createInitialState({ poll_interval_ms: 30000, max_concurrent_agents: 4 });
   let fired = false;
-  scheduleRetry(s, { issue_id: "i1", identifier: "X-1", attempt: 1, delayMs: 50,
-    error: null, onFire: () => { fired = true; } });
+  scheduleRetry(s, {
+    issue_id: "i1",
+    identifier: "X-1",
+    attempt: 1,
+    delayMs: 50,
+    error: null,
+    onFire: () => {
+      fired = true;
+    },
+  });
   cancelRetry(s, "i1");
   await new Promise((r) => setTimeout(r, 80));
   expect(fired).toBe(false);
