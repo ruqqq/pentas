@@ -104,3 +104,16 @@ test("rejects unknown codex.sandbox_mode", () => {
   (bad.codex as any).sandbox_mode = "kitchen-sink";
   expect(() => WorkflowFrontMatterSchema.parse(bad)).toThrow();
 });
+
+test("rejects agent_provider=codex without a codex block", () => {
+  const cfg = applyDefaults({}) as Record<string, unknown>;
+  cfg.agent_provider = "codex";
+  delete cfg.codex;
+  expect(() => WorkflowFrontMatterSchema.parse(cfg)).toThrow(/codex/i);
+});
+
+test("rejects agent_provider=claude without a claude block", () => {
+  const cfg = applyDefaults({}) as Record<string, unknown>;
+  delete cfg.claude;
+  expect(() => WorkflowFrontMatterSchema.parse(cfg)).toThrow(/claude/i);
+});

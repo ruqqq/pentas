@@ -87,7 +87,7 @@ export const PrChecksSchema = z.object({
   gh_executable: z.string().min(1),
 });
 
-export const WorkflowFrontMatterSchema = z.object({
+const RawWorkflowFrontMatterSchema = z.object({
   tracker: TrackerSchema,
   repo: RepoSchema,
   polling: PollingSchema,
@@ -95,10 +95,27 @@ export const WorkflowFrontMatterSchema = z.object({
   hooks: HooksSchema,
   agent: AgentSchema,
   agent_provider: AgentProvider.default("claude"),
-  claude: ClaudeSchema,
+  claude: ClaudeSchema.optional(),
   codex: CodexSchema.optional(),
   server: ServerSchema,
   pr_checks: PrChecksSchema,
+});
+
+export const WorkflowFrontMatterSchema = RawWorkflowFrontMatterSchema.superRefine((cfg, ctx) => {
+  if (cfg.agent_provider === "claude" && !cfg.claude) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["claude"],
+      message: "claude block is required when agent_provider is \"claude\"",
+    });
+  }
+  if (cfg.agent_provider === "codex" && !cfg.codex) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["codex"],
+      message: "codex block is required when agent_provider is \"codex\"",
+    });
+  }
 });
 
 export type WorkflowFrontMatter = z.infer<typeof WorkflowFrontMatterSchema>;
