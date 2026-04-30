@@ -5,6 +5,7 @@ import { validateForDispatch, probeClaudeAuth, ValidationError } from "../config
 import { resolveTrackerApiKey, Orchestrator } from "../orchestrator/orchestrator";
 import { RestTrackerAdapter } from "../tracker/rest-adapter";
 import { sdkRunQuery } from "../agent/sdk-runner";
+import { codexRunQuery } from "../agent/codex-runner";
 import { startServer, type ServerHandle } from "../http/server";
 import { createLogger, type Logger } from "../logging/logger";
 import type { RunQuery } from "../agent/agent-runner";
@@ -52,7 +53,11 @@ export class Bootstrap {
         ? resolveTrackerApiKey(this.opts.trackerApiKey)
         : resolveTrackerApiKey(wf.config.tracker.api_key ?? null),
     });
-    const runQuery = this.opts.runQueryFactory ? this.opts.runQueryFactory() : sdkRunQuery;
+    const runQuery = this.opts.runQueryFactory
+      ? this.opts.runQueryFactory()
+      : wf.config.agent_provider === "codex"
+        ? codexRunQuery
+        : sdkRunQuery;
     this.orch = new Orchestrator({
       tracker, config: wf.config, promptTemplate: wf.promptTemplate,
       runQuery, logger: this.log,
