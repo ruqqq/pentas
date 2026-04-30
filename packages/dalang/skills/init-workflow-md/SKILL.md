@@ -7,7 +7,7 @@ description: Use when the user wants to create, scaffold, or initialize a WORKFL
 
 dalang loads a single `WORKFLOW.md` consisting of YAML front matter (config) plus a Liquid prompt body. This skill walks through producing a valid file from scratch.
 
-Spec source of truth: `docs/superpowers/specs/2026-04-29-dalang-orchestrator-design.md` §6.
+Spec source of truth: `docs/superpowers/specs/2026-04-29-dalang-orchestrator-design.md` §6 (with the `Waiting PR Checks` extension in `2026-04-30-pr-checks-wait-design.md`).
 
 ## Step 1 — confirm inputs with the user
 
@@ -41,6 +41,11 @@ Confirm before writing if any of these are non-obvious.
 | `claude.turn_timeout_ms` | `3600000` | 1 h |
 | `claude.read_timeout_ms` | `5000` | |
 | `claude.stall_timeout_ms` | `300000` | 5 min; set `<= 0` to disable stall detection |
+| `pr_checks.enabled` | `false` | turns the `Waiting PR Checks` reconciler on; opt-in |
+| `pr_checks.poll_interval_ms` | `60000` | per-issue throttle for `gh pr checks` polls |
+| `pr_checks.failure_budget` | `3` | red-CI bounces tolerated before escalation to `Ready for Human Review` |
+| `pr_checks.rerun_flakes` | `true` | re-run failed checks once before counting as a real failure |
+| `pr_checks.gh_executable` | `gh` | resolves on `PATH`; override if the CLI isn't in PATH |
 | `server.port` | `0` | ephemeral; CLI `--port` wins |
 | `hooks.timeout_ms` | `60000` | |
 
@@ -92,6 +97,20 @@ claude:
   read_timeout_ms: 5000
   stall_timeout_ms: 300000
 
+# Optional: orchestrator-driven PR-checks waiting state.
+# When enabled, the agent transitions Ready for Review → Waiting PR Checks
+# (instead of going directly to Done). dalang then polls `gh pr checks`
+# and either bounces back to In Dev with a [pr_checks_failed] comment
+# or hands off to Ready for Human Review.
+# See docs/superpowers/specs/2026-04-30-pr-checks-wait-design.md for details.
+# Add "Waiting PR Checks" to the prompt body's state machine when enabling.
+pr_checks:
+  enabled: false
+  poll_interval_ms: 60000
+  failure_budget: 3
+  rerun_flakes: true
+  gh_executable: gh
+
 server:
   port: 0
 ---
@@ -142,6 +161,8 @@ Hooks run as `bash -lc` with `cwd = workspace`. Available env: `WORKSPACE_PATH`,
 | Inlining the api key | Prefer `$TOK_JUARA_API_KEY` so the file is committable. |
 | Setting `agent.max_concurrent_agents: 10` | Claude Max session limits make 4 the practical ceiling. |
 | Omitting `repo:` while expecting worktrees | Without `repo.*`, dalang only ensures the directory exists; bootstrap must happen in `after_create`. |
+| Setting `pr_checks.enabled: true` without a `Waiting PR Checks` branch in the prompt body | The agent will reach a state with no instructions. Add an explicit case (or a guard that exits cleanly), and update the prompt's pipeline diagram so the agent transitions `Ready for Review → Waiting PR Checks` instead of `Ready for Review → Done`. |
+| Adding `Waiting PR Checks` to `tracker.active_states` | Don't. dalang's reconciler reads it via a separate fetch; the dispatcher must NOT pick up these tickets, otherwise an agent will run on a state it shouldn't drive. |
 
 ## After writing
 
