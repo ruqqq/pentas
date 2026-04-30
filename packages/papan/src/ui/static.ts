@@ -5,7 +5,7 @@ import htmxJs from "./public/htmx.min.js" with { type: "file" };
 import sseJs from "./public/sse.js" with { type: "file" };
 import jsonEncJs from "./public/json-enc.js" with { type: "file" };
 
-// Embedded so the compiled supervisor binary ships these assets. Keys are the
+// Embedded so the compiled papan binary ships these assets. Keys are the
 // public URL suffix (after /static/); values are the bundler-rewritten paths.
 const ASSETS: Record<string, string> = {
   "style.css": styleCss,

@@ -1,6 +1,6 @@
 # pentas
 
-A three-package Bun + TypeScript monorepo:
+A two-package Bun + TypeScript monorepo:
 
 - **`@pentas/dalang`** — orchestrator daemon. Polls a control plane for owned work, dispatches per-item work to git-worktree workspaces, and runs Claude/Codex/opencode agent sessions.
 - **`@pentas/papan`** — single-user issue control plane and inbox that dalang can drive against (REST API + minimal UI). Dalang can also use GitHub Projects v2 as a control plane.
@@ -47,6 +47,7 @@ bun run typecheck      # tsgo --noEmit on every workspace
 bun run lint           # oxlint
 bun run format         # oxfmt (writes)
 bun run format:check   # oxfmt --check
+bun run build          # compile dist/dalang and dist/papan
 bun test               # bun test on every package
 ```
 

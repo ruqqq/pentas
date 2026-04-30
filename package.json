@@ -11,7 +11,9 @@
     "lint": "oxlint",
     "format": "oxfmt .",
     "format:check": "bunx --bun oxfmt --check .",
-    "build": "bun build packages/supervisor/src/index.ts --compile --target=bun --outfile=dist/pentas"
+    "build": "bun run build:dalang && bun run build:papan",
+    "build:dalang": "bun build packages/dalang/src/index.ts --compile --target=bun --outfile=dist/dalang",
+    "build:papan": "bun build packages/papan/src/index.ts --compile --target=bun --outfile=dist/papan"
   },
   "devDependencies": {
     "@types/bun": "^1.3.13",
