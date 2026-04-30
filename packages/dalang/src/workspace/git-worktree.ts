@@ -59,7 +59,8 @@ export class GitWorktreeManager {
 
   async ensureWorktree(workspacePath: string, branch: string): Promise<void> {
     await this.ensureSharedClone();
-    if (existsSync(workspacePath)) return;
+    if (existsSync(join(workspacePath, ".git"))) return;
+    if (existsSync(workspacePath)) await rm(workspacePath, { recursive: true, force: true });
     const fetch = await git(this.sharedClonePath, ["fetch", "origin"]);
     if (!fetch.ok) throw new GitWorktreeError(`fetch failed: ${fetch.stderr}`);
 

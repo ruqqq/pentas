@@ -37,6 +37,18 @@ test("first worktree creates branch from default and adds worktree", async () =>
   expect(existsSync(join(wsPath, "README.md"))).toBe(true);
 });
 
+test("empty pre-existing dir is replaced by a real worktree", async () => {
+  const src = await setupSourceRepo();
+  const root = await tmpRoot();
+  const m = new GitWorktreeManager({ workspaceRoot: root, repoUrl: src, defaultBranch: "main", branchPrefix: "juara/" });
+  await m.ensureSharedClone();
+  const wsPath = join(root, "EMPTY-1");
+  await mkdir(wsPath, { recursive: true });
+  await m.ensureWorktree(wsPath, "juara/EMPTY-1");
+  expect(existsSync(join(wsPath, "README.md"))).toBe(true);
+  expect(existsSync(join(wsPath, ".git"))).toBe(true);
+});
+
 test("reusing worktree path is a no-op (preserves branch)", async () => {
   const src = await setupSourceRepo();
   const root = await tmpRoot();

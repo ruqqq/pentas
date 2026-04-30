@@ -5,6 +5,7 @@ import type { TrackerAdapter } from "../../src/tracker/adapter";
 import type { NormalizedIssue, TrackerComment, TrackerHistoryEntry } from "../../src/types";
 import { applyDefaults } from "../../src/config/schema";
 import { mkdtemp, writeFile, chmod } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -62,6 +63,45 @@ test("tick dispatches eligible issue and runs an attempt to completion", async (
 
   expect(orch.state.claude_totals.total_tokens).toBe(10);
   expect(orch.state.completed.has("i1")).toBe(true);
+});
+
+test("workspace is removed when issue disappears between completion and continuation retry", async () => {
+  const root = await tmpRoot();
+  const tracker = new FakeTracker();
+  tracker.candidates = [issue("i1")];
+  tracker.byIds["i1"] = issue("i1");
+
+  const cfg = applyDefaults({
+    tracker: { endpoint: "http://localhost:1", active_states: ["Todo"], terminal_states: ["Done"] },
+    workspace: { root },
+    agent: { max_concurrent_agents: 1, max_turns: 1 },
+    polling: { interval_ms: 1000 },
+  });
+
+  const orch = new Orchestrator({
+    tracker, config: cfg, promptTemplate: "x",
+    runQuery: async function* () {
+      yield { type: "system", subtype: "init", session_id: "s-1" };
+      yield { type: "result", subtype: "success", usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } };
+    },
+  });
+
+  await orch.tick();
+  await orch.drainPendingForTest();
+
+  const wsPath = join(root, "X-i1");
+  expect(existsSync(wsPath)).toBe(true);
+  expect(orch.state.retry_attempts.has("i1")).toBe(true);
+
+  // PR submitted → issue no longer in active candidates.
+  tracker.candidates = [];
+
+  // Wait for the continuation retry (CONTINUATION_RETRY_MS = 1000ms) to fire.
+  await new Promise((r) => setTimeout(r, 1300));
+
+  expect(existsSync(wsPath)).toBe(false);
+  expect(orch.state.retry_attempts.has("i1")).toBe(false);
+  expect(orch.state.claimed.has("i1")).toBe(false);
 });
 
 test("tick respects max_concurrent_agents and queues the rest", async () => {

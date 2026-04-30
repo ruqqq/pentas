@@ -287,7 +287,7 @@ export class Orchestrator {
       scheduleRetry(this.state, {
         issue_id: issue.id, identifier: issue.identifier,
         attempt: 1, delayMs: CONTINUATION_RETRY_MS, error: null,
-        onFire: () => this.handleRetryFire(issue.id),
+        onFire: () => this.handleRetryFire(issue.id, issue.identifier),
       });
     } else {
       const nextAttempt = (attempt ?? 0) + 1;
@@ -305,12 +305,12 @@ export class Orchestrator {
       scheduleRetry(this.state, {
         issue_id: issue.id, identifier: issue.identifier,
         attempt: nextAttempt, delayMs: delay, error: result.reason ?? "worker_failed",
-        onFire: () => this.handleRetryFire(issue.id),
+        onFire: () => this.handleRetryFire(issue.id, issue.identifier),
       });
     }
   }
 
-  private async handleRetryFire(issueId: string): Promise<void> {
+  private async handleRetryFire(issueId: string, identifier: string): Promise<void> {
     let candidates: NormalizedIssue[] = [];
     try {
       candidates = await this.tracker.fetchCandidateIssues(this.cfg.tracker.active_states);
@@ -318,15 +318,21 @@ export class Orchestrator {
       const e = this.state.retry_attempts.get(issueId);
       const next = (e?.attempt ?? 1) + 1;
       scheduleRetry(this.state, {
-        issue_id: issueId, identifier: e?.identifier ?? issueId,
+        issue_id: issueId, identifier,
         attempt: next, delayMs: computeBackoffMs(next, this.cfg.agent.max_retry_backoff_ms),
         error: "retry poll failed",
-        onFire: () => this.handleRetryFire(issueId),
+        onFire: () => this.handleRetryFire(issueId, identifier),
       });
       return;
     }
     const issue = candidates.find((c) => c.id === issueId);
     if (!issue) {
+      await this.cleanupByIdentifier({ id: issueId, identifier, state: "" }).catch((err) => {
+        this.log.warn(
+          { issue_id: issueId, identifier, err: (err as Error).message },
+          "post-completion cleanup failed",
+        );
+      });
       releaseClaim(this.state, issueId);
       return;
     }
@@ -341,7 +347,7 @@ export class Orchestrator {
         issue_id: issueId, identifier: issue.identifier,
         attempt: next, delayMs: computeBackoffMs(next, this.cfg.agent.max_retry_backoff_ms),
         error: "no available orchestrator slots",
-        onFire: () => this.handleRetryFire(issueId),
+        onFire: () => this.handleRetryFire(issueId, issue.identifier),
       });
       return;
     }
@@ -349,17 +355,31 @@ export class Orchestrator {
   }
 
   private async cleanupWorkspace(entry: RunningEntry): Promise<void> {
-    const cwd = entry.workspace_path;
+    await this.cleanupByIdentifier({
+      id: entry.issue.id,
+      identifier: entry.issue.identifier,
+      state: entry.issue.state,
+    });
+  }
+
+  private async cleanupByIdentifier(opts: { id: string; identifier: string; state: string }): Promise<void> {
+    const cwd = this.workspaces.pathFor(opts.identifier);
     const env = {
-      WORKSPACE_PATH: cwd, ISSUE_ID: entry.issue.id,
-      ISSUE_IDENTIFIER: entry.issue.identifier, ISSUE_STATE: entry.issue.state,
+      WORKSPACE_PATH: cwd, ISSUE_ID: opts.id,
+      ISSUE_IDENTIFIER: opts.identifier, ISSUE_STATE: opts.state,
       ATTEMPT: "",
     };
     if (this.cfg.hooks.before_remove) {
-      await this.runHookLogged("before_remove", this.cfg.hooks.before_remove, cwd, env, entry.issue).catch(() => {});
+      await this.runHookLogged(
+        "before_remove",
+        this.cfg.hooks.before_remove,
+        cwd,
+        env,
+        { id: opts.id, identifier: opts.identifier },
+      ).catch(() => {});
     }
     if (this.worktrees) await this.worktrees.removeWorktree(cwd);
-    else await this.workspaces.removeWorkspace(entry.issue.identifier);
+    else await this.workspaces.removeWorkspace(opts.identifier);
   }
 
   private async runHookLogged(
@@ -367,7 +387,7 @@ export class Orchestrator {
     script: string,
     cwd: string,
     env: Record<string, string>,
-    issue: NormalizedIssue,
+    issue: { id: string; identifier: string },
   ): Promise<void> {
     const startedAt = Date.now();
     this.log.info(
