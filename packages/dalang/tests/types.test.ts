@@ -45,6 +45,7 @@ test("OrchestratorState has expected shape", () => {
     },
     rate_limits: null,
     workflow_mtime: null,
+    pr_checks_polls: new Map(),
   };
   expect(state.running.size).toBe(0);
 });

@@ -172,6 +172,8 @@ Todo  →  In Progress  →  In Review  →  Done
 
 State transitions are unrestricted in v1 (any → any). dalang does not depend on a specific transition graph; this avoids workflow-engine creep.
 
+The state set has been extended in subsequent specs. See `2026-04-30-pr-checks-wait-design.md` for `Waiting PR Checks` — orchestrator-driven, not in `ACTIVE_STATES` (so the dispatcher does not pick up tickets parked there); dalang polls them via a non-agent reconciler.
+
 ## 7. API Surface
 
 All endpoints under `/api/v1/`. Auth middleware (§7.4) applies uniformly when `WAYANG_API_TOKEN` is set.

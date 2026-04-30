@@ -2,9 +2,9 @@
 import { test, expect } from "bun:test";
 import { Orchestrator } from "../../src/orchestrator/orchestrator";
 import type { TrackerAdapter } from "../../src/tracker/adapter";
-import type { NormalizedIssue } from "../../src/types";
+import type { NormalizedIssue, TrackerComment } from "../../src/types";
 import { applyDefaults } from "../../src/config/schema";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, writeFile, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -18,11 +18,14 @@ class FakeTracker implements TrackerAdapter {
   candidates: NormalizedIssue[] = [];
   byIds: Record<string, NormalizedIssue> = {};
   async fetchCandidateIssues(): Promise<NormalizedIssue[]> { return this.candidates; }
-  async fetchIssuesByStates(): Promise<NormalizedIssue[]> { return []; }
+  async fetchIssuesByStates(_states: string[]): Promise<NormalizedIssue[]> { return []; }
   async fetchIssueStatesByIds(ids: string[]): Promise<NormalizedIssue[]> {
     return ids.map((id) => this.byIds[id]).filter((x): x is NormalizedIssue => Boolean(x));
   }
   async fetchIssue(id: string): Promise<NormalizedIssue | null> { return this.byIds[id] ?? null; }
+  async listComments(_issueId: string): Promise<TrackerComment[]> { return []; }
+  async addComment(_issueId: string, _body: string, _author?: "user" | "agent"): Promise<void> { /* noop */ }
+  async updateState(_issueId: string, _state: string): Promise<void> { /* noop */ }
 }
 
 async function tmpRoot(): Promise<string> {
@@ -86,4 +89,107 @@ test("tick respects max_concurrent_agents and queues the rest", async () => {
   await orch.tick();
   expect(orch.state.running.size + orch.state.retry_attempts.size).toBeGreaterThanOrEqual(1);
   expect(orch.state.running.size).toBeLessThanOrEqual(1);
+});
+
+async function ghStub(scriptBody: string): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), "gh-stub-"));
+  const path = join(dir, "gh");
+  await writeFile(path, `#!/bin/sh\n${scriptBody}\n`);
+  await chmod(path, 0o755);
+  return path;
+}
+
+test("tick runs pr_checks reconciler when enabled, bouncing red checks to In Dev", async () => {
+  const root = await tmpRoot();
+  const stub = await ghStub(`
+    case "$1 $2" in
+      "pr list") echo '[{"url":"https://x/pr/1","number":1,"headRefOid":"abc1234567"}]' ;;
+      "pr checks") echo '[{"name":"build","state":"FAILURE","bucket":"fail","link":"https://x/run/9"}]' ;;
+    esac`);
+
+  const waiting: NormalizedIssue = {
+    id: "i1", identifier: "TJ-1", title: "x", description: null, priority: null,
+    state: "Waiting PR Checks", branch_name: "feat/tj-1", url: null,
+    external_ref: null, internal_ref: null, labels: [], blocked_by: [],
+    created_at: "2026-01-01", updated_at: null,
+  };
+
+  class WriteRecordingTracker extends FakeTracker {
+    comments: { id: string; body: string }[] = [];
+    states: Record<string, string> = { i1: "Waiting PR Checks" };
+    override async fetchIssuesByStates(states: string[]): Promise<NormalizedIssue[]> {
+      if (states.includes("Waiting PR Checks")) return [waiting];
+      return [];
+    }
+    override async listComments(_id: string): Promise<TrackerComment[]> { return []; }
+    override async addComment(id: string, body: string): Promise<void> {
+      this.comments.push({ id, body });
+    }
+    override async updateState(id: string, s: string): Promise<void> {
+      this.states[id] = s;
+    }
+  }
+
+  const tracker = new WriteRecordingTracker();
+  const cfg = applyDefaults({
+    tracker: { endpoint: "http://localhost:1", active_states: ["Todo"], terminal_states: ["Done"] },
+    workspace: { root },
+    agent: { max_concurrent_agents: 1, max_turns: 1 },
+    polling: { interval_ms: 1000 },
+    pr_checks: {
+      enabled: true,
+      poll_interval_ms: 1,
+      failure_budget: 3,
+      rerun_flakes: false,
+      gh_executable: stub,
+    },
+  });
+
+  const orch = new Orchestrator({
+    tracker, config: cfg, promptTemplate: "x",
+    runQuery: async function* () {
+      yield { type: "system", subtype: "init", session_id: "s" };
+      yield { type: "result", subtype: "success", usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 } };
+    },
+  });
+
+  await orch.tick();
+  expect(tracker.states.i1).toBe("In Dev");
+  expect(tracker.comments).toHaveLength(1);
+  expect(tracker.comments[0]!.body).toContain("[pr_checks_failed] sha=abc1234");
+});
+
+test("tick skips pr_checks reconciler when disabled", async () => {
+  const root = await tmpRoot();
+  const stub = await ghStub(`exit 99`);
+  class T extends FakeTracker {
+    waitingFetched = false;
+    override async fetchIssuesByStates(_states: string[]): Promise<NormalizedIssue[]> {
+      this.waitingFetched = true; return [];
+    }
+  }
+  const tracker = new T();
+  const cfg = applyDefaults({
+    tracker: { endpoint: "http://localhost:1", active_states: ["Todo"], terminal_states: ["Done"] },
+    workspace: { root },
+    agent: { max_concurrent_agents: 1, max_turns: 1 },
+    polling: { interval_ms: 1000 },
+    pr_checks: {
+      enabled: false,
+      poll_interval_ms: 1,
+      failure_budget: 3,
+      rerun_flakes: false,
+      gh_executable: stub,
+    },
+  });
+
+  const orch = new Orchestrator({
+    tracker, config: cfg, promptTemplate: "x",
+    runQuery: async function* () {
+      yield { type: "system", subtype: "init", session_id: "s" };
+      yield { type: "result", subtype: "success", usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 } };
+    },
+  });
+  await orch.tick();
+  expect(tracker.waitingFetched).toBe(false);
 });

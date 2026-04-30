@@ -1,5 +1,5 @@
 // packages/dalang/tests/config/schema.test.ts
-import { test, expect } from "bun:test";
+import { test, expect, describe } from "bun:test";
 import { WorkflowFrontMatterSchema, applyDefaults } from "../../src/config/schema";
 
 test("accepts a complete valid front matter", () => {
@@ -14,6 +14,7 @@ test("accepts a complete valid front matter", () => {
     claude: { executable_path: "claude", model: "claude-opus-4-7",
       permission_mode: "auto", turn_timeout_ms: 60000, read_timeout_ms: 5000, stall_timeout_ms: 30000 },
     server: { port: 0 },
+    pr_checks: { enabled: false, poll_interval_ms: 60000, failure_budget: 3, rerun_flakes: true, gh_executable: "gh" },
   };
   const parsed = WorkflowFrontMatterSchema.parse(raw);
   expect(parsed.tracker.kind).toBe("tok-juara");
@@ -58,4 +59,25 @@ test("rejects negative agent.max_turns", () => {
   const bad = applyDefaults({});
   bad.agent.max_turns = 0;
   expect(() => WorkflowFrontMatterSchema.parse(bad)).toThrow();
+});
+
+describe("pr_checks config", () => {
+  test("defaults to enabled=false with sensible values", () => {
+    const cfg = applyDefaults({});
+    expect(cfg.pr_checks).toEqual({
+      enabled: false,
+      poll_interval_ms: 60000,
+      failure_budget: 3,
+      rerun_flakes: true,
+      gh_executable: "gh",
+    });
+  });
+  test("user override is shallow-merged into defaults", () => {
+    const cfg = applyDefaults({ pr_checks: { enabled: true, failure_budget: 5 } });
+    expect(cfg.pr_checks.enabled).toBe(true);
+    expect(cfg.pr_checks.failure_budget).toBe(5);
+    expect(cfg.pr_checks.poll_interval_ms).toBe(60000);
+    expect(cfg.pr_checks.rerun_flakes).toBe(true);
+    expect(cfg.pr_checks.gh_executable).toBe("gh");
+  });
 });

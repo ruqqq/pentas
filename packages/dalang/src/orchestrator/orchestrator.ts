@@ -7,6 +7,7 @@ import { createInitialState, addRunning, removeRunning, accumulateTokens } from 
 import { sortForDispatch, isEligible } from "./eligibility";
 import { scheduleRetry, computeBackoffMs, releaseClaim, CONTINUATION_RETRY_MS } from "./retry";
 import { detectStalls, classifyTrackerRefresh } from "./reconcile";
+import { runPrChecksReconciler } from "./pr-checks-runner";
 import { WorkspaceManager } from "../workspace/workspace-manager";
 import { GitWorktreeManager } from "../workspace/git-worktree";
 import { runHook, truncateLogged } from "../workspace/hooks";
@@ -66,6 +67,26 @@ export class Orchestrator {
 
   async tick(): Promise<void> {
     await this.reconcile();
+
+    if (this.cfg.pr_checks.enabled) {
+      let waiting: NormalizedIssue[] = [];
+      try {
+        waiting = await this.tracker.fetchIssuesByStates(["Waiting PR Checks"]);
+      } catch (err) {
+        this.log.warn({ err: (err as Error).message }, "pr_checks fetch failed; skipping");
+      }
+      await runPrChecksReconciler({
+        issues: waiting,
+        state: this.state,
+        tracker: this.tracker,
+        cfg: this.cfg.pr_checks,
+        cwd: process.cwd(),
+        now: () => new Date(),
+      }).catch((err) => {
+        this.log.warn({ err: (err as Error).message }, "pr_checks reconcile failed");
+      });
+    }
+
     let candidates: NormalizedIssue[] = [];
     try {
       candidates = await this.tracker.fetchCandidateIssues(this.cfg.tracker.active_states);

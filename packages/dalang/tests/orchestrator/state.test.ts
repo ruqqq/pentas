@@ -50,3 +50,9 @@ test("accumulateTokens adds to totals", () => {
   expect(s.claude_totals.output_tokens).toBe(55);
   expect(s.claude_totals.total_tokens).toBe(165);
 });
+
+test("createInitialState includes empty pr_checks_polls map", () => {
+  const s = createInitialState({ poll_interval_ms: 1000, max_concurrent_agents: 1 });
+  expect(s.pr_checks_polls).toBeInstanceOf(Map);
+  expect(s.pr_checks_polls.size).toBe(0);
+});

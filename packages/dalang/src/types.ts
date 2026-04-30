@@ -23,6 +23,13 @@ export interface NormalizedIssue {
   updated_at: string | null;
 }
 
+export interface TrackerComment {
+  id: string;
+  author: string | null;
+  body: string;
+  created_at: string;
+}
+
 export interface WorkspaceMeta {
   path: string;
   workspace_key: string;
@@ -110,6 +117,11 @@ export interface OrchestratorState {
   claude_totals: ClaudeTotals;
   rate_limits: RateLimitsSnapshot | null;
   workflow_mtime: number | null;
+  pr_checks_polls: Map<string, {
+    last_polled_at: string;
+    last_seen_sha: string | null;
+    last_action: "pending" | "rerun" | "failed" | "passed" | "escalated" | "no_pr" | null;
+  }>;
 }
 
 export type RuntimeEventKind =
@@ -125,7 +137,8 @@ export type RuntimeEventKind =
   | "unsupported_tool_call"
   | "notification"
   | "other_message"
-  | "malformed";
+  | "malformed"
+  | "pr_checks_observed";
 
 export interface RuntimeEvent {
   event: RuntimeEventKind;

@@ -17,6 +17,7 @@ describe("issue state machine", () => {
       "Ready for Dev",
       "In Dev",
       "Ready for Review",
+      "Waiting PR Checks",
       "Ready for Human Review",
       "Done",
       "Cancelled",
@@ -47,5 +48,23 @@ describe("issue state machine", () => {
   test("isValidState recognizes all canonical states", () => {
     for (const s of ALL_STATES) expect(isValidState(s)).toBe(true);
     expect(isValidState("garbage")).toBe(false);
+  });
+});
+
+describe("Waiting PR Checks state", () => {
+  test("is included in ALL_STATES between Ready for Review and Ready for Human Review", () => {
+    const idx = (ALL_STATES as readonly string[]).indexOf("Waiting PR Checks");
+    expect(idx).toBeGreaterThan(-1);
+    expect(ALL_STATES[idx - 1]).toBe("Ready for Review");
+    expect(ALL_STATES[idx + 1]).toBe("Ready for Human Review");
+  });
+  test("is not in ACTIVE_STATES (no agent dispatch)", () => {
+    expect((ACTIVE_STATES as readonly string[]).includes("Waiting PR Checks")).toBe(false);
+  });
+  test("isValidState recognises it", () => {
+    expect(isValidState("Waiting PR Checks")).toBe(true);
+  });
+  test("isActive returns false for it", () => {
+    expect(isActive("Waiting PR Checks")).toBe(false);
   });
 });

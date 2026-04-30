@@ -45,6 +45,10 @@
   --st-human-bg: #f7e6d3;
   --st-human-rg: #e0bc8a;
 
+  --st-wait-fg: #92400e;
+  --st-wait-bg: #fffbeb;
+  --st-wait-rg: #fcd34d;
+
   --serif:
     ui-serif, "Iowan Old Style", "Charter", "Source Serif Pro", Georgia, Cambria, "Times New Roman",
     Times, serif;
@@ -101,6 +105,10 @@
     --st-human-fg: #e0a878;
     --st-human-bg: #2c1f15;
     --st-human-rg: #4a3320;
+
+    --st-wait-fg: #fbbf24;
+    --st-wait-bg: #1c1700;
+    --st-wait-rg: #4a3a00;
 
     --shadow-1: 0 1px 0 rgba(0, 0, 0, 0.3);
     --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
@@ -483,6 +491,14 @@ tbody td:nth-child(6) {
 }
 .state-badge[data-state="Ready for Review"]::before {
   background: conic-gradient(from 0deg, currentColor 0 90%, transparent 90% 100%);
+}
+.state-badge[data-state="Waiting PR Checks"] {
+  color: var(--st-wait-fg);
+  background: var(--st-wait-bg);
+  border-color: var(--st-wait-rg);
+}
+.state-badge[data-state="Waiting PR Checks"]::before {
+  background: #fbbf24;
 }
 .state-badge[data-state="Ready for Dev"] {
   color: var(--st-todo-fg);

@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .repo.git/
+.worktrees/
 .dalang/
 *.log
 .DS_Store

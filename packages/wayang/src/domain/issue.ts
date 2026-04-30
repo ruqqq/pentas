@@ -5,6 +5,7 @@ export type IssueState =
   | "Ready for Dev"
   | "In Dev"
   | "Ready for Review"
+  | "Waiting PR Checks"
   | "Ready for Human Review"
   | "Done"
   | "Cancelled";
@@ -16,6 +17,7 @@ export const ALL_STATES = [
   "Ready for Dev",
   "In Dev",
   "Ready for Review",
+  "Waiting PR Checks",
   "Ready for Human Review",
   "Done",
   "Cancelled",

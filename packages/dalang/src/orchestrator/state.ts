@@ -16,6 +16,7 @@ export function createInitialState(opts: InitialStateOptions): OrchestratorState
     claude_totals: { input_tokens: 0, output_tokens: 0, total_tokens: 0, seconds_running: 0 },
     rate_limits: null,
     workflow_mtime: null,
+    pr_checks_polls: new Map(),
   };
 }
 

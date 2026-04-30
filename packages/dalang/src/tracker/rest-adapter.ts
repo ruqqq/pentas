@@ -1,5 +1,5 @@
 // packages/dalang/src/tracker/rest-adapter.ts
-import type { NormalizedIssue } from "../types";
+import type { NormalizedIssue, TrackerComment } from "../types";
 import type { TrackerAdapter } from "./adapter";
 import { TrackerError } from "./adapter";
 import { normalizeIssue } from "./normalize";
@@ -119,5 +119,44 @@ export class RestTrackerAdapter implements TrackerAdapter {
   async fetchIssue(id: string): Promise<NormalizedIssue | null> {
     const body = await this.getJson(`/api/v1/issues/${encodeURIComponent(id)}`);
     return normalizeIssue(body);
+  }
+
+  async listComments(issueId: string): Promise<TrackerComment[]> {
+    const path = `/api/v1/issues/${encodeURIComponent(issueId)}/comments`;
+    const data = await this.getJson(path);
+    if (typeof data !== "object" || data === null || !Array.isArray((data as { comments?: unknown }).comments)) {
+      throw new TrackerError("tracker_malformed_payload", `${this.endpoint}${path}: comments not array`);
+    }
+    return (data as { comments: TrackerComment[] }).comments;
+  }
+
+  async addComment(issueId: string, body: string, author: "user" | "agent" = "agent"): Promise<void> {
+    await this.writeJson(`/api/v1/issues/${encodeURIComponent(issueId)}/comments`, "POST", { body, author });
+  }
+
+  async updateState(issueId: string, state: string): Promise<void> {
+    await this.writeJson(`/api/v1/issues/${encodeURIComponent(issueId)}`, "PATCH", { state });
+  }
+
+  private async writeJson(path: string, method: "POST" | "PATCH", payload: unknown): Promise<void> {
+    const url = `${this.endpoint}${path}`;
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), this.timeoutMs);
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method,
+        headers: { ...this.headers(), "content-type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      throw new TrackerError("tracker_write_error", `${url}: ${(err as Error).message}`);
+    } finally {
+      clearTimeout(t);
+    }
+    if (!res.ok) {
+      throw new TrackerError("tracker_write_error", `${url}: HTTP ${res.status}`);
+    }
   }
 }

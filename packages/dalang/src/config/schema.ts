@@ -54,6 +54,14 @@ export const ServerSchema = z.object({
   port: z.number().int().min(0),
 });
 
+export const PrChecksSchema = z.object({
+  enabled: z.boolean(),
+  poll_interval_ms: z.number().int().positive(),
+  failure_budget: z.number().int().positive(),
+  rerun_flakes: z.boolean(),
+  gh_executable: z.string().min(1),
+});
+
 export const WorkflowFrontMatterSchema = z.object({
   tracker: TrackerSchema,
   repo: RepoSchema,
@@ -63,6 +71,7 @@ export const WorkflowFrontMatterSchema = z.object({
   agent: AgentSchema,
   claude: ClaudeSchema,
   server: ServerSchema,
+  pr_checks: PrChecksSchema,
 });
 
 export type WorkflowFrontMatter = z.infer<typeof WorkflowFrontMatterSchema>;
@@ -108,6 +117,13 @@ const DEFAULTS = {
     stall_timeout_ms: 300000,
   },
   server: { port: 0 },
+  pr_checks: {
+    enabled: false,
+    poll_interval_ms: 60000,
+    failure_budget: 3,
+    rerun_flakes: true,
+    gh_executable: "gh",
+  },
 };
 
 function deepClone<T>(val: T): T {

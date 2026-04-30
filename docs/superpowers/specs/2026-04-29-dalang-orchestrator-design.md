@@ -24,6 +24,7 @@ Conformance posture: dalang aims to be Symphony-extension-clean. A WORKFLOW.md a
 - Hot-reloadable `WORKFLOW.md` (YAML front matter + Liquid prompt body).
 - Structured JSON logs and an HTTP observability surface (`/api/v1/state`, `/api/v1/:identifier`, `/api/v1/refresh`, `/`).
 - Bun-native monorepo workspace; `dalang` and `wayang` live as sibling packages.
+- PR-checks waiting state — see `2026-04-30-pr-checks-wait-design.md`. Adds a non-agent reconciler that polls `gh pr checks` for issues parked in `Waiting PR Checks`, posts results back as comments, and bounces or escalates based on a budget.
 
 ### Out of scope (v1, deferred)
 
