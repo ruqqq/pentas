@@ -28,12 +28,14 @@ export function renderDetailPage({ issue, comments, history }: DetailPageInput):
   const commentList = comments.map(renderComment).join("\n");
   const historyList = history.map(renderHistoryItem).join("\n");
 
+  const detailUrl = `/issues/${escapeHtml(issue.id)}`;
+  const articleSelector = `#issue-${escapeHtml(issue.id)}`;
   const body = `
 <article id="issue-${escapeHtml(issue.id)}"
-         hx-ext="sse"
-         sse-connect="/api/v1/events"
-         sse-swap="issue.updated"
-         hx-target="this">
+         hx-get="${detailUrl}"
+         hx-trigger="sse:issue.updated"
+         hx-select="${articleSelector}"
+         hx-swap="outerHTML">
   <header>
     <h1>${escapeHtml(issue.identifier)} ${escapeHtml(issue.title)}</h1>
     ${
@@ -72,7 +74,11 @@ export function renderDetailPage({ issue, comments, history }: DetailPageInput):
 
   <section id="comments">
     <h2>Comments</h2>
-    <div sse-swap="comment.added" hx-swap="beforeend">
+    <div id="comments-list"
+         hx-get="${detailUrl}"
+         hx-trigger="sse:comment.added"
+         hx-select="#comments-list"
+         hx-swap="outerHTML">
       ${commentList}
     </div>
     <form hx-post="/api/v1/issues/${escapeHtml(issue.id)}/comments"

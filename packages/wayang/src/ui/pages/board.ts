@@ -38,7 +38,6 @@ ${cards}
 
   const refreshUrl = `/partials/board?q=${encodeURIComponent(q)}`;
   return `<div id="board" class="board"
-       sse-swap="issue.created,issue.updated,state.changed,issue.deleted"
        hx-get="${escapeAttr(refreshUrl)}"
        hx-trigger="sse:issue.created,sse:issue.updated,sse:state.changed,sse:issue.deleted"
        hx-swap="outerHTML">
