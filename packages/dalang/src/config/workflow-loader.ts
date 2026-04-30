@@ -1,5 +1,6 @@
 // packages/dalang/src/config/workflow-loader.ts
-import { readFile, stat } from "node:fs/promises";
+import { readFile, realpath, stat } from "node:fs/promises";
+import { dirname, extname, isAbsolute, resolve, sep } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { applyDefaults, WorkflowFrontMatterSchema, type WorkflowFrontMatter } from "./schema";
 
@@ -8,7 +9,8 @@ export type WorkflowErrorCode =
   | "workflow_parse_error"
   | "workflow_front_matter_not_a_map"
   | "workflow_empty_prompt"
-  | "workflow_validation_error";
+  | "workflow_validation_error"
+  | "workflow_import_error";
 
 export class WorkflowError extends Error {
   code: WorkflowErrorCode;
@@ -22,9 +24,11 @@ export interface LoadedWorkflow {
   config: WorkflowFrontMatter;
   promptTemplate: string;
   mtimeMs: number;
+  importedPaths: string[];
 }
 
-const FM_DELIM = /^---\s*$/m;
+const IMPORT_LINE = /^\s*@(?<path>\S+)\s*$/;
+const MAX_IMPORT_DEPTH = 10;
 
 export async function loadWorkflow(path: string): Promise<LoadedWorkflow> {
   let raw: string;
@@ -75,10 +79,133 @@ export async function loadWorkflow(path: string): Promise<LoadedWorkflow> {
     throw new WorkflowError("workflow_validation_error", `front matter invalid: ${validation.error.message}`);
   }
 
-  const trimmedBody = body.trim();
+  const expanded = await expandImports(body, {
+    rootDir: dirname(resolve(path)),
+    currentDir: dirname(resolve(path)),
+    stack: [],
+    importedPaths: [],
+    maxMtimeMs: mtimeMs,
+    depth: 0,
+  });
+
+  const trimmedBody = expanded.body.trim();
   if (trimmedBody.length === 0) {
     throw new WorkflowError("workflow_empty_prompt", "prompt body is empty after trimming");
   }
 
-  return { config: validation.data, promptTemplate: trimmedBody, mtimeMs };
+  return {
+    config: validation.data,
+    promptTemplate: trimmedBody,
+    mtimeMs: expanded.maxMtimeMs,
+    importedPaths: expanded.importedPaths,
+  };
+}
+
+interface ImportContext {
+  rootDir: string;
+  currentDir: string;
+  stack: string[];
+  importedPaths: string[];
+  maxMtimeMs: number;
+  depth: number;
+}
+
+interface ExpandResult {
+  body: string;
+  importedPaths: string[];
+  maxMtimeMs: number;
+}
+
+async function expandImports(body: string, ctx: ImportContext): Promise<ExpandResult> {
+  if (ctx.depth > MAX_IMPORT_DEPTH) {
+    throw new WorkflowError("workflow_import_error", `workflow import depth exceeds ${MAX_IMPORT_DEPTH}`);
+  }
+
+  const lines = body.split("\n");
+  const out: string[] = [];
+  const rootReal = await realpath(ctx.rootDir);
+  const currentReal = await realpath(ctx.currentDir);
+
+  for (const line of lines) {
+    const match = line.match(IMPORT_LINE);
+    if (!match?.groups?.path) {
+      out.push(line);
+      continue;
+    }
+
+    const importPath = match.groups.path;
+    const resolved = resolveImportPath(importPath, currentReal, rootReal);
+    let targetReal: string;
+    try {
+      targetReal = await realpath(resolved);
+    } catch (err) {
+      throw new WorkflowError(
+        "workflow_import_error",
+        `cannot resolve import ${importPath}: ${(err as Error).message}`,
+      );
+    }
+
+    assertInsideRoot(targetReal, rootReal, importPath);
+    if (ctx.stack.includes(targetReal)) {
+      throw new WorkflowError(
+        "workflow_import_error",
+        `cyclic workflow import detected: ${[...ctx.stack, targetReal].join(" -> ")}`,
+      );
+    }
+
+    let imported: string;
+    let importedMtime: number;
+    try {
+      imported = await readFile(targetReal, "utf8");
+      importedMtime = (await stat(targetReal)).mtimeMs;
+    } catch (err) {
+      throw new WorkflowError(
+        "workflow_import_error",
+        `cannot read import ${importPath}: ${(err as Error).message}`,
+      );
+    }
+
+    if (imported.split("\n")[0]?.trim() === "---") {
+      throw new WorkflowError("workflow_import_error", `import ${importPath} must not contain front matter`);
+    }
+
+    ctx.importedPaths.push(targetReal);
+    ctx.maxMtimeMs = Math.max(ctx.maxMtimeMs, importedMtime);
+    const expanded = await expandImports(imported, {
+      ...ctx,
+      currentDir: dirname(targetReal),
+      stack: [...ctx.stack, targetReal],
+      depth: ctx.depth + 1,
+    });
+    ctx.maxMtimeMs = expanded.maxMtimeMs;
+    out.push(expanded.body);
+  }
+
+  return {
+    body: out.join("\n"),
+    importedPaths: ctx.importedPaths,
+    maxMtimeMs: ctx.maxMtimeMs,
+  };
+}
+
+function resolveImportPath(importPath: string, currentDir: string, rootReal: string): string {
+  if (isAbsolute(importPath)) {
+    throw new WorkflowError("workflow_import_error", `absolute workflow import rejected: ${importPath}`);
+  }
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(importPath)) {
+    throw new WorkflowError("workflow_import_error", `URL-style workflow import rejected: ${importPath}`);
+  }
+  if (extname(importPath) !== ".md") {
+    throw new WorkflowError("workflow_import_error", `workflow import must be a .md file: ${importPath}`);
+  }
+
+  const resolved = resolve(currentDir, importPath);
+  assertInsideRoot(resolved, rootReal, importPath);
+  return resolved;
+}
+
+function assertInsideRoot(path: string, rootReal: string, importPath: string): void {
+  if (path !== rootReal && !path.startsWith(rootReal + sep)) {
+    throw new WorkflowError("workflow_import_error", `workflow import escapes root directory: ${importPath}`);
+  }
 }

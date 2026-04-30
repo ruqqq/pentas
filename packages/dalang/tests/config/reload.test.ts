@@ -2,7 +2,7 @@
 import { test, expect } from "bun:test";
 import { writeFile, mkdtemp, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { WorkflowReloader } from "../../src/config/reload";
 
 const VALID = `---
@@ -59,6 +59,25 @@ test("valid reload swaps config", async () => {
   const future = Date.now() / 1000 + 5;
   await utimes(path, future, future);
   await reloader.checkMtimeReload();
+  expect(reloader.current().promptTemplate).toContain("Howdy");
+  await reloader.stop();
+});
+
+test("mtime polling reloads when an imported workflow file changes", async () => {
+  const path = await makeFile(VALID.replace("Hello {{ issue.identifier }}.", "@prompt.md"));
+  const dir = dirname(path);
+  const importPath = join(dir, "prompt.md");
+  await writeFile(importPath, "Hello {{ issue.identifier }}.", "utf8");
+
+  const reloader = new WorkflowReloader(path);
+  await reloader.start();
+  expect(reloader.current().promptTemplate).toContain("Hello");
+
+  await writeFile(importPath, "Howdy {{ issue.identifier }}.", "utf8");
+  const future = Date.now() / 1000 + 5;
+  await utimes(importPath, future, future);
+  await reloader.checkMtimeReload();
+
   expect(reloader.current().promptTemplate).toContain("Howdy");
   await reloader.stop();
 });

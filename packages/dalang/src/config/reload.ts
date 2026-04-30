@@ -1,6 +1,5 @@
 // packages/dalang/src/config/reload.ts
 import chokidar, { type FSWatcher } from "chokidar";
-import { stat } from "node:fs/promises";
 import { loadWorkflow, type LoadedWorkflow, WorkflowError } from "./workflow-loader";
 
 export type ReloadListener = (next: LoadedWorkflow) => void;
@@ -30,10 +29,16 @@ export class WorkflowReloader {
   }
 
   async checkMtimeReload(): Promise<void> {
-    const st = await stat(this.path).catch(() => null);
-    if (!st) return;
-    if (this.workflow && st.mtimeMs > this.workflow.mtimeMs) {
-      await this.tryReload();
+    if (!this.workflow) return;
+    try {
+      const next = await loadWorkflow(this.path);
+      if (next.mtimeMs > this.workflow.mtimeMs) {
+        this.workflow = next;
+        for (const fn of this.listeners) fn(next);
+      }
+    } catch (err) {
+      const we = err instanceof WorkflowError ? err : new WorkflowError("workflow_validation_error", (err as Error).message);
+      for (const fn of this.errorListeners) fn(we);
     }
   }
 
