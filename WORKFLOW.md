@@ -81,6 +81,7 @@ pr_checks:
 ---
 
 @workflow/preamble.md
+@workflow/session-lifecycle.md
 @workflow/project-board.md
 @workflow/superpowers.md
 @workflow/state-dispatch.md

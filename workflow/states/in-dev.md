@@ -9,4 +9,4 @@ Implement, verify, commit, and publish.
 5. Commit with the repo's conventional commit style.
 6. Use `github:yeet` or equivalent GitHub workflow to push and open a draft PR when changes are ready.
 7. Add a comment summarizing changes, verification, PR link, and residual risk.
-8. Move the item to `Ready for Review`.
+8. Move the item to `Ready for Review`, then end this turn. Do not perform review work in the same session after moving the item.
