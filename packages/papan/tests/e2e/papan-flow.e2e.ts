@@ -44,7 +44,10 @@ test("covers create, list, detail, state, comments, history, and board update", 
   await page.goto(`${baseURL}/`);
   await expect(page.locator(".card", { hasText: title })).toBeVisible();
 
-  await page.locator(".card", { hasText: title }).getByRole("link", { name: /PENTAS-\d+/ }).click();
+  await page
+    .locator(".card", { hasText: title })
+    .getByRole("link", { name: /PENTAS-\d+/ })
+    .click();
   await page.locator("article select").selectOption("In QA");
   await expect(page.locator(".state-badge", { hasText: "In QA" })).toBeVisible();
 
