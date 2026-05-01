@@ -73,9 +73,13 @@ export class Orchestrator {
     if (prChecksConfig.enabled) {
       let waiting: NormalizedIssue[] = [];
       const waitState = prChecksConfig.wait_state ?? "Waiting PR Checks";
+      const reconciliationStates = dedupeStates([
+        waitState,
+        ...(prChecksConfig.conflict_watch_state ? [prChecksConfig.conflict_watch_state] : []),
+      ]);
       try {
         waiting = await this.controlPlane.fetchDispatchableWork({
-          activeStates: [waitState],
+          activeStates: reconciliationStates,
           ownership: this.cfg.control_plane.ownership,
         });
       } catch (err) {
@@ -127,6 +131,8 @@ export class Orchestrator {
     pass_state?: string | undefined;
     fail_state?: string | undefined;
     escalation_state?: string | undefined;
+    conflict_watch_state?: string | undefined;
+    conflict_target_state?: string | undefined;
   } {
     if (cfg.control_plane.kind === "github-projects" && cfg.control_plane.pr_checks) {
       return {
@@ -140,6 +146,9 @@ export class Orchestrator {
         pass_state: cfg.control_plane.pr_checks.pass_state,
         fail_state: cfg.control_plane.pr_checks.fail_state,
         escalation_state: cfg.control_plane.pr_checks.escalation_state,
+        conflict_watch_state:
+          cfg.control_plane.pr_checks.conflict_watch_state ?? "Ready for Human Review",
+        conflict_target_state: cfg.control_plane.pr_checks.conflict_target_state ?? "Ready for Dev",
       };
     }
     return cfg.pr_checks;
@@ -642,6 +651,18 @@ export class Orchestrator {
       await Promise.allSettled(all);
     }
   }
+}
+
+function dedupeStates(states: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const state of states) {
+    const key = state.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(state);
+  }
+  return out;
 }
 
 export { resolveTrackerApiKey } from "../config/env-resolver";

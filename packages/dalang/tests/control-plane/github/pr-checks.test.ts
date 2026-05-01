@@ -63,6 +63,7 @@ test("passed checks comment and move to pass state", async () => {
     fetchChecks: async () => [
       { name: "build", state: "SUCCESS", bucket: "pass", link: "https://ci/build" },
     ],
+    fetchMergeability: async () => "unknown",
     rerunFailedChecks: async () => 0,
     markReady: async () => {
       ready = true;
@@ -103,6 +104,7 @@ test("passed checks still move state when markReady fails", async () => {
     fetchChecks: async () => [
       { name: "build", state: "SUCCESS", bucket: "pass", link: "https://ci/build" },
     ],
+    fetchMergeability: async () => "unknown",
     rerunFailedChecks: async () => 0,
     markReady: async () => {
       throw new Error("already ready");
@@ -141,6 +143,7 @@ test("no checks built still moves to pass state", async () => {
       sha: "abc123",
     }),
     fetchChecks: async () => [],
+    fetchMergeability: async () => "unknown",
     rerunFailedChecks: async () => 0,
     markReady: async () => {
       ready = true;
@@ -188,6 +191,7 @@ test("failed checks bounce until failure budget then escalate", async () => {
     fetchChecks: async () => [
       { name: "build", state: "FAILURE", bucket: "fail", link: "https://ci/build" },
     ],
+    fetchMergeability: async () => "unknown",
     rerunFailedChecks: async () => 0,
     markReady: async () => {},
   });
@@ -224,6 +228,7 @@ test("state-changing failures do not post marker before state mutation succeeds"
     fetchChecks: async () => [
       { name: "build", state: "FAILURE", bucket: "fail", link: "https://ci/build" },
     ],
+    fetchMergeability: async () => "unknown",
     rerunFailedChecks: async () => 0,
     markReady: async () => {},
   });
@@ -261,6 +266,7 @@ test("rerun flakes posts rerun marker without moving state", async () => {
     fetchChecks: async () => [
       { name: "build", state: "FAILURE", bucket: "fail", link: "https://ci/build", runId: 123 },
     ],
+    fetchMergeability: async () => "unknown",
     rerunFailedChecks: async (_pr, checks) => {
       rerunCount = checks.length;
       return checks.length;
@@ -296,6 +302,7 @@ test("poll interval throttles repeated checks", async () => {
       return { number: 9, url: "https://github.com/acme/app/pull/9", sha: "abc123" };
     },
     fetchChecks: async () => [],
+    fetchMergeability: async () => "unknown",
     rerunFailedChecks: async () => 0,
     markReady: async () => {},
   });
@@ -324,6 +331,7 @@ test("wait state comparison is case-insensitive", async () => {
     fetchChecks: async () => [
       { name: "build", state: "SUCCESS", bucket: "pass", link: "https://ci/build" },
     ],
+    fetchMergeability: async () => "unknown",
     rerunFailedChecks: async () => 0,
     markReady: async () => {},
   });
@@ -346,6 +354,7 @@ test("poll errors still record a throttle entry", async () => {
       throw new Error("boom");
     },
     fetchChecks: async () => [],
+    fetchMergeability: async () => "unknown",
     rerunFailedChecks: async () => 0,
     markReady: async () => {},
   });
@@ -355,4 +364,149 @@ test("poll errors still record a throttle entry", async () => {
     last_seen_sha: null,
     last_action: null,
   });
+});
+
+test("conflicted human-review PR comments and moves back to Ready for Dev", async () => {
+  const comments: ControlPlaneComment[] = [];
+  const states: string[] = [];
+
+  await reconcileGithubPrChecks({
+    work: [work("Ready for Human Review")],
+    polls: new Map(),
+    config: {
+      ...config,
+      conflict_watch_state: "Ready for Human Review",
+      conflict_target_state: "Ready for Dev",
+    },
+    now: () => new Date("2026-05-01T00:00:00Z"),
+    listComments: async () => comments,
+    addComment: async (_id, body) => {
+      comments.push({ id: "1", author: "agent", body, created_at: "2026-05-01T00:00:00Z" });
+    },
+    updateState: async (_id, state) => {
+      states.push(state);
+    },
+    resolvePullRequest: async () => ({
+      number: 42,
+      url: "https://github.com/acme/app/pull/42",
+      sha: "abc1234",
+    }),
+    fetchChecks: async () => [],
+    fetchMergeability: async () => "conflicted",
+    rerunFailedChecks: async () => 0,
+    markReady: async () => {},
+  });
+
+  expect(comments[0]!.body).toContain("[AGENT MESSAGE]");
+  expect(comments[0]!.body).toContain("[pr_conflicts_detected] sha=abc1234");
+  expect(comments[0]!.body).toContain("PR #42");
+  expect(states).toEqual(["Ready for Dev"]);
+});
+
+test("clean and unknown human-review PRs stay in place", async () => {
+  for (const mergeability of ["clean", "unknown"] as const) {
+    const comments: ControlPlaneComment[] = [];
+    const states: string[] = [];
+
+    await reconcileGithubPrChecks({
+      work: [work("Ready for Human Review")],
+      polls: new Map(),
+      config: {
+        ...config,
+        conflict_watch_state: "Ready for Human Review",
+        conflict_target_state: "Ready for Dev",
+      },
+      now: () => new Date("2026-05-01T00:00:00Z"),
+      listComments: async () => comments,
+      addComment: async (_id, body) => {
+        comments.push({ id: "1", author: "agent", body, created_at: "2026-05-01T00:00:00Z" });
+      },
+      updateState: async (_id, state) => {
+        states.push(state);
+      },
+      resolvePullRequest: async () => ({
+        number: 42,
+        url: "https://github.com/acme/app/pull/42",
+        sha: "abc1234",
+      }),
+      fetchChecks: async () => [],
+      fetchMergeability: async () => mergeability,
+      rerunFailedChecks: async () => 0,
+      markReady: async () => {},
+    });
+
+    expect(comments).toEqual([]);
+    expect(states).toEqual([]);
+  }
+});
+
+test("human-review item without PR stays in place", async () => {
+  const states: string[] = [];
+
+  await reconcileGithubPrChecks({
+    work: [work("Ready for Human Review")],
+    polls: new Map(),
+    config: {
+      ...config,
+      conflict_watch_state: "Ready for Human Review",
+      conflict_target_state: "Ready for Dev",
+    },
+    now: () => new Date("2026-05-01T00:00:00Z"),
+    listComments: async () => [],
+    addComment: async () => {
+      throw new Error("should not comment");
+    },
+    updateState: async (_id, state) => {
+      states.push(state);
+    },
+    resolvePullRequest: async () => null,
+    fetchChecks: async () => [],
+    fetchMergeability: async () => "conflicted",
+    rerunFailedChecks: async () => 0,
+    markReady: async () => {},
+  });
+
+  expect(states).toEqual([]);
+});
+
+test("existing conflict comment dedupes but still retries state move", async () => {
+  const comments: ControlPlaneComment[] = [
+    {
+      id: "1",
+      author: "agent",
+      body: "[pr_conflicts_detected] sha=abc1234",
+      created_at: "2026-05-01T00:00:00Z",
+    },
+  ];
+  const states: string[] = [];
+
+  await reconcileGithubPrChecks({
+    work: [work("Ready for Human Review")],
+    polls: new Map(),
+    config: {
+      ...config,
+      conflict_watch_state: "Ready for Human Review",
+      conflict_target_state: "Ready for Dev",
+    },
+    now: () => new Date("2026-05-01T00:00:00Z"),
+    listComments: async () => comments,
+    addComment: async (_id, body) => {
+      comments.push({ id: "2", author: "agent", body, created_at: "2026-05-01T00:00:00Z" });
+    },
+    updateState: async (_id, state) => {
+      states.push(state);
+    },
+    resolvePullRequest: async () => ({
+      number: 42,
+      url: "https://github.com/acme/app/pull/42",
+      sha: "abc1234",
+    }),
+    fetchChecks: async () => [],
+    fetchMergeability: async () => "conflicted",
+    rerunFailedChecks: async () => 0,
+    markReady: async () => {},
+  });
+
+  expect(comments).toHaveLength(1);
+  expect(states).toEqual(["Ready for Dev"]);
 });

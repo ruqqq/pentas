@@ -51,6 +51,8 @@ export const GithubPrChecksSchema = z.object({
   escalation_state: z.string().min(1).default("Ready for Human Review"),
   mark_pr_ready: z.boolean().default(true),
   gh_executable: z.string().min(1).default("gh"),
+  conflict_watch_state: z.string().min(1).default("Ready for Human Review"),
+  conflict_target_state: z.string().min(1).default("Ready for Dev"),
 });
 
 export const GithubProjectsControlPlaneSchema = z.object({

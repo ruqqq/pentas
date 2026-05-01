@@ -427,7 +427,7 @@ test("github control_plane pr_checks config drives delegation", async () => {
   await orch.tick();
 
   expect(controlPlane.seenQueries[0]).toEqual({
-    activeStates: ["Reviewing CI"],
+    activeStates: ["Reviewing CI", "Ready for Human Review"],
     ownership: { mode: "label", value: "dalang" },
   });
   expect(controlPlane.seenConfig).toMatchObject({
@@ -439,6 +439,8 @@ test("github control_plane pr_checks config drives delegation", async () => {
     pass_state: "Ready",
     fail_state: "Fixing",
     escalation_state: "Escalate",
+    conflict_watch_state: "Ready for Human Review",
+    conflict_target_state: "Ready for Dev",
   });
 });
 

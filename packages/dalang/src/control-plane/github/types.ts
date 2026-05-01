@@ -30,5 +30,7 @@ export interface GithubProjectConfig {
     pass_state: string;
     fail_state: string;
     escalation_state: string;
+    conflict_watch_state?: string | undefined;
+    conflict_target_state?: string | undefined;
   } | null;
 }
