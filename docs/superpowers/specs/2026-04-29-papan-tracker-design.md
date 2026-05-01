@@ -4,6 +4,7 @@ Status: Draft v1
 Date: 2026-04-29
 Author: ruqqq
 Companion spec: `2026-04-29-dalang-orchestrator-design.md`
+Supersession note: multi-project behavior extends this v1 design in `2026-05-01-papan-multi-projects-design.md`; unscoped APIs and UI routes now target the default project for compatibility.
 
 ## 1. Purpose
 

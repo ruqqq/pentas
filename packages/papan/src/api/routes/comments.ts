@@ -3,6 +3,7 @@ import { addComment, listComments } from "../../db/repo/comments";
 import { addHistory } from "../../db/repo/history";
 import { getIssueById } from "../../db/repo/issues";
 import type { Route } from "../server";
+import { eventProject, isResponse, projectSlugFromUrl, resolveProject } from "./project-scope";
 
 interface CommentBody {
   body?: unknown;
@@ -13,9 +14,11 @@ export function commentsListRoute(): Route {
   return {
     method: "GET",
     pattern: new URLPattern({ pathname: "/api/v1/issues/:id/comments" }),
-    handler: (_req, match, { db }) => {
+    handler: (req, match, { db }) => {
       const id = match.pathname.groups.id!;
-      const issue = getIssueById(db, id);
+      const project = resolveProject(db, projectSlugFromUrl(req));
+      if (isResponse(project)) return project;
+      const issue = getIssueById(db, id, project.id);
       if (!issue) return Response.json({ error: { code: "issue_not_found" } }, { status: 404 });
       return Response.json({ comments: listComments(db, id) });
     },
@@ -28,7 +31,9 @@ export function commentsCreateRoute(): Route {
     pattern: new URLPattern({ pathname: "/api/v1/issues/:id/comments" }),
     handler: async (req, match, { db, bus }) => {
       const id = match.pathname.groups.id!;
-      const issue = getIssueById(db, id);
+      const project = resolveProject(db, projectSlugFromUrl(req));
+      if (isResponse(project)) return project;
+      const issue = getIssueById(db, id, project.id);
       if (!issue) return Response.json({ error: { code: "issue_not_found" } }, { status: 404 });
 
       let body: CommentBody;
@@ -54,7 +59,7 @@ export function commentsCreateRoute(): Route {
         to_value: null,
         actor: author,
       });
-      bus.publish("comment.added", { issue_id: id, comment });
+      bus.publish("comment.added", { issue_id: id, comment, project: eventProject(project) });
       return Response.json(comment, { status: 201 });
     },
   };

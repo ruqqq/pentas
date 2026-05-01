@@ -8,6 +8,7 @@ import { normalizeWorkItem } from "./normalize";
 export interface PapanControlPlaneConfig {
   endpoint: string;
   apiKey: string | null;
+  board?: string | null;
   timeoutMs?: number;
 }
 
@@ -20,11 +21,13 @@ export class PapanControlPlaneAdapter implements ControlPlaneAdapter {
   readonly capabilities = { history: true, prChecks: true } as const;
   private readonly endpoint: string;
   private readonly apiKey: string | null;
+  private readonly board: string | null;
   private readonly timeoutMs: number;
 
   constructor(cfg: PapanControlPlaneConfig) {
     this.endpoint = cfg.endpoint.replace(/\/$/, "");
     this.apiKey = cfg.apiKey;
+    this.board = cfg.board ?? null;
     this.timeoutMs = cfg.timeoutMs ?? 30000;
   }
 
@@ -62,6 +65,12 @@ export class PapanControlPlaneAdapter implements ControlPlaneAdapter {
     }
   }
 
+  private withProject(path: string): string {
+    if (!this.board) return path;
+    const separator = path.includes("?") ? "&" : "?";
+    return `${path}${separator}project=${encodeURIComponent(this.board)}`;
+  }
+
   async fetchDispatchableWork(query: DispatchQuery): Promise<WorkItem[]> {
     const work = await this.fetchPaginated(query.activeStates);
     return work.filter((item) => matchesOwnership(item, query.ownership));
@@ -76,7 +85,7 @@ export class PapanControlPlaneAdapter implements ControlPlaneAdapter {
     if (ids.length === 0) return [];
     const params = new URLSearchParams();
     for (const id of ids) params.append("id", id);
-    const body = await this.getJson(`/api/v1/issues/by-ids?${params.toString()}`);
+    const body = await this.getJson(this.withProject(`/api/v1/issues/by-ids?${params.toString()}`));
     if (
       body === null ||
       typeof body !== "object" ||
@@ -96,12 +105,12 @@ export class PapanControlPlaneAdapter implements ControlPlaneAdapter {
   }
 
   async fetchWorkItem(id: string): Promise<WorkItem | null> {
-    const body = await this.getJson(`/api/v1/issues/${encodeURIComponent(id)}`);
+    const body = await this.getJson(this.withProject(`/api/v1/issues/${encodeURIComponent(id)}`));
     return normalizeWorkItem(body);
   }
 
   async listComments(workItemId: string): Promise<ControlPlaneComment[]> {
-    const path = `/api/v1/issues/${encodeURIComponent(workItemId)}/comments`;
+    const path = this.withProject(`/api/v1/issues/${encodeURIComponent(workItemId)}/comments`);
     const data = await this.getJson(path);
     if (
       typeof data !== "object" ||
@@ -117,7 +126,7 @@ export class PapanControlPlaneAdapter implements ControlPlaneAdapter {
   }
 
   async listHistory(workItemId: string): Promise<ControlPlaneHistoryEntry[]> {
-    const path = `/api/v1/issues/${encodeURIComponent(workItemId)}/history`;
+    const path = this.withProject(`/api/v1/issues/${encodeURIComponent(workItemId)}/history`);
     const data = await this.getJson(path);
     if (
       typeof data !== "object" ||
@@ -137,14 +146,17 @@ export class PapanControlPlaneAdapter implements ControlPlaneAdapter {
     body: string,
     author: "user" | "agent" = "agent",
   ): Promise<void> {
-    await this.writeJson(`/api/v1/issues/${encodeURIComponent(workItemId)}/comments`, "POST", {
-      body,
-      author,
-    });
+    await this.writeJson(
+      this.withProject(`/api/v1/issues/${encodeURIComponent(workItemId)}/comments`),
+      "POST",
+      { body, author },
+    );
   }
 
   async updateState(workItemId: string, state: string): Promise<void> {
-    await this.writeJson(`/api/v1/issues/${encodeURIComponent(workItemId)}`, "PATCH", { state });
+    await this.writeJson(this.withProject(`/api/v1/issues/${encodeURIComponent(workItemId)}`), "PATCH", {
+      state,
+    });
   }
 
   async reconcilePrChecks(args: PrChecksReconcileArgs): Promise<void> {
@@ -175,7 +187,7 @@ export class PapanControlPlaneAdapter implements ControlPlaneAdapter {
       const params = new URLSearchParams();
       for (const s of stateParams) params.append("state", s);
       if (cursor) params.append("cursor", cursor);
-      const body = await this.getJson(`/api/v1/issues?${params.toString()}`);
+      const body = await this.getJson(this.withProject(`/api/v1/issues?${params.toString()}`));
       const page = this.assertPage(body);
       for (const raw of page.issues) {
         const norm = normalizeWorkItem(raw);

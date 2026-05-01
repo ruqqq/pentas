@@ -1,18 +1,25 @@
 import { layout, escapeHtml } from "../layout";
 import { ALL_STATES } from "../../domain/issue";
+import type { Project } from "../../domain/project";
+import { DEFAULT_PROJECT_SLUG } from "../../domain/project";
 
 export interface NewPageInput {
   error?: string;
   values?: { title?: string; description?: string; linear_url?: string; labels?: string };
+  project?: Project;
+  projects?: Project[];
 }
 
-export function renderNewPage({ error, values = {} }: NewPageInput): string {
+export function renderNewPage({ error, values = {}, project, projects = [] }: NewPageInput): string {
   const stateOptions = ALL_STATES.map(
     (s) => `<option value="${s}"${s === "Todo" ? " selected" : ""}>${s}</option>`,
   ).join("");
+  const projectSlug = project?.slug ?? DEFAULT_PROJECT_SLUG;
+  const action =
+    projectSlug === DEFAULT_PROJECT_SLUG ? "/new" : `/projects/${escapeHtml(projectSlug)}/new`;
   const body = `
 ${error ? `<div class="error">${escapeHtml(error)}</div>` : ""}
-<form method="post" action="/new">
+<form method="post" action="${action}">
   <label>Paste Linear URL (optional)
     <input type="url" name="linear_url" value="${escapeHtml(values.linear_url ?? "")}" placeholder="https://linear.app/...">
   </label>
@@ -39,5 +46,5 @@ ${error ? `<div class="error">${escapeHtml(error)}</div>` : ""}
   </label>
   <button type="submit">Create issue</button>
 </form>`;
-  return layout("New issue", body);
+  return layout("New issue", body, { projects, activeProject: project ?? null });
 }

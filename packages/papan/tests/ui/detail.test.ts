@@ -28,4 +28,23 @@ describe("renderDetailPage", () => {
     expect(html).toContain('id="comments"');
     expect(html).toContain('id="history"');
   });
+
+  test("uses project-scoped API paths when project is supplied", () => {
+    const html = renderDetailPage({
+      issue,
+      comments: [],
+      history: [],
+      project: {
+        id: "p1",
+        slug: "alpha",
+        name: "Alpha",
+        description: null,
+        created_at: "",
+        updated_at: "",
+      },
+    });
+    expect(html).toContain(`hx-patch="/api/v1/issues/X?project=alpha"`);
+    expect(html).toContain(`hx-post="/api/v1/issues/X/comments?project=alpha"`);
+    expect(html).toContain(`data-project-scope="alpha"`);
+  });
 });

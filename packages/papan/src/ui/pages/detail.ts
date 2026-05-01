@@ -3,6 +3,8 @@ import { renderStateBadge } from "../partials/state-badge";
 import { renderComment } from "../partials/comment";
 import { renderHistoryItem } from "../partials/history-item";
 import { ALL_STATES, type NormalizedIssue } from "../../domain/issue";
+import type { Project } from "../../domain/project";
+import { DEFAULT_PROJECT_SLUG } from "../../domain/project";
 import type { Comment } from "../../domain/comment";
 import type { HistoryEntry } from "../../domain/history";
 
@@ -10,9 +12,17 @@ export interface DetailPageInput {
   issue: NormalizedIssue;
   comments: Comment[];
   history: HistoryEntry[];
+  project?: Project;
+  projects?: Project[];
 }
 
-export function renderDetailPage({ issue, comments, history }: DetailPageInput): string {
+export function renderDetailPage({
+  issue,
+  comments,
+  history,
+  project,
+  projects = [],
+}: DetailPageInput): string {
   const stateOptions = ALL_STATES.map(
     (s) => `<option value="${s}"${s === issue.state ? " selected" : ""}>${s}</option>`,
   ).join("");
@@ -21,18 +31,20 @@ export function renderDetailPage({ issue, comments, history }: DetailPageInput):
   const blockers = issue.blocked_by
     .map(
       (b) =>
-        `<a href="/issues/${escapeHtml(b.id ?? "")}">${escapeHtml(b.identifier ?? "?")}</a> (${escapeHtml(b.state ?? "?")})`,
+        `<a href="${issuePath(b.id ?? "", project?.slug)}">${escapeHtml(b.identifier ?? "?")}</a> (${escapeHtml(b.state ?? "?")})`,
     )
     .join(", ");
 
   const commentList = comments.map(renderComment).join("\n");
   const historyList = history.map(renderHistoryItem).join("\n");
 
-  const detailUrl = `/issues/${escapeHtml(issue.id)}`;
+  const detailUrl = issuePath(issue.id, project?.slug);
+  const apiProject = project ? `?project=${escapeHtml(project.slug)}` : "";
   const articleSelector = `#issue-${escapeHtml(issue.id)}`;
   const body = `
 <article id="issue-${escapeHtml(issue.id)}"
          hx-get="${detailUrl}"
+         data-project-scope="${escapeHtml(project?.slug ?? DEFAULT_PROJECT_SLUG)}"
          hx-trigger="sse:issue.updated"
          hx-select="${articleSelector}"
          hx-swap="outerHTML">
@@ -44,7 +56,7 @@ export function renderDetailPage({ issue, comments, history }: DetailPageInput):
         : ""
     }
     ${renderStateBadge(issue.state)}
-    <select hx-patch="/api/v1/issues/${escapeHtml(issue.id)}"
+    <select hx-patch="/api/v1/issues/${escapeHtml(issue.id)}${apiProject}"
             hx-trigger="change"
             hx-vals="js:{state: event.target.value, actor: 'user'}"
             hx-ext="json-enc"
@@ -81,7 +93,7 @@ export function renderDetailPage({ issue, comments, history }: DetailPageInput):
          hx-swap="outerHTML">
       ${commentList}
     </div>
-    <form hx-post="/api/v1/issues/${escapeHtml(issue.id)}/comments"
+    <form hx-post="/api/v1/issues/${escapeHtml(issue.id)}/comments${apiProject}"
           hx-ext="json-enc"
           hx-target="#comments > div"
           hx-swap="beforeend">
@@ -95,5 +107,14 @@ export function renderDetailPage({ issue, comments, history }: DetailPageInput):
     <ol>${historyList}</ol>
   </section>
 </article>`;
-  return layout(`${issue.identifier} · ${issue.title}`, body);
+  return layout(`${issue.identifier} · ${issue.title}`, body, {
+    projects,
+    activeProject: project ?? null,
+  });
+}
+
+function issuePath(id: string, projectSlug?: string): string {
+  return projectSlug && projectSlug !== DEFAULT_PROJECT_SLUG
+    ? `/projects/${escapeHtml(projectSlug)}/issues/${escapeHtml(id)}`
+    : `/issues/${escapeHtml(id)}`;
 }

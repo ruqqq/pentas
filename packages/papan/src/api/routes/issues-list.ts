@@ -1,6 +1,7 @@
 import { URLPattern } from "urlpattern-polyfill";
 import { getIssuesByStates } from "../../db/repo/issues";
 import type { Route } from "../server";
+import { isResponse, projectSlugFromUrl, resolveProject } from "./project-scope";
 
 const DEFAULT_LIMIT = 50;
 
@@ -18,7 +19,9 @@ export function issuesListRoute(): Route {
         );
       }
       const cursor = url.searchParams.get("cursor");
-      const result = getIssuesByStates(db, states, cursor, DEFAULT_LIMIT);
+      const project = resolveProject(db, projectSlugFromUrl(req));
+      if (isResponse(project)) return project;
+      const result = getIssuesByStates(db, states, cursor, DEFAULT_LIMIT, project.id);
       return Response.json(result);
     },
   };
