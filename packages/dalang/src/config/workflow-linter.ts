@@ -175,7 +175,7 @@ function lintLiquidVariables(
   const scopes: ScopeStack = [new Map()];
   const seen = new Set<string>();
   const pendingCaptures: string[] = [];
-  const tokenPattern = /{{\s*([\s\S]*?)\s*}}|{%\s*([\s\S]*?)\s*%}/g;
+  const tokenPattern = /{{-?\s*([\s\S]*?)\s*-?}}|{%-?\s*([\s\S]*?)\s*-?%}/g;
 
   for (const match of template.matchAll(tokenPattern)) {
     if (match[1] !== undefined) {
@@ -299,7 +299,7 @@ function collectPathCandidates(expression: string): string[] {
 
 function collectFilters(template: string): string[] {
   const out = new Set<string>();
-  const expressionPattern = /{{\s*([\s\S]*?)\s*}}|{%\s*(?:assign\s+[A-Za-z_]\w*\s*=\s*|for\s+[A-Za-z_]\w*\s+in\s+|if\s+|elsif\s+|unless\s+|case\s+|when\s+)([\s\S]*?)\s*%}/g;
+  const expressionPattern = /{{-?\s*([\s\S]*?)\s*-?}}|{%-?\s*(?:assign\s+[A-Za-z_]\w*\s*=\s*|for\s+[A-Za-z_]\w*\s+in\s+|if\s+|elsif\s+|unless\s+|case\s+|when\s+)([\s\S]*?)\s*-?%}/g;
   for (const match of template.matchAll(expressionPattern)) {
     const expression = match[1] ?? match[2] ?? "";
     const parts = splitLiquidPipeline(expression).slice(1);

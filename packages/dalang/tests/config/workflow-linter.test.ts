@@ -185,6 +185,24 @@ test("lint rejects unknown Liquid references using bracket notation", () => {
   );
 });
 
+test("lint rejects unknown Liquid references inside whitespace-controlled tags", () => {
+  const diagnostics = lintLiquidTemplate(
+    "{%- if issue.not_a_field -%}x{%- endif -%}",
+  );
+
+  expect(diagnostics.map((d) => d.message)).toContain(
+    "Unknown Liquid variable path `issue.not_a_field`",
+  );
+});
+
+test("lint accepts whitespace-controlled Liquid for-loop scopes", () => {
+  const diagnostics = lintLiquidTemplate(
+    "{%- for comment in recent_comments -%}{{ comment.author }}{%- endfor -%}",
+  );
+
+  expect(diagnostics).toEqual([]);
+});
+
 test("lint accepts quoted pipe characters inside filter arguments", async () => {
   const path = await writeWorkflow(`
 {{ issue.title | default: "foo|bar" }}
