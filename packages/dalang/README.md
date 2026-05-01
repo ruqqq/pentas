@@ -64,7 +64,7 @@ agent_provider: codex
 codex:
   executable_path: codex
   model: gpt-5.5
-  sandbox_mode: workspace-write # "read-only" | "workspace-write" | "danger-full-access"
+  sandbox_mode: danger-full-access # "read-only" | "workspace-write" | "danger-full-access"
   approval_policy: never # "untrusted" | "on-failure" | "on-request" | "never"
   network_access_enabled: true
   turn_timeout_ms: 3600000
@@ -78,9 +78,9 @@ codex:
 | ------------------ | ------------------- | -------------------------------------------------------------------- |
 | `executable_path`  | `"codex"`           | Path or name of the `codex` binary.                                  |
 | `model`            | `"gpt-5.5"`         | Codex model to use.                                                  |
-| `sandbox_mode`     | `"workspace-write"` | File system access granted to the agent.                             |
+| `sandbox_mode`     | `"workspace-write"` | File system access granted to the agent. Use `"danger-full-access"` when Codex workers must stage, commit, or push because `workspace-write` can mount `.git` read-only. |
 | `approval_policy`  | `"never"`           | `"never"` is the recommended headless value; `"ask"` would deadlock. |
-| `network_access_enabled` | `true`       | Allows workspace-write Codex runs to perform GitHub handoff commands. |
+| `network_access_enabled` | `true`       | Allows Codex runs to perform GitHub handoff commands.                 |
 | `turn_timeout_ms`  | `3600000`           | Max time for a single agent turn.                                    |
 | `read_timeout_ms`  | `5000`              | Max silence before declaring a stall.                                |
 | `stall_timeout_ms` | `300000`            | Max total stall time before aborting.                                |

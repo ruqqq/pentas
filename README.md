@@ -214,7 +214,7 @@ agent_provider: codex
 codex:
   executable_path: codex
   model: gpt-5.5
-  sandbox_mode: workspace-write
+  sandbox_mode: danger-full-access
   approval_policy: never
   network_access_enabled: true
   turn_timeout_ms: 3600000
@@ -222,7 +222,7 @@ codex:
   stall_timeout_ms: 300000
 ```
 
-`approval_policy: never` is the headless setting. Interactive approval prompts would deadlock an unattended dalang worker. `network_access_enabled` defaults to `true` for Codex so GitHub handoff commands can comment, push, and update Project fields.
+`approval_policy: never` is the headless setting. Interactive approval prompts would deadlock an unattended dalang worker. Use `sandbox_mode: danger-full-access` for workflows where the agent must stage, commit, or push; Codex `workspace-write` can edit files, but its sandbox mounts `.git` read-only. `network_access_enabled` defaults to `true` for Codex so GitHub handoff commands can comment, push, and update Project fields.
 
 #### Workflow prompt and agent skills
 
