@@ -203,6 +203,8 @@ Every issue that dalang should pick up must be added to the project, have `Agent
 
 When an agent moves an item from one active `Status` to another, dalang ends the current provider session. The next poll dispatches a fresh session for the new column, so the agent receives the full state-specific workflow prompt instead of a generic continuation prompt.
 
+Agent-authored GitHub comments must start with `[AGENT MESSAGE]` on the first line. This keeps automation comments identifiable even when GitHub attributes them to the user token that dalang is running with.
+
 #### Codex agent provider
 
 For Codex-driven runs, use:
