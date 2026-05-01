@@ -49,6 +49,8 @@ export const GithubPrChecksSchema = z.object({
   pass_state: z.string().min(1).default("Ready for Human Review"),
   fail_state: z.string().min(1).default("In Dev"),
   escalation_state: z.string().min(1).default("Ready for Human Review"),
+  mark_pr_ready: z.boolean().default(true),
+  gh_executable: z.string().min(1).default("gh"),
 });
 
 export const GithubProjectsControlPlaneSchema = z.object({
@@ -151,6 +153,11 @@ export const PrChecksSchema = z.object({
   failure_budget: z.number().int().positive(),
   rerun_flakes: z.boolean(),
   gh_executable: z.string().min(1),
+  mark_pr_ready: z.boolean().default(true),
+  wait_state: z.string().min(1).optional(),
+  pass_state: z.string().min(1).optional(),
+  fail_state: z.string().min(1).optional(),
+  escalation_state: z.string().min(1).optional(),
 });
 
 const DEFAULT_ACTIVE_STATES = [
@@ -447,6 +454,7 @@ const DEFAULTS = {
     failure_budget: 3,
     rerun_flakes: true,
     gh_executable: "gh",
+    mark_pr_ready: true,
   },
 };
 

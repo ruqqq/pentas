@@ -2,8 +2,10 @@ import type { Database } from "bun:sqlite";
 import { ulid } from "../../lib/ids";
 import { allocateIdentifier } from "../seq";
 import type { NormalizedIssue } from "../../domain/issue";
+import { DEFAULT_PROJECT_ID } from "../../domain/project";
 
 export interface CreateIssueInput {
+  project_id?: string;
   title: string;
   description?: string | null;
   priority?: number | null;
@@ -18,8 +20,16 @@ export interface CreateIssueInput {
 
 export type UpdateIssueInput = Partial<CreateIssueInput>;
 
+export class ProjectScopeMismatchError extends Error {
+  constructor(message = "related issues must belong to the same project") {
+    super(message);
+    this.name = "ProjectScopeMismatchError";
+  }
+}
+
 interface IssueRow {
   id: string;
+  project_id: string;
   identifier: string;
   title: string;
   description: string | null;
@@ -31,6 +41,8 @@ interface IssueRow {
   branch_name: string | null;
   created_at: string;
   updated_at: string;
+  project_slug: string | null;
+  project_name: string | null;
 }
 
 function nowIso(): string {
@@ -59,6 +71,31 @@ function hydrateBlockers(db: Database, issueId: string): NormalizedIssue["blocke
     .map((r) => ({ id: r.id, identifier: r.identifier, state: r.state }));
 }
 
+function assertIssuesInProject(db: Database, projectId: string, issueIds: string[]): void {
+  const ids = [...new Set(issueIds.filter(Boolean))];
+  if (ids.length === 0) return;
+  const placeholders = ids.map(() => "?").join(",");
+  const rows = db
+    .query<{ id: string }, string[]>(
+      `SELECT id FROM issues WHERE id IN (${placeholders}) AND project_id = ?`,
+    )
+    .all(...ids, projectId);
+  if (rows.length !== ids.length) throw new ProjectScopeMismatchError();
+}
+
+function selectIssueById(db: Database, id: string, projectId?: string): IssueRow | null {
+  const where = projectId ? "i.id = ? AND i.project_id = ?" : "i.id = ?";
+  const params = projectId ? [id, projectId] : [id];
+  return db
+    .query<IssueRow, string[]>(
+      `SELECT i.*, p.slug AS project_slug, p.name AS project_name
+         FROM issues i
+         LEFT JOIN projects p ON p.id = i.project_id
+        WHERE ${where}`,
+    )
+    .get(...params);
+}
+
 function rowToNormalized(db: Database, row: IssueRow): NormalizedIssue {
   // Public identifier prefers the upstream tracker ref (e.g. "ENG-123" from Linear).
   // The auto-allocated papan sequence ("PENTAS-N") is demoted to internal_ref.
@@ -77,6 +114,9 @@ function rowToNormalized(db: Database, row: IssueRow): NormalizedIssue {
     internal_ref: row.identifier,
     labels: hydrateLabels(db, row.id),
     blocked_by: hydrateBlockers(db, row.id),
+    project: row.project_slug
+      ? { id: row.project_id, slug: row.project_slug, name: row.project_name ?? row.project_slug }
+      : null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -86,16 +126,22 @@ export function createIssue(db: Database, input: CreateIssueInput): NormalizedIs
   const id = ulid();
   const identifier = allocateIdentifier(db);
   const now = nowIso();
+  const projectId = input.project_id ?? DEFAULT_PROJECT_ID;
+  assertIssuesInProject(db, projectId, [
+    ...(input.parent_issue_id ? [input.parent_issue_id] : []),
+    ...(input.blocker_ids ?? []),
+  ]);
 
   const tx = db.transaction(() => {
     db.query(
       `INSERT INTO issues
-         (id, identifier, title, description, priority, state,
+         (id, project_id, identifier, title, description, priority, state,
           parent_issue_id, external_ref, external_url, branch_name,
           created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
+      projectId,
       identifier,
       input.title,
       input.description ?? null,
@@ -131,13 +177,13 @@ export function createIssue(db: Database, input: CreateIssueInput): NormalizedIs
   });
   tx();
 
-  const row = db.query<IssueRow, [string]>("SELECT * FROM issues WHERE id = ?").get(id);
+  const row = selectIssueById(db, id);
   if (!row) throw new Error("createIssue: row vanished");
   return rowToNormalized(db, row);
 }
 
-export function getIssueById(db: Database, id: string): NormalizedIssue | null {
-  const row = db.query<IssueRow, [string]>("SELECT * FROM issues WHERE id = ?").get(id);
+export function getIssueById(db: Database, id: string, projectId?: string): NormalizedIssue | null {
+  const row = selectIssueById(db, id, projectId);
   return row ? rowToNormalized(db, row) : null;
 }
 
@@ -164,26 +210,29 @@ export function getIssuesByStates(
   states: string[],
   cursor: string | null,
   limit: number,
+  projectId: string = DEFAULT_PROJECT_ID,
 ): PageResult {
   if (states.length === 0) return { issues: [], next_cursor: null };
 
   const placeholders = states.map(() => "?").join(",");
-  const params: (string | number)[] = [...states];
-  let where = `state IN (${placeholders})`;
+  const params: (string | number)[] = [projectId, ...states];
+  let where = `i.project_id = ? AND i.state IN (${placeholders})`;
 
   if (cursor) {
     const c = decodeCursor(cursor);
     if (c) {
-      where += ` AND (updated_at, id) < (?, ?)`;
+      where += ` AND (i.updated_at, i.id) < (?, ?)`;
       params.push(c.updated_at, c.id);
     }
   }
 
   const rows = db
     .query<IssueRow, (string | number)[]>(
-      `SELECT * FROM issues
+      `SELECT i.*, p.slug AS project_slug, p.name AS project_name
+         FROM issues i
+         LEFT JOIN projects p ON p.id = i.project_id
         WHERE ${where}
-        ORDER BY updated_at DESC, id DESC
+        ORDER BY i.updated_at DESC, i.id DESC
         LIMIT ?`,
     )
     .all(...params, limit + 1);
@@ -199,11 +248,24 @@ export function getIssuesByStates(
 }
 
 export function getIssuesByIds(db: Database, ids: string[]): NormalizedIssue[] {
+  return getIssuesByIdsInProject(db, ids, DEFAULT_PROJECT_ID);
+}
+
+export function getIssuesByIdsInProject(
+  db: Database,
+  ids: string[],
+  projectId: string,
+): NormalizedIssue[] {
   if (ids.length === 0) return [];
   const placeholders = ids.map(() => "?").join(",");
   const rows = db
-    .query<IssueRow, string[]>(`SELECT * FROM issues WHERE id IN (${placeholders})`)
-    .all(...ids);
+    .query<IssueRow, string[]>(
+      `SELECT i.*, p.slug AS project_slug, p.name AS project_name
+         FROM issues i
+         LEFT JOIN projects p ON p.id = i.project_id
+        WHERE i.project_id = ? AND i.id IN (${placeholders})`,
+    )
+    .all(projectId, ...ids);
   return rows.map((r) => rowToNormalized(db, r));
 }
 
@@ -211,9 +273,14 @@ export function updateIssue(
   db: Database,
   id: string,
   input: UpdateIssueInput,
+  projectId: string = DEFAULT_PROJECT_ID,
 ): NormalizedIssue | null {
-  const existing = db.query<IssueRow, [string]>("SELECT * FROM issues WHERE id = ?").get(id);
+  const existing = selectIssueById(db, id, projectId);
   if (!existing) return null;
+  assertIssuesInProject(db, projectId, [
+    ...(typeof input.parent_issue_id === "string" ? [input.parent_issue_id] : []),
+    ...(input.blocker_ids ?? []),
+  ]);
 
   const now = nowIso();
   const tx = db.transaction(() => {
@@ -233,8 +300,10 @@ export function updateIssue(
     setIfDefined("external_url", "external_url");
     setIfDefined("branch_name", "branch_name");
 
-    params.push(id);
-    db.query(`UPDATE issues SET ${fields.join(", ")} WHERE id = ?`).run(...params);
+    params.push(id, projectId);
+    db.query(`UPDATE issues SET ${fields.join(", ")} WHERE id = ? AND project_id = ?`).run(
+      ...params,
+    );
 
     if (input.labels !== undefined) {
       db.query("DELETE FROM issue_labels WHERE issue_id = ?").run(id);
@@ -260,11 +329,15 @@ export function updateIssue(
   });
   tx();
 
-  const row = db.query<IssueRow, [string]>("SELECT * FROM issues WHERE id = ?").get(id);
+  const row = selectIssueById(db, id, projectId);
   return row ? rowToNormalized(db, row) : null;
 }
 
-export function deleteIssue(db: Database, id: string): boolean {
-  const result = db.query("DELETE FROM issues WHERE id = ?").run(id);
+export function deleteIssue(
+  db: Database,
+  id: string,
+  projectId: string = DEFAULT_PROJECT_ID,
+): boolean {
+  const result = db.query("DELETE FROM issues WHERE id = ? AND project_id = ?").run(id, projectId);
   return result.changes > 0;
 }

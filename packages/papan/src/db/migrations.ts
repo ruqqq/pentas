@@ -1,7 +1,44 @@
 import type { Database } from "bun:sqlite";
 import schema from "./schema.sql" with { type: "text" };
+import { seedDefaultStatuses } from "./repo/project-statuses";
+
+function hasTable(db: Database, table: string): boolean {
+  return (
+    db
+      .query<{ name: string }, [string]>(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+      )
+      .get(table) !== null
+  );
+}
+
+function hasColumn(db: Database, table: string, column: string): boolean {
+  if (!hasTable(db, table)) return false;
+  return (
+    db
+      .query<{ name: string }, [string, string]>(
+        `SELECT name FROM pragma_table_info(?) WHERE name = ?`,
+      )
+      .get(table, column) !== null
+  );
+}
 
 export function runMigrations(db: Database): void {
   db.exec("PRAGMA foreign_keys = ON;");
+  // Pre-schema migration: legacy single-project DBs predate the projects table.
+  // Add project_id, then let schema.sql create projects (and seed 'default').
+  if (hasTable(db, "issues") && !hasColumn(db, "issues", "project_id")) {
+    db.exec("ALTER TABLE issues ADD COLUMN project_id TEXT;");
+    db.query("UPDATE issues SET project_id = ? WHERE project_id IS NULL").run("default");
+  }
   db.exec(schema);
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS issues_project_state_idx ON issues(project_id, state);
+    CREATE INDEX IF NOT EXISTS issues_project_updated_at_idx ON issues(project_id, updated_at, id);
+    CREATE UNIQUE INDEX IF NOT EXISTS issues_project_identifier_idx ON issues(project_id, identifier);
+  `);
+  // Backfill: ensure every existing project has the default status set so the system
+  // remains usable on upgrade. Idempotent — seedDefaultStatuses no-ops when populated.
+  const projects = db.query<{ id: string }, []>("SELECT id FROM projects").all();
+  for (const p of projects) seedDefaultStatuses(db, p.id);
 }

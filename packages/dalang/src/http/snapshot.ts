@@ -14,7 +14,9 @@ export function buildStateSnapshot(state: OrchestratorState): unknown {
     started_at: entry.started_at,
     last_event_at: entry.session?.last_event_at ?? null,
     workspace_path: entry.workspace_path,
-    transcript_path: transcriptPathFor(entry.workspace_path, entry.session?.thread_id),
+    transcript_path:
+      entry.session?.transcript_path ??
+      transcriptPathFor(entry.workspace_path, entry.session?.thread_id, entry.agent_provider),
     tokens: {
       input_tokens: entry.session?.input_tokens ?? 0,
       output_tokens: entry.session?.output_tokens ?? 0,
@@ -48,7 +50,9 @@ export function buildIssueSnapshot(state: OrchestratorState, identifier: string)
         status: "running",
         workspace: {
           path: entry.workspace_path,
-          transcript_path: transcriptPathFor(entry.workspace_path, entry.session?.thread_id),
+          transcript_path:
+            entry.session?.transcript_path ??
+            transcriptPathFor(entry.workspace_path, entry.session?.thread_id, entry.agent_provider),
         },
         attempts: { current_retry_attempt: entry.retry_attempt ?? 0 },
         running: {

@@ -1,8 +1,9 @@
 import { URLPattern } from "urlpattern-polyfill";
-import { getIssueById, updateIssue } from "../../db/repo/issues";
+import { ProjectScopeMismatchError, getIssueById, updateIssue } from "../../db/repo/issues";
 import { addHistory } from "../../db/repo/history";
-import { isValidState } from "../../domain/issue";
+import { isValidStateForProject } from "../../db/repo/project-statuses";
 import type { Route } from "../server";
+import { eventProject, isResponse, projectSlugFromUrl, resolveProject } from "./project-scope";
 
 interface PatchBody {
   title?: unknown;
@@ -16,6 +17,7 @@ interface PatchBody {
   labels?: unknown;
   blocker_ids?: unknown;
   actor?: unknown;
+  project_slug?: unknown;
 }
 
 export function issuesUpdateRoute(): Route {
@@ -24,7 +26,9 @@ export function issuesUpdateRoute(): Route {
     pattern: new URLPattern({ pathname: "/api/v1/issues/:id" }),
     handler: async (req, match, { db, bus }) => {
       const id = match.pathname.groups.id!;
-      const existing = getIssueById(db, id);
+      const project = resolveProject(db, projectSlugFromUrl(req));
+      if (isResponse(project)) return project;
+      const existing = getIssueById(db, id, project.id);
       if (!existing) {
         return Response.json(
           { error: { code: "issue_not_found", message: `issue ${id} not found` } },
@@ -42,9 +46,22 @@ export function issuesUpdateRoute(): Route {
         );
       }
 
+      if (body.project_slug !== undefined) {
+        return Response.json(
+          {
+            error: {
+              code: "unsupported_field",
+              message: "project_slug is not accepted on issue updates",
+              fields: ["project_slug"],
+            },
+          },
+          { status: 400 },
+        );
+      }
+
       if (
         body.state !== undefined &&
-        (typeof body.state !== "string" || !isValidState(body.state))
+        (typeof body.state !== "string" || !isValidStateForProject(db, project.id, body.state))
       ) {
         return Response.json(
           { error: { code: "invalid_state", message: "unknown state", fields: ["state"] } },
@@ -55,37 +72,50 @@ export function issuesUpdateRoute(): Route {
       const actor: "user" | "agent" = body.actor === "agent" ? "agent" : "user";
       const oldState = existing.state;
 
-      const updated = updateIssue(db, id, {
-        ...(typeof body.title === "string" ? { title: body.title } : {}),
-        ...(body.description !== undefined
-          ? { description: typeof body.description === "string" ? body.description : null }
-          : {}),
-        ...(body.priority !== undefined
-          ? { priority: typeof body.priority === "number" ? body.priority : null }
-          : {}),
-        ...(typeof body.state === "string" ? { state: body.state } : {}),
-        ...(body.parent_issue_id !== undefined
-          ? {
-              parent_issue_id:
-                typeof body.parent_issue_id === "string" ? body.parent_issue_id : null,
-            }
-          : {}),
-        ...(body.external_ref !== undefined
-          ? { external_ref: typeof body.external_ref === "string" ? body.external_ref : null }
-          : {}),
-        ...(body.external_url !== undefined
-          ? { external_url: typeof body.external_url === "string" ? body.external_url : null }
-          : {}),
-        ...(body.branch_name !== undefined
-          ? { branch_name: typeof body.branch_name === "string" ? body.branch_name : null }
-          : {}),
-        ...(Array.isArray(body.labels)
-          ? { labels: body.labels.filter((s): s is string => typeof s === "string") }
-          : {}),
-        ...(Array.isArray(body.blocker_ids)
-          ? { blocker_ids: body.blocker_ids.filter((s): s is string => typeof s === "string") }
-          : {}),
-      });
+      let updated;
+      try {
+        updated = updateIssue(
+          db,
+          id,
+          {
+            ...(typeof body.title === "string" ? { title: body.title } : {}),
+            ...(body.description !== undefined
+              ? { description: typeof body.description === "string" ? body.description : null }
+              : {}),
+            ...(body.priority !== undefined
+              ? { priority: typeof body.priority === "number" ? body.priority : null }
+              : {}),
+            ...(typeof body.state === "string" ? { state: body.state } : {}),
+            ...(body.parent_issue_id !== undefined
+              ? {
+                  parent_issue_id:
+                    typeof body.parent_issue_id === "string" ? body.parent_issue_id : null,
+                }
+              : {}),
+            ...(body.external_ref !== undefined
+              ? { external_ref: typeof body.external_ref === "string" ? body.external_ref : null }
+              : {}),
+            ...(body.external_url !== undefined
+              ? { external_url: typeof body.external_url === "string" ? body.external_url : null }
+              : {}),
+            ...(body.branch_name !== undefined
+              ? { branch_name: typeof body.branch_name === "string" ? body.branch_name : null }
+              : {}),
+            ...(Array.isArray(body.labels)
+              ? { labels: body.labels.filter((s): s is string => typeof s === "string") }
+              : {}),
+            ...(Array.isArray(body.blocker_ids)
+              ? { blocker_ids: body.blocker_ids.filter((s): s is string => typeof s === "string") }
+              : {}),
+          },
+          project.id,
+        );
+      } catch (err) {
+        if (err instanceof ProjectScopeMismatchError) {
+          return Response.json({ error: { code: "project_scope_mismatch" } }, { status: 400 });
+        }
+        throw err;
+      }
 
       if (!updated) {
         return Response.json({ error: { code: "issue_not_found" } }, { status: 404 });
@@ -105,12 +135,13 @@ export function issuesUpdateRoute(): Route {
           from: oldState,
           to: body.state,
           actor,
+          project: eventProject(project),
         });
       } else {
         addHistory(db, { issue_id: id, kind: "edited", from_value: null, to_value: null, actor });
       }
 
-      bus.publish("issue.updated", updated);
+      bus.publish("issue.updated", { ...updated, project: eventProject(project) });
       return Response.json(updated);
     },
   };

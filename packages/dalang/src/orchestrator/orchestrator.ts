@@ -122,6 +122,7 @@ export class Orchestrator {
     failure_budget: number;
     rerun_flakes: boolean;
     gh_executable?: string | undefined;
+    mark_pr_ready: boolean;
     wait_state?: string | undefined;
     pass_state?: string | undefined;
     fail_state?: string | undefined;
@@ -133,6 +134,8 @@ export class Orchestrator {
         poll_interval_ms: cfg.control_plane.pr_checks.poll_interval_ms,
         failure_budget: cfg.control_plane.pr_checks.failure_budget,
         rerun_flakes: cfg.control_plane.pr_checks.rerun_flakes,
+        gh_executable: cfg.control_plane.pr_checks.gh_executable,
+        mark_pr_ready: cfg.control_plane.pr_checks.mark_pr_ready,
         wait_state: cfg.control_plane.pr_checks.wait_state,
         pass_state: cfg.control_plane.pr_checks.pass_state,
         fail_state: cfg.control_plane.pr_checks.fail_state,
@@ -198,6 +201,7 @@ export class Orchestrator {
       issue,
       identifier: issue.identifier,
       workspace_path: this.workspaces.pathFor(issue.identifier),
+      agent_provider: this.cfg.agent_provider,
       started_at: new Date().toISOString(),
       abort_controller: controller,
       retry_attempt: attempt,
@@ -296,6 +300,11 @@ export class Orchestrator {
             session_id: e.thread_id ? `${e.thread_id}-1` : "?-1",
             thread_id: e.thread_id ?? "?",
             turn_id: "1",
+            transcript_path: transcriptPathFor(
+              entry.workspace_path,
+              e.thread_id,
+              entry.agent_provider,
+            ),
             claude_session_pid: null,
             last_event: e.event,
             last_event_at: e.timestamp,
@@ -315,12 +324,17 @@ export class Orchestrator {
         if (e.thread_id && entry.session.thread_id !== e.thread_id) {
           entry.session.thread_id = e.thread_id;
           entry.session.session_id = `${e.thread_id}-1`;
+          entry.session.transcript_path = transcriptPathFor(
+            entry.workspace_path,
+            e.thread_id,
+            entry.agent_provider,
+          );
           this.log.info(
             {
               issue_id: issue.id,
               identifier: issue.identifier,
               session_id: entry.session.session_id,
-              transcript_path: transcriptPathFor(entry.workspace_path, e.thread_id),
+              transcript_path: entry.session.transcript_path,
             },
             "session started",
           );

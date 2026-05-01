@@ -91,6 +91,7 @@ describe("pr_checks config", () => {
       failure_budget: 3,
       rerun_flakes: true,
       gh_executable: "gh",
+      mark_pr_ready: true,
     });
   });
   test("user override is shallow-merged into defaults", () => {
@@ -100,6 +101,25 @@ describe("pr_checks config", () => {
     expect(cfg.pr_checks.poll_interval_ms).toBe(60000);
     expect(cfg.pr_checks.rerun_flakes).toBe(true);
     expect(cfg.pr_checks.gh_executable).toBe("gh");
+    expect(cfg.pr_checks.mark_pr_ready).toBe(true);
+  });
+  test("mark_pr_ready can be disabled", () => {
+    const cfg = applyDefaults({ pr_checks: { mark_pr_ready: false } });
+    expect(cfg.pr_checks.mark_pr_ready).toBe(false);
+  });
+  test("optional state fields are accepted", () => {
+    const cfg = applyDefaults({
+      pr_checks: {
+        wait_state: "Waiting CI",
+        pass_state: "Ready for Human Review",
+        fail_state: "In Dev",
+        escalation_state: "Escalated",
+      },
+    });
+    expect(cfg.pr_checks.wait_state).toBe("Waiting CI");
+    expect(cfg.pr_checks.pass_state).toBe("Ready for Human Review");
+    expect(cfg.pr_checks.fail_state).toBe("In Dev");
+    expect(cfg.pr_checks.escalation_state).toBe("Escalated");
   });
 });
 

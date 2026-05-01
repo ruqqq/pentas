@@ -305,6 +305,40 @@ describe("runPrChecksReconciler", () => {
     expect(tracker.comments[0]!.body).toContain("[pr_checks_rerun] sha=abc1234");
   });
 
+  test("passed + mark_pr_ready=false → state still transitions but gh pr ready is NOT called", async () => {
+    const logDir = await mkdtemp(join(tmpdir(), "gh-log-"));
+    const logPath = join(logDir, "calls.log");
+    const stub = await ghStub(`
+      echo "$@" >> ${logPath}
+      case "$1 $2" in
+        "pr list") echo '[{"url":"https://x/pr/1","number":1,"headRefOid":"abc1234567"}]' ;;
+        "pr checks") echo '[{"name":"build","state":"SUCCESS","bucket":"pass","link":"https://x/run/9"}]' ;;
+        "pr ready") echo '' ;;
+      esac`);
+    const tracker = { comments: [] as TrackerComment[], states: { i1: "Waiting PR Checks" } };
+
+    await runPrChecksReconciler({
+      issues: [issue],
+      polls: polls(),
+      controlPlane: fakeTracker(tracker),
+      cfg: {
+        enabled: true,
+        poll_interval_ms: 1000,
+        failure_budget: 3,
+        rerun_flakes: false,
+        gh_executable: stub,
+        mark_pr_ready: false,
+      },
+      cwd: process.cwd(),
+      now: () => new Date(),
+    });
+
+    expect(tracker.states.i1).toBe("Ready for Human Review");
+    expect(tracker.comments[0]!.body).toContain("[pr_checks_passed] sha=abc1234");
+    const log = await Bun.file(logPath).text();
+    expect(log).not.toContain("pr ready");
+  });
+
   test("subprocess failure does not throw and records null last_action", async () => {
     // gh stub that fails outright (exits 127, no stdout)
     const dir = await mkdtemp(join(tmpdir(), "gh-bad-"));

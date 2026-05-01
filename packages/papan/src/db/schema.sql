@@ -1,6 +1,21 @@
+CREATE TABLE IF NOT EXISTS projects (
+  id          TEXT PRIMARY KEY,
+  slug        TEXT NOT NULL UNIQUE,
+  name        TEXT NOT NULL,
+  description TEXT,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
+INSERT OR IGNORE INTO projects
+  (id, slug, name, description, created_at, updated_at)
+VALUES
+  ('default', 'default', 'Default', NULL, '1970-01-01T00:00:00.000Z', '1970-01-01T00:00:00.000Z');
+
 CREATE TABLE IF NOT EXISTS issues (
   id              TEXT PRIMARY KEY,
-  identifier      TEXT NOT NULL UNIQUE,
+  project_id      TEXT NOT NULL REFERENCES projects(id) ON DELETE RESTRICT,
+  identifier      TEXT NOT NULL,
   title           TEXT NOT NULL,
   description     TEXT,
   priority        INTEGER,
@@ -16,6 +31,9 @@ CREATE TABLE IF NOT EXISTS issues (
 CREATE INDEX IF NOT EXISTS issues_state_idx      ON issues(state);
 CREATE INDEX IF NOT EXISTS issues_updated_at_idx ON issues(updated_at);
 CREATE INDEX IF NOT EXISTS issues_parent_idx     ON issues(parent_issue_id);
+CREATE INDEX IF NOT EXISTS issues_project_state_idx ON issues(project_id, state);
+CREATE INDEX IF NOT EXISTS issues_project_updated_at_idx ON issues(project_id, updated_at, id);
+CREATE UNIQUE INDEX IF NOT EXISTS issues_project_identifier_idx ON issues(project_id, identifier);
 
 CREATE TABLE IF NOT EXISTS issue_labels (
   issue_id  TEXT NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
@@ -49,6 +67,20 @@ CREATE TABLE IF NOT EXISTS history (
   at          TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS history_issue_id_idx ON history(issue_id);
+
+-- ON DELETE CASCADE here removes a project's status rows when the project is
+-- deleted. Note that issues.project_id uses ON DELETE RESTRICT, so a project
+-- with any issue cannot be deleted in the first place — this CASCADE only
+-- fires once those issues are gone.
+CREATE TABLE IF NOT EXISTS project_statuses (
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  position   INTEGER NOT NULL,
+  kind       TEXT NOT NULL CHECK (kind IN ('dispatchable','waiting','terminal')),
+  PRIMARY KEY (project_id, name)
+);
+CREATE INDEX IF NOT EXISTS project_statuses_order_idx
+  ON project_statuses(project_id, position);
 
 CREATE TABLE IF NOT EXISTS seq (
   name   TEXT PRIMARY KEY,

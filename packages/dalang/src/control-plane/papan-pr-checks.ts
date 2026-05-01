@@ -18,6 +18,7 @@ export interface PrChecksConfig {
   failure_budget: number;
   rerun_flakes: boolean;
   gh_executable: string;
+  mark_pr_ready?: boolean | undefined;
   wait_state?: string | undefined;
   pass_state?: string | undefined;
   fail_state?: string | undefined;
@@ -158,8 +159,9 @@ export async function runPrChecksReconciler(args: ReconcilerArgs): Promise<void>
         case "passed": {
           // Flip the PR out of draft now that CI is green. Idempotent: gh pr ready
           // on an already-ready PR succeeds. If it fails we still proceed with the
-          // state transition — the human can flip the PR manually.
-          if (pr) {
+          // state transition — the human can flip the PR manually. When
+          // mark_pr_ready is false, the workflow wants humans to flip the PR.
+          if (pr && (args.cfg.mark_pr_ready ?? true)) {
             const ready = await runGh(args.cfg.gh_executable, ["pr", "ready", String(pr.number)], {
               cwd: args.cwd,
             });

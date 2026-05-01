@@ -3,14 +3,27 @@ export interface ParsedArgs {
   command: "serve" | "lint";
   workflowPath: string;
   port: number | null;
+  help: boolean;
 }
 
+export const DALANG_HELP = `Usage: dalang [WORKFLOW.md] [--port <port>]
+       dalang lint [WORKFLOW.md]
+
+Options:
+  --port <port>  Override the HTTP server port from WORKFLOW.md.
+  -h, --help     Print this help text and exit.
+`;
+
 export function parseArgs(argv: string[]): ParsedArgs {
+  if (argv.some((a) => a === "--help" || a === "-h")) {
+    return { command: "serve", workflowPath: "./WORKFLOW.md", port: null, help: true };
+  }
+
   if (argv[0] === "lint") {
     const rest = argv.slice(1);
     if (rest.includes("--port")) throw new Error("--port is only valid for serve mode");
     if (rest.length > 1) throw new Error(`unexpected positional argument: ${rest[1]}`);
-    return { command: "lint", workflowPath: rest[0] ?? "./WORKFLOW.md", port: null };
+    return { command: "lint", workflowPath: rest[0] ?? "./WORKFLOW.md", port: null, help: false };
   }
 
   let workflowPath: string | null = null;
@@ -20,7 +33,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
     if (a === "--port") {
       const v = argv[++i];
       if (v === undefined) throw new Error("--port requires a value");
-      const n = Number.parseInt(v, 10);
+      if (v.trim().length === 0) throw new Error("invalid --port value");
+      const n = Number(v);
       if (!Number.isInteger(n) || n < 0) throw new Error(`invalid --port value: ${v}`);
       port = n;
       continue;
@@ -29,5 +43,5 @@ export function parseArgs(argv: string[]): ParsedArgs {
     if (workflowPath !== null) throw new Error(`unexpected positional argument: ${a}`);
     workflowPath = a;
   }
-  return { command: "serve", workflowPath: workflowPath ?? "./WORKFLOW.md", port };
+  return { command: "serve", workflowPath: workflowPath ?? "./WORKFLOW.md", port, help: false };
 }

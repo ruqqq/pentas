@@ -1,8 +1,10 @@
 import { URLPattern } from "urlpattern-polyfill";
-import { createIssue } from "../../db/repo/issues";
+import { ProjectScopeMismatchError, createIssue } from "../../db/repo/issues";
 import { addHistory } from "../../db/repo/history";
-import { isValidState } from "../../domain/issue";
+import { firstDispatchableStatus, isValidStateForProject } from "../../db/repo/project-statuses";
 import type { Route } from "../server";
+import { eventProject, isResponse, resolveProject } from "./project-scope";
+import { DEFAULT_PROJECT_SLUG } from "../../domain/project";
 
 interface CreateBody {
   title?: unknown;
@@ -15,6 +17,7 @@ interface CreateBody {
   branch_name?: unknown;
   labels?: unknown;
   blocker_ids?: unknown;
+  project_slug?: unknown;
 }
 
 export function issuesCreateRoute(): Route {
@@ -39,32 +42,69 @@ export function issuesCreateRoute(): Route {
         );
       }
 
-      const state = typeof body.state === "string" ? body.state : "Todo";
-      if (!isValidState(state)) {
-        return Response.json(
-          {
-            error: { code: "invalid_state", message: `unknown state ${state}`, fields: ["state"] },
-          },
-          { status: 400 },
-        );
+      const projectSlug =
+        typeof body.project_slug === "string" ? body.project_slug.trim() : DEFAULT_PROJECT_SLUG;
+      const project = resolveProject(db, projectSlug);
+      if (isResponse(project)) return project;
+
+      let state: string;
+      if (typeof body.state === "string") {
+        state = body.state;
+        if (!isValidStateForProject(db, project.id, state)) {
+          return Response.json(
+            {
+              error: {
+                code: "invalid_state",
+                message: `unknown state ${state}`,
+                fields: ["state"],
+              },
+            },
+            { status: 400 },
+          );
+        }
+      } else {
+        const fallback = firstDispatchableStatus(db, project.id);
+        if (!fallback) {
+          return Response.json(
+            {
+              error: {
+                code: "no_dispatchable_status",
+                message:
+                  "project has no dispatchable status; configure one or set state explicitly",
+                fields: ["state"],
+              },
+            },
+            { status: 400 },
+          );
+        }
+        state = fallback.name;
       }
 
-      const issue = createIssue(db, {
-        title: body.title.trim(),
-        description: typeof body.description === "string" ? body.description : null,
-        priority: typeof body.priority === "number" ? body.priority : null,
-        state,
-        parent_issue_id: typeof body.parent_issue_id === "string" ? body.parent_issue_id : null,
-        external_ref: typeof body.external_ref === "string" ? body.external_ref : null,
-        external_url: typeof body.external_url === "string" ? body.external_url : null,
-        branch_name: typeof body.branch_name === "string" ? body.branch_name : null,
-        labels: Array.isArray(body.labels)
-          ? body.labels.filter((s): s is string => typeof s === "string")
-          : [],
-        blocker_ids: Array.isArray(body.blocker_ids)
-          ? body.blocker_ids.filter((s): s is string => typeof s === "string")
-          : [],
-      });
+      let issue;
+      try {
+        issue = createIssue(db, {
+          project_id: project.id,
+          title: body.title.trim(),
+          description: typeof body.description === "string" ? body.description : null,
+          priority: typeof body.priority === "number" ? body.priority : null,
+          state,
+          parent_issue_id: typeof body.parent_issue_id === "string" ? body.parent_issue_id : null,
+          external_ref: typeof body.external_ref === "string" ? body.external_ref : null,
+          external_url: typeof body.external_url === "string" ? body.external_url : null,
+          branch_name: typeof body.branch_name === "string" ? body.branch_name : null,
+          labels: Array.isArray(body.labels)
+            ? body.labels.filter((s): s is string => typeof s === "string")
+            : [],
+          blocker_ids: Array.isArray(body.blocker_ids)
+            ? body.blocker_ids.filter((s): s is string => typeof s === "string")
+            : [],
+        });
+      } catch (err) {
+        if (err instanceof ProjectScopeMismatchError) {
+          return Response.json({ error: { code: "project_scope_mismatch" } }, { status: 400 });
+        }
+        throw err;
+      }
 
       addHistory(db, {
         issue_id: issue.id,
@@ -73,7 +113,7 @@ export function issuesCreateRoute(): Route {
         to_value: state,
         actor: "user",
       });
-      bus.publish("issue.created", issue);
+      bus.publish("issue.created", { ...issue, project: eventProject(project) });
 
       return Response.json(issue, { status: 201 });
     },

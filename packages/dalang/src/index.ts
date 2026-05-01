@@ -1,10 +1,15 @@
 // packages/dalang/src/index.ts
-import { parseArgs } from "./cli/args";
+import { DALANG_HELP, parseArgs } from "./cli/args";
 import { Bootstrap } from "./cli/bootstrap";
 import { createLogger } from "./logging/logger";
 
 const log = createLogger({ name: "dalang", level: "info" });
 const args = parseArgs(Bun.argv.slice(2));
+
+if (args.help) {
+  console.log(DALANG_HELP.trimEnd());
+  process.exit(0);
+}
 
 if (args.command === "lint") {
   const { lintWorkflow } = await import("./config/workflow-linter");
