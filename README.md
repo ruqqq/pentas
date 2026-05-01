@@ -201,6 +201,8 @@ gh project field-list 1 --owner ruqqq --format json
 
 Every issue that dalang should pick up must be added to the project, have `Agent = dalang`, and be in one of the configured active `Status` values. `Blocked`, `Inbox`, `Waiting PR Checks`, `Ready for Human Review`, and terminal states are intentionally not directly dispatched by the normal poll loop.
 
+When an agent moves an item from one active `Status` to another, dalang ends the current provider session. The next poll dispatches a fresh session for the new column, so the agent receives the full state-specific workflow prompt instead of a generic continuation prompt.
+
 #### Codex agent provider
 
 For Codex-driven runs, use:

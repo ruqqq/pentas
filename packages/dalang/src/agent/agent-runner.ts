@@ -151,8 +151,10 @@ export async function runAttempt(deps: RunAttemptDeps): Promise<RunAttemptResult
 
     const refreshed = await deps.trackerRefresh(issue.id).catch(() => null);
     if (!refreshed) break;
+    const previousState = issue.state;
     issue = refreshed;
     if (!deps.isActiveState(issue.state)) break;
+    if (issue.state !== previousState) break;
     if (turnCount >= deps.config.maxTurns) break;
   }
 
