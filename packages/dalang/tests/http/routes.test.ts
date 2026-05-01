@@ -129,7 +129,6 @@ function runningEntry(opts: {
     internal_ref: null,
     labels: [],
     blocked_by: [],
-    project: null,
     created_at: null,
     updated_at: null,
   };
