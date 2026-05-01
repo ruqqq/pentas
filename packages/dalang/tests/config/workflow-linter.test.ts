@@ -147,6 +147,21 @@ test("lint rejects unknown Liquid references inside assignment tags", async () =
   );
 });
 
+test("lint rejects unknown Liquid references inside case tags", async () => {
+  const path = await writeWorkflow(`
+{% case issue.not_a_field %}
+{% when "x" %}x
+{% endcase %}
+`);
+
+  const result = await lintWorkflow(path);
+
+  expect(result.ok).toBe(false);
+  expect(result.diagnostics.map((d) => d.message)).toContain(
+    "Unknown Liquid variable path `issue.not_a_field`",
+  );
+});
+
 test("lint rejects loop variables used outside their for block", async () => {
   const path = await writeWorkflow(`
 {% for comment in recent_comments %}{{ comment.author }}{% endfor %}

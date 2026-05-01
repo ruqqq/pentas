@@ -234,7 +234,7 @@ function lintLiquidVariables(
       continue;
     }
 
-    const conditionalMatch = tag.match(/^(?:if|elsif|unless)\s+([\s\S]+)$/);
+    const conditionalMatch = tag.match(/^(?:if|elsif|unless|case)\s+([\s\S]+)$/);
     if (conditionalMatch) lintExpressionPaths(conditionalMatch[1]!, scopes, diagnostics, seen);
   }
 }
@@ -299,7 +299,7 @@ function collectPathCandidates(expression: string): string[] {
 
 function collectFilters(template: string): string[] {
   const out = new Set<string>();
-  const expressionPattern = /{{\s*([\s\S]*?)\s*}}|{%\s*(?:assign\s+[A-Za-z_]\w*\s*=\s*|for\s+[A-Za-z_]\w*\s+in\s+|if\s+|elsif\s+|unless\s+)([\s\S]*?)\s*%}/g;
+  const expressionPattern = /{{\s*([\s\S]*?)\s*}}|{%\s*(?:assign\s+[A-Za-z_]\w*\s*=\s*|for\s+[A-Za-z_]\w*\s+in\s+|if\s+|elsif\s+|unless\s+|case\s+)([\s\S]*?)\s*%}/g;
   for (const match of template.matchAll(expressionPattern)) {
     const expression = match[1] ?? match[2] ?? "";
     const parts = expression.split("|").slice(1);
