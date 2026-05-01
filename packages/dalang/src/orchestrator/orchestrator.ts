@@ -198,6 +198,7 @@ export class Orchestrator {
       issue,
       identifier: issue.identifier,
       workspace_path: this.workspaces.pathFor(issue.identifier),
+      agent_provider: this.cfg.agent_provider,
       started_at: new Date().toISOString(),
       abort_controller: controller,
       retry_attempt: attempt,
@@ -292,6 +293,11 @@ export class Orchestrator {
         const entry = this.state.running.get(issue.id);
         if (!entry) return;
         if (entry.session === null) {
+          const transcriptPath = transcriptPathFor(
+            entry.workspace_path,
+            e.thread_id,
+            entry.agent_provider,
+          );
           entry.session = {
             session_id: e.thread_id ? `${e.thread_id}-1` : "?-1",
             thread_id: e.thread_id ?? "?",
@@ -308,6 +314,15 @@ export class Orchestrator {
             last_reported_total_tokens: 0,
             turn_count: 1,
           };
+          this.log.info(
+            {
+              issue_id: issue.id,
+              identifier: issue.identifier,
+              session_id: entry.session.session_id,
+              transcript_path: transcriptPath,
+            },
+            "session started",
+          );
         }
         // Once the SDK reveals a real session id (it's on every message but the
         // very first event we receive may not have been routed through us as a
@@ -320,7 +335,11 @@ export class Orchestrator {
               issue_id: issue.id,
               identifier: issue.identifier,
               session_id: entry.session.session_id,
-              transcript_path: transcriptPathFor(entry.workspace_path, e.thread_id),
+              transcript_path: transcriptPathFor(
+                entry.workspace_path,
+                e.thread_id,
+                entry.agent_provider,
+              ),
             },
             "session started",
           );

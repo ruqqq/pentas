@@ -114,6 +114,7 @@ export interface RunningEntry {
   issue: NormalizedIssue;
   identifier: string;
   workspace_path: string;
+  agent_provider: "claude" | "codex" | "opencode";
   started_at: string;
   abort_controller: AbortController;
   retry_attempt: number | null;

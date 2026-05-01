@@ -10,16 +10,19 @@ import { join } from "node:path";
 export function transcriptPathFor(
   workspacePath: string,
   sessionId: string | null | undefined,
+  provider: "claude" | "codex" | "opencode" = "claude",
 ): string | null {
   if (!sessionId || sessionId === "?" || sessionId.startsWith("?")) return null;
-  const codexPath = codexTranscriptPathFor(sessionId);
-  if (codexPath) return codexPath;
+  if (provider === "opencode") return null;
+  if (provider === "codex") return codexTranscriptPathFor(sessionId);
   const slug = workspacePath.replace(/[/.]/g, "-");
   return join(homedir(), ".claude", "projects", slug, `${sessionId}.jsonl`);
 }
 
-function codexTranscriptPathFor(sessionId: string): string | null {
-  const root = join(homedir(), ".codex", "sessions");
+export function codexTranscriptPathFor(
+  sessionId: string,
+  root: string = join(homedir(), ".codex", "sessions"),
+): string | null {
   const wanted = `${sessionId}.jsonl`;
   const stack = [root];
   while (stack.length > 0) {

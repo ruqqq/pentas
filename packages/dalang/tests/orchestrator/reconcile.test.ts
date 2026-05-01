@@ -13,6 +13,7 @@ function makeRunning(
     issue,
     identifier: issue.identifier,
     workspace_path: "/tmp",
+    agent_provider: "claude",
     started_at: startedAt,
     abort_controller: new AbortController(),
     retry_attempt: null,
