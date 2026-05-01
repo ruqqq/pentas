@@ -42,9 +42,18 @@ const ISSUE_FIELDS = [
   "updated_at",
 ] as const;
 
+const ISSUE_FIELD_SCHEMA: Record<(typeof ISSUE_FIELDS)[number], SchemaNode> =
+  Object.fromEntries(ISSUE_FIELDS.map((field) => [field, true])) as Record<
+    (typeof ISSUE_FIELDS)[number],
+    SchemaNode
+  >;
+
+ISSUE_FIELD_SCHEMA.labels = { array: true };
+ISSUE_FIELD_SCHEMA.blocked_by = { array: true };
+
 const PROMPT_CONTEXT: Record<string, SchemaNode> = {
   issue: {
-    fields: Object.fromEntries(ISSUE_FIELDS.map((field) => [field, true])),
+    fields: ISSUE_FIELD_SCHEMA,
   },
   attempt: true,
   control_plane: {

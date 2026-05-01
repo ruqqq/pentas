@@ -32,6 +32,18 @@ test("lint accepts known prompt context fields", async () => {
   expect(result.diagnostics).toEqual([]);
 });
 
+test("lint accepts loops over issue collection fields", async () => {
+  const path = await writeWorkflow(`
+{% for label in issue.labels %}{{ label }}{% endfor %}
+{% for blocker in issue.blocked_by %}{{ blocker }}{% endfor %}
+`);
+
+  const result = await lintWorkflow(path);
+
+  expect(result.ok).toBe(true);
+  expect(result.diagnostics).toEqual([]);
+});
+
 test("lint rejects unknown prompt context fields", async () => {
   const path = await writeWorkflow(`
 {{ issue.not_a_field }}
