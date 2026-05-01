@@ -59,6 +59,7 @@ export interface NormalizedIssue {
   internal_ref: string;
   labels: string[];
   blocked_by: { id: string | null; identifier: string | null; state: string | null }[];
+  project?: { id: string; slug: string; name: string } | null;
   created_at: string | null;
   updated_at: string | null;
 }

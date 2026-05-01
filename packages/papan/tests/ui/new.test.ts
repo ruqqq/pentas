@@ -10,4 +10,18 @@ describe("renderNewPage", () => {
     expect(html).toContain('name="state"');
     expect(html).toContain('value="Todo" selected');
   });
+
+  test("posts to project route when project is supplied", () => {
+    const html = renderNewPage({
+      project: {
+        id: "p1",
+        slug: "alpha",
+        name: "Alpha",
+        description: null,
+        created_at: "",
+        updated_at: "",
+      },
+    });
+    expect(html).toContain('action="/projects/alpha/new"');
+  });
 });

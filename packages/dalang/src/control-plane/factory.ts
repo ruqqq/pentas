@@ -19,6 +19,7 @@ export function createControlPlaneAdapter(args: CreateControlPlaneArgs): Control
         args.trackerApiKey !== undefined
           ? resolveTrackerApiKey(args.trackerApiKey)
           : resolveTrackerApiKey(cp.api_key ?? null),
+      board: cp.board ?? null,
     });
   }
 

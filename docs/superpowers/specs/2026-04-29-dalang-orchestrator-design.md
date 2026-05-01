@@ -3,6 +3,7 @@
 Status: Draft v1
 Date: 2026-04-29
 Author: ruqqq
+Supersession note: Papan project scoping is defined in `2026-05-01-papan-multi-projects-design.md`; dalang passes `tracker.board`/Papan `control_plane.board` as the Papan project slug when configured.
 
 ## 1. Purpose
 

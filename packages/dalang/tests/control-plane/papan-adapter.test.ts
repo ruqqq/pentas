@@ -144,6 +144,30 @@ test("refreshWork builds correct URL", async () => {
   expect(lastRequest!.url).toContain("/api/v1/issues/by-ids?id=i1&id=i2");
 });
 
+test("appends board as project query parameter on Papan calls", async () => {
+  nextResponse = { status: 200, body: { issues: [], next_cursor: null } };
+  const adapter = new PapanControlPlaneAdapter({
+    endpoint: baseURL(),
+    apiKey: null,
+    board: "alpha board",
+  });
+
+  await adapter.fetchDispatchableWork({ activeStates: ["Todo"], ownership: { mode: "none" } });
+  expect(lastRequest!.url).toContain("project=alpha%20board");
+
+  nextResponse = { status: 200, body: { issues: [] } };
+  await adapter.refreshWork(["i1"]);
+  expect(lastRequest!.url).toBe("/api/v1/issues/by-ids?id=i1&project=alpha%20board");
+
+  nextResponse = { status: 200, body: { comments: [] } };
+  await adapter.listComments("i1");
+  expect(lastRequest!.url).toBe("/api/v1/issues/i1/comments?project=alpha%20board");
+
+  nextResponse = { status: 200, body: { ok: true } };
+  await adapter.updateState("i1", "In Dev");
+  expect(lastRequest!.url).toBe("/api/v1/issues/i1?project=alpha%20board");
+});
+
 test("non-200 throws control-plane error control_plane_status_error", async () => {
   nextResponse = { status: 500, body: { error: "boom" } };
   const adapter = new PapanControlPlaneAdapter({ endpoint: baseURL(), apiKey: null });

@@ -30,6 +30,12 @@ describe("renderIssueCard", () => {
     expect(html).toContain("P2");
   });
 
+  test("renders project-scoped links and patch URLs", () => {
+    const html = renderIssueCard(issue, "alpha");
+    expect(html).toContain('href="/projects/alpha/issues/01ABC"');
+    expect(html).toContain('hx-patch="/api/v1/issues/01ABC?project=alpha"');
+  });
+
   test("uses card- id prefix for SSE addressing", () => {
     const html = renderIssueCard(issue);
     expect(html).toContain('id="card-01ABC"');

@@ -60,4 +60,42 @@ describe.skipIf(!RUN)("full HTTP cycle", () => {
       server.stop();
     }
   }, 10000);
+
+  test("multi-project cycle keeps issues isolated", async () => {
+    const dbPath = "/tmp/papan-it-projects.db";
+    if (existsSync(dbPath)) unlinkSync(dbPath);
+    const { server, db } = runPapan({ port: 0, dbPath });
+    try {
+      const project = await fetch(`${server.url}api/v1/projects`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ slug: "alpha", name: "Alpha" }),
+      });
+      expect(project.status).toBe(201);
+
+      const defaultCreated = await fetch(`${server.url}api/v1/issues`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: "default", state: "Todo" }),
+      });
+      const alphaCreated = await fetch(`${server.url}api/v1/issues`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ project_slug: "alpha", title: "alpha", state: "Todo" }),
+      });
+      const defaultIssue = (await defaultCreated.json()) as { id: string };
+      const alphaIssue = (await alphaCreated.json()) as { id: string };
+
+      const defaultList = await fetch(`${server.url}api/v1/issues?state=Todo`);
+      const defaultBody = (await defaultList.json()) as { issues: { id: string }[] };
+      expect(defaultBody.issues.map((i) => i.id)).toEqual([defaultIssue.id]);
+
+      const alphaList = await fetch(`${server.url}api/v1/issues?project=alpha&state=Todo`);
+      const alphaBody = (await alphaList.json()) as { issues: { id: string }[] };
+      expect(alphaBody.issues.map((i) => i.id)).toEqual([alphaIssue.id]);
+      db.close();
+    } finally {
+      server.stop();
+    }
+  }, 10000);
 });

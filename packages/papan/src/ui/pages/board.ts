@@ -2,17 +2,30 @@ import { layout, escapeHtml } from "../layout";
 import { renderIssueCard } from "../partials/issue-card";
 import { ALL_STATES } from "../../domain/issue";
 import type { NormalizedIssue } from "../../domain/issue";
+import type { Project } from "../../domain/project";
+import { DEFAULT_PROJECT_SLUG } from "../../domain/project";
 
 export interface BoardPageInput {
   issues: NormalizedIssue[];
   q: string;
+  project?: Project;
+  projects?: Project[];
 }
 
-export function renderBoardPage({ issues, q }: BoardPageInput): string {
-  return layout("Board", boardChrome(q) + renderBoardGrid({ issues, q }));
+export function renderBoardPage({ issues, q, project, projects = [] }: BoardPageInput): string {
+  const heading = project
+    ? `<header class="page-title"><h1>${escapeHtml(project.name)}</h1><code>${escapeHtml(project.slug)}</code></header>`
+    : "";
+  return layout(
+    "Board",
+    heading +
+      boardChrome(q, project?.slug ?? DEFAULT_PROJECT_SLUG) +
+      renderBoardGrid({ issues, q, project }),
+    { projects, activeProject: project ?? null },
+  );
 }
 
-export function renderBoardGrid({ issues, q }: BoardPageInput): string {
+export function renderBoardGrid({ issues, q, project }: BoardPageInput): string {
   const buckets = new Map<string, NormalizedIssue[]>();
   for (const s of ALL_STATES) buckets.set(s, []);
   for (const i of issues) {
@@ -23,7 +36,9 @@ export function renderBoardGrid({ issues, q }: BoardPageInput): string {
   const cols = ALL_STATES.map((s) => {
     const list = buckets.get(s) ?? [];
     const cards =
-      list.length === 0 ? `<p class="kempty">No issues</p>` : list.map(renderIssueCard).join("\n");
+      list.length === 0
+        ? `<p class="kempty">No issues</p>`
+        : list.map((issue) => renderIssueCard(issue, issue.project?.slug)).join("\n");
     return `<section class="kcol" data-state="${s}">
   <header class="khead">
     <span class="state-badge" data-state="${s}">${s}</span>
@@ -35,18 +50,25 @@ ${cards}
 </section>`;
   }).join("\n");
 
-  const refreshUrl = `/partials/board?q=${encodeURIComponent(q)}`;
+  const projectSlug = project?.slug ?? issues[0]?.project?.slug ?? DEFAULT_PROJECT_SLUG;
+  const refreshUrl =
+    projectSlug === DEFAULT_PROJECT_SLUG
+      ? `/partials/board?q=${encodeURIComponent(q)}`
+      : `/projects/${encodeURIComponent(projectSlug)}/partials/board?q=${encodeURIComponent(q)}`;
   return `<div id="board" class="board"
        hx-get="${escapeAttr(refreshUrl)}"
+       data-project-scope="${escapeAttr(projectSlug)}"
        hx-trigger="sse:issue.created,sse:issue.updated,sse:state.changed,sse:issue.deleted"
        hx-swap="outerHTML">
 ${cols}
 </div>`;
 }
 
-function boardChrome(q: string): string {
+function boardChrome(q: string, projectSlug: string): string {
+  const action =
+    projectSlug === DEFAULT_PROJECT_SLUG ? "/" : `/projects/${encodeURIComponent(projectSlug)}`;
   return `
-<form method="get" action="/" class="filters board-filters">
+<form method="get" action="${escapeAttr(action)}" class="filters board-filters">
   <input type="search" name="q" value="${escapeAttr(q)}" placeholder="Search issues">
   <button type="submit">Filter</button>
 </form>`;

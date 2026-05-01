@@ -118,6 +118,9 @@ This extension adds support for Server Sent Events to htmx.  See /www/extensions
           if (!api.triggerEvent(elt, "htmx:sseBeforeMessage", event)) {
             return;
           }
+          if (!eventMatchesProject(elt, event)) {
+            return;
+          }
           swap(elt, event.data);
           api.triggerEvent(elt, "htmx:sseMessage", event);
         };
@@ -153,6 +156,9 @@ This extension adds support for Server Sent Events to htmx.  See /www/extensions
           }
           if (!api.bodyContains(elt)) {
             source.removeEventListener(ts.trigger.slice(4), listener);
+          }
+          if (!eventMatchesProject(elt, event)) {
+            return;
           }
           // Trigger events to be handled by the rest of htmx
           htmx.trigger(elt, ts.trigger, event);
@@ -284,5 +290,19 @@ This extension adds support for Server Sent Events to htmx.  See /www/extensions
 
   function hasEventSource(node) {
     return api.getInternalData(node).sseEventSource != null;
+  }
+
+  function eventMatchesProject(elt, event) {
+    var wanted = api.getAttributeValue(elt, "data-project-scope");
+    if (!wanted) {
+      return true;
+    }
+    try {
+      var data = JSON.parse(event.data);
+      var got = data && data.project && data.project.slug ? data.project.slug : "default";
+      return got === wanted;
+    } catch (_err) {
+      return wanted === "default";
+    }
   }
 })();

@@ -7,7 +7,22 @@ export function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-export function layout(title: string, body: string): string {
+import type { Project } from "../domain/project";
+import { DEFAULT_PROJECT_SLUG } from "../domain/project";
+
+export interface LayoutOptions {
+  projects?: Project[];
+  activeProject?: Project | null;
+}
+
+export function layout(title: string, body: string, opts: LayoutOptions = {}): string {
+  const activeSlug = opts.activeProject?.slug ?? DEFAULT_PROJECT_SLUG;
+  const projectLinks = (opts.projects ?? [])
+    .map(
+      (p) =>
+        `<a href="/projects/${escapeHtml(p.slug)}"${p.slug === activeSlug ? ' aria-current="page"' : ""}>${escapeHtml(p.name)}</a>`,
+    )
+    .join("");
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -22,7 +37,11 @@ export function layout(title: string, body: string): string {
 <body>
 <header>
   <a href="/"><strong>papan</strong></a>
-  <a href="/new">+ New issue</a>
+  <nav class="project-switcher">
+    <a href="/projects">Projects</a>
+    ${projectLinks}
+  </nav>
+  <a href="/projects/${escapeHtml(activeSlug)}/new">+ New issue</a>
 </header>
 <main hx-ext="sse" sse-connect="/api/v1/events">
 ${body}

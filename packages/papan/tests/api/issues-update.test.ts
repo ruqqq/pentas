@@ -38,4 +38,18 @@ describe("PATCH/DELETE /api/v1/issues/:id", () => {
     expect(res.status).toBe(204);
     server.stop();
   });
+
+  test("PATCH rejects project moves", async () => {
+    const a = createIssue(db, { title: "t", state: "Todo" });
+    const server = startServer({ db, apiToken: undefined, port: 0 }, [issuesUpdateRoute()]);
+    const res = await fetch(`${server.url}api/v1/issues/${a.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ project_slug: "other" }),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("unsupported_field");
+    server.stop();
+  });
 });
