@@ -44,6 +44,32 @@ test("lint accepts loops over issue collection fields", async () => {
   expect(result.diagnostics).toEqual([]);
 });
 
+test("lint accepts blocker fields inside issue blocked_by loops", async () => {
+  const path = await writeWorkflow(`
+{% for blocker in issue.blocked_by %}
+{{ blocker.id }} {{ blocker.identifier }} {{ blocker.state }}
+{% endfor %}
+`);
+
+  const result = await lintWorkflow(path);
+
+  expect(result.ok).toBe(true);
+  expect(result.diagnostics).toEqual([]);
+});
+
+test("lint accepts Liquid filters exposed by the runtime engine", async () => {
+  const path = await writeWorkflow(`
+{{ issue.title | json }}
+{{ issue.title | base64_encode }}
+{{ issue.labels | where_exp: "label", "label contains 'bug'" }}
+`);
+
+  const result = await lintWorkflow(path);
+
+  expect(result.ok).toBe(true);
+  expect(result.diagnostics).toEqual([]);
+});
+
 test("lint rejects unknown prompt context fields", async () => {
   const path = await writeWorkflow(`
 {{ issue.not_a_field }}

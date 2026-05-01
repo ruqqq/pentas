@@ -49,7 +49,15 @@ const ISSUE_FIELD_SCHEMA: Record<(typeof ISSUE_FIELDS)[number], SchemaNode> =
   >;
 
 ISSUE_FIELD_SCHEMA.labels = { array: true };
-ISSUE_FIELD_SCHEMA.blocked_by = { array: true };
+ISSUE_FIELD_SCHEMA.blocked_by = {
+  array: {
+    fields: {
+      id: true,
+      identifier: true,
+      state: true,
+    },
+  },
+};
 
 const PROMPT_CONTEXT: Record<string, SchemaNode> = {
   issue: {
@@ -95,58 +103,8 @@ const PROMPT_CONTEXT: Record<string, SchemaNode> = {
   },
 };
 
-const KNOWN_FILTERS = new Set([
-  "abs",
-  "append",
-  "at_least",
-  "at_most",
-  "capitalize",
-  "ceil",
-  "compact",
-  "concat",
-  "date",
-  "default",
-  "divided_by",
-  "downcase",
-  "escape",
-  "escape_once",
-  "first",
-  "floor",
-  "join",
-  "last",
-  "lstrip",
-  "map",
-  "minus",
-  "modulo",
-  "newline_to_br",
-  "plus",
-  "prepend",
-  "remove",
-  "remove_first",
-  "replace",
-  "replace_first",
-  "reverse",
-  "round",
-  "rstrip",
-  "size",
-  "slice",
-  "sort",
-  "sort_natural",
-  "split",
-  "strip",
-  "strip_html",
-  "strip_newlines",
-  "times",
-  "truncate",
-  "truncatewords",
-  "uniq",
-  "upcase",
-  "url_decode",
-  "url_encode",
-  "where",
-]);
-
 const liquid = new Liquid({ strictVariables: true, strictFilters: true });
+const KNOWN_FILTERS = getLiquidFilterNames(liquid);
 
 const LIQUID_EXPRESSION_KEYWORDS = new Set([
   "and",
@@ -331,4 +289,16 @@ function lintPrChecksStates(cfg: WorkflowFrontMatter): WorkflowLintDiagnostic[] 
           },
         ],
   );
+}
+
+interface LiquidFilterRegistry {
+  readonly filters?: Record<string, unknown> & {
+    readonly impls?: Record<string, unknown>;
+  };
+}
+
+function getLiquidFilterNames(engine: Liquid): Set<string> {
+  const registry = engine as LiquidFilterRegistry;
+  const filters = registry.filters;
+  return new Set(Object.keys(filters?.impls ?? filters ?? {}));
 }
