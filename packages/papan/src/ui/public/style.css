@@ -500,6 +500,22 @@ tbody td:nth-child(6) {
 .state-badge[data-state="Waiting PR Checks"]::before {
   background: #fbbf24;
 }
+.state-badge[data-state="Ready for QA"] {
+  background: #e9d5ff;
+  color: #581c87;
+  border-color: #c084fc;
+}
+.state-badge[data-state="Ready for QA"]::before {
+  background: #9333ea;
+}
+.state-badge[data-state="In QA"] {
+  background: #cffafe;
+  color: #155e75;
+  border-color: #67e8f9;
+}
+.state-badge[data-state="In QA"]::before {
+  background: #0891b2;
+}
 .state-badge[data-state="Ready for Dev"] {
   color: var(--st-todo-fg);
   background: var(--st-todo-bg);

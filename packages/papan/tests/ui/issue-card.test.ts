@@ -53,6 +53,12 @@ describe("renderIssueCard", () => {
     const html = renderIssueCard(issue, undefined, defaultNames);
     expect(html).toContain('<option value="Todo">Todo</option>');
     expect(html).toContain('<option value="In Dev" selected>In Dev</option>');
+    expect(html).toContain('<option value="Ready for Review">Ready for Review</option>');
+    expect(html).toContain('<option value="Ready for QA">Ready for QA</option>');
+    expect(html).toContain('<option value="In QA">In QA</option>');
+    expect(html).toContain(
+      '<option value="Ready for Human Review">Ready for Human Review</option>',
+    );
     expect(html).toContain('<option value="Done">Done</option>');
   });
 

@@ -67,6 +67,8 @@ test("applyDefaults fills empty input with all defaults", () => {
     "Ready for Dev",
     "In Dev",
     "Ready for Review",
+    "Ready for QA",
+    "In QA",
   ]);
   expect(result.server.port).toBe(0);
 });
