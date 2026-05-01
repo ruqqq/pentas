@@ -2,18 +2,24 @@ import type { Database } from "bun:sqlite";
 import schema from "./schema.sql" with { type: "text" };
 
 function hasTable(db: Database, table: string): boolean {
-  return db
-    .query<{ name: string }, [string]>(
-      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
-    )
-    .get(table) !== null;
+  return (
+    db
+      .query<{ name: string }, [string]>(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+      )
+      .get(table) !== null
+  );
 }
 
 function hasColumn(db: Database, table: string, column: string): boolean {
   if (!hasTable(db, table)) return false;
-  return db
-    .query<{ name: string }, [string, string]>(`SELECT name FROM pragma_table_info(?) WHERE name = ?`)
-    .get(table, column) !== null;
+  return (
+    db
+      .query<{ name: string }, [string, string]>(
+        `SELECT name FROM pragma_table_info(?) WHERE name = ?`,
+      )
+      .get(table, column) !== null
+  );
 }
 
 function createProjectsTable(db: Database): void {

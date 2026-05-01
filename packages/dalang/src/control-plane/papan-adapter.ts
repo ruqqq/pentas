@@ -154,9 +154,13 @@ export class PapanControlPlaneAdapter implements ControlPlaneAdapter {
   }
 
   async updateState(workItemId: string, state: string): Promise<void> {
-    await this.writeJson(this.withProject(`/api/v1/issues/${encodeURIComponent(workItemId)}`), "PATCH", {
-      state,
-    });
+    await this.writeJson(
+      this.withProject(`/api/v1/issues/${encodeURIComponent(workItemId)}`),
+      "PATCH",
+      {
+        state,
+      },
+    );
   }
 
   async reconcilePrChecks(args: PrChecksReconcileArgs): Promise<void> {

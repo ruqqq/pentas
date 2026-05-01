@@ -333,7 +333,11 @@ export function updateIssue(
   return row ? rowToNormalized(db, row) : null;
 }
 
-export function deleteIssue(db: Database, id: string, projectId: string = DEFAULT_PROJECT_ID): boolean {
+export function deleteIssue(
+  db: Database,
+  id: string,
+  projectId: string = DEFAULT_PROJECT_ID,
+): boolean {
   const result = db.query("DELETE FROM issues WHERE id = ? AND project_id = ?").run(id, projectId);
   return result.changes > 0;
 }

@@ -2,18 +2,19 @@ import { URLPattern } from "urlpattern-polyfill";
 import type { Database } from "bun:sqlite";
 import type { Route } from "../api/server";
 import { getIssuesByStates, getIssueById, createIssue } from "../db/repo/issues";
-import { createProject, getProjectBySlug, listProjectSummaries, listProjects } from "../db/repo/projects";
+import {
+  createProject,
+  getProjectBySlug,
+  listProjectSummaries,
+  listProjects,
+} from "../db/repo/projects";
 import { listComments } from "../db/repo/comments";
 import { listHistory } from "../db/repo/history";
 import { addHistory } from "../db/repo/history";
 import { renderBoardPage, renderBoardGrid } from "./pages/board";
 import { renderDetailPage } from "./pages/detail";
 import { renderNewPage } from "./pages/new";
-import {
-  renderNewProjectPage,
-  renderProjectNotFound,
-  renderProjectsPage,
-} from "./pages/projects";
+import { renderNewProjectPage, renderProjectNotFound, renderProjectsPage } from "./pages/projects";
 import { ALL_STATES } from "../domain/issue";
 import { DEFAULT_PROJECT_SLUG, isValidProjectSlug, type Project } from "../domain/project";
 import { parseLinearUrl } from "../lib/linear-url";
@@ -89,7 +90,9 @@ export function uiProjectCreatePostRoute(): Route {
     pattern: new URLPattern({ pathname: "/projects/new" }),
     handler: async (req, _match, { db }) => {
       const form = await req.formData();
-      const slug = String(form.get("slug") ?? "").trim().toLowerCase();
+      const slug = String(form.get("slug") ?? "")
+        .trim()
+        .toLowerCase();
       const name = String(form.get("name") ?? "").trim();
       if (!isValidProjectSlug(slug)) {
         return html(renderNewProjectPage({ error: "Invalid slug", slug, name }), 400);
@@ -206,7 +209,9 @@ export function uiProjectDetailRoute(): Route {
       if (!issue) return new Response("Not Found", { status: 404 });
       const comments = listComments(db, id);
       const history = listHistory(db, id);
-      return html(renderDetailPage({ issue, comments, history, project, projects: listProjects(db) }));
+      return html(
+        renderDetailPage({ issue, comments, history, project, projects: listProjects(db) }),
+      );
     },
   };
 }

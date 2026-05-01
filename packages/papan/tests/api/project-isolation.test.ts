@@ -23,7 +23,11 @@ describe("project-scoped issue API", () => {
   test("list, detail, by-ids, comments, history, and delete are isolated by project", async () => {
     const alpha = createProject(db, { slug: "alpha", name: "Alpha" });
     const beta = createProject(db, { slug: "beta", name: "Beta" });
-    const alphaIssue = createIssue(db, { project_id: alpha.id, title: "alpha issue", state: "Todo" });
+    const alphaIssue = createIssue(db, {
+      project_id: alpha.id,
+      title: "alpha issue",
+      state: "Todo",
+    });
     const betaIssue = createIssue(db, { project_id: beta.id, title: "beta issue", state: "Todo" });
 
     const server = startServer({ db, apiToken: undefined, port: 0 }, [

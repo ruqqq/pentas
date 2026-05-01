@@ -18,7 +18,9 @@ export function renderBoardPage({ issues, q, project, projects = [] }: BoardPage
     : "";
   return layout(
     "Board",
-    heading + boardChrome(q, project?.slug ?? DEFAULT_PROJECT_SLUG) + renderBoardGrid({ issues, q, project }),
+    heading +
+      boardChrome(q, project?.slug ?? DEFAULT_PROJECT_SLUG) +
+      renderBoardGrid({ issues, q, project }),
     { projects, activeProject: project ?? null },
   );
 }

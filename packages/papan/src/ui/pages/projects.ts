@@ -30,7 +30,9 @@ export function renderProjectsPage(projects: ProjectSummary[]): string {
   );
 }
 
-export function renderNewProjectPage(values: { error?: string; slug?: string; name?: string } = {}): string {
+export function renderNewProjectPage(
+  values: { error?: string; slug?: string; name?: string } = {},
+): string {
   return layout(
     "New project",
     `${values.error ? `<div class="error">${escapeHtml(values.error)}</div>` : ""}

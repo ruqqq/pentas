@@ -16,7 +16,9 @@ export function renderIssueCard(issue: NormalizedIssue, projectSlug = issue.proj
       ? `<span class="card-internal" title="Internal ID">${escapeHtml(issue.internal_ref)}</span>`
       : "";
   const labelStrip = labels ? `<div class="card-labels">${labels}</div>` : "";
-  const detailPath = projectSlug ? `/projects/${escapeHtml(projectSlug)}/issues/${escapeHtml(issue.id)}` : `/issues/${escapeHtml(issue.id)}`;
+  const detailPath = projectSlug
+    ? `/projects/${escapeHtml(projectSlug)}/issues/${escapeHtml(issue.id)}`
+    : `/issues/${escapeHtml(issue.id)}`;
   const patchPath = projectSlug
     ? `/api/v1/issues/${escapeHtml(issue.id)}?project=${escapeHtml(projectSlug)}`
     : `/api/v1/issues/${escapeHtml(issue.id)}`;

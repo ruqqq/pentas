@@ -10,7 +10,12 @@ export interface NewPageInput {
   projects?: Project[];
 }
 
-export function renderNewPage({ error, values = {}, project, projects = [] }: NewPageInput): string {
+export function renderNewPage({
+  error,
+  values = {},
+  project,
+  projects = [],
+}: NewPageInput): string {
   const stateOptions = ALL_STATES.map(
     (s) => `<option value="${s}"${s === "Todo" ? " selected" : ""}>${s}</option>`,
   ).join("");

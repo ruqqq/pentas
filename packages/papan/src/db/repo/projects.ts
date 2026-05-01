@@ -40,9 +40,7 @@ export function getProjectBySlug(db: Database, slug: string): Project | null {
 }
 
 export function listProjects(db: Database): Project[] {
-  return db
-    .query<Project, []>("SELECT * FROM projects ORDER BY slug ASC")
-    .all();
+  return db.query<Project, []>("SELECT * FROM projects ORDER BY slug ASC").all();
 }
 
 export function listProjectSummaries(db: Database): ProjectSummary[] {
