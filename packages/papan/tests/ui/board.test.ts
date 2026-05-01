@@ -66,5 +66,6 @@ describe("renderBoardGrid", () => {
     });
     expect(html).toContain('data-state="Unknown"');
     expect(html).toContain("Mystery"); // option value or data-state on card
+    expect(html).toContain('href="/projects/alpha/statuses"');
   });
 });

@@ -63,12 +63,27 @@ export interface AddStatusInput {
   position?: number;
 }
 
+function isUniqueOrPkError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    /UNIQUE constraint failed|PRIMARY KEY/i.test(err.message)
+  );
+}
+
 export function addStatus(db: Database, projectId: string, input: AddStatusInput): ProjectStatus {
-  if (getStatus(db, projectId, input.name)) throw new StatusExistsError(input.name);
-  const pos = input.position ?? nextPosition(db, projectId);
-  db.query(
-    "INSERT INTO project_statuses (project_id, name, position, kind) VALUES (?, ?, ?, ?)",
-  ).run(projectId, input.name, pos, input.kind);
+  let pos = 0;
+  const tx = db.transaction(() => {
+    pos = input.position ?? nextPosition(db, projectId);
+    db.query(
+      "INSERT INTO project_statuses (project_id, name, position, kind) VALUES (?, ?, ?, ?)",
+    ).run(projectId, input.name, pos, input.kind);
+  });
+  try {
+    tx();
+  } catch (err) {
+    if (isUniqueOrPkError(err)) throw new StatusExistsError(input.name);
+    throw err;
+  }
   return { name: input.name, position: pos, kind: input.kind };
 }
 
@@ -83,10 +98,10 @@ export function renameStatus(
     if (!cur) throw new StatusNotFoundError(oldName);
     return cur;
   }
-  const existing = getStatus(db, projectId, oldName);
-  if (!existing) throw new StatusNotFoundError(oldName);
-  if (getStatus(db, projectId, newName)) throw new StatusExistsError(newName);
+  let result: ProjectStatus | null = null;
   const tx = db.transaction(() => {
+    const existing = getStatus(db, projectId, oldName);
+    if (!existing) throw new StatusNotFoundError(oldName);
     db.query("UPDATE project_statuses SET name = ? WHERE project_id = ? AND name = ?").run(
       newName,
       projectId,
@@ -97,9 +112,15 @@ export function renameStatus(
       projectId,
       oldName,
     );
+    result = { ...existing, name: newName };
   });
-  tx();
-  return { ...existing, name: newName };
+  try {
+    tx();
+  } catch (err) {
+    if (isUniqueOrPkError(err)) throw new StatusExistsError(newName);
+    throw err;
+  }
+  return result!;
 }
 
 export function updateStatusKind(
@@ -125,8 +146,6 @@ export function reorderStatuses(db: Database, projectId: string, names: string[]
   const newSet = new Set(names);
   if (newSet.size !== names.length) throw new StatusReorderMismatchError();
   for (const n of names) if (!currentSet.has(n)) throw new StatusReorderMismatchError();
-  // Two-phase to avoid PRIMARY KEY collisions on (project_id, position) — but the
-  // PK is (project_id, name), not (project_id, position), so straight updates are fine.
   const tx = db.transaction(() => {
     names.forEach((n, i) => {
       db.query("UPDATE project_statuses SET position = ? WHERE project_id = ? AND name = ?").run(
@@ -170,6 +189,9 @@ export function isValidStateForProject(db: Database, projectId: string, state: s
 }
 
 export function firstDispatchableStatus(db: Database, projectId: string): ProjectStatus | null {
-  const all = listStatuses(db, projectId);
-  return all.find((s) => s.kind === "dispatchable") ?? all[0] ?? null;
+  return listStatuses(db, projectId).find((s) => s.kind === "dispatchable") ?? null;
+}
+
+export function firstStatus(db: Database, projectId: string): ProjectStatus | null {
+  return listStatuses(db, projectId)[0] ?? null;
 }

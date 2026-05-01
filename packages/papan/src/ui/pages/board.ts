@@ -45,16 +45,26 @@ export function renderBoardGrid({ issues, q, statuses, project }: BoardPageInput
   }
 
   const statusNames = statuses.map((s) => s.name);
-  const renderCol = (name: string, list: NormalizedIssue[], extraClass = ""): string => {
+  const projectSlugForLinks = project?.slug ?? issues[0]?.project?.slug ?? DEFAULT_PROJECT_SLUG;
+  const statusesHref = `/projects/${encodeURIComponent(projectSlugForLinks)}/statuses`;
+  const renderCol = (
+    name: string,
+    list: NormalizedIssue[],
+    opts: { extraClass?: string; headerHref?: string } = {},
+  ): string => {
     const cards =
       list.length === 0
         ? `<p class="kempty">No issues</p>`
         : list
             .map((issue) => renderIssueCard(issue, issue.project?.slug, statusNames))
             .join("\n");
-    return `<section class="kcol${extraClass}" data-state="${escapeHtml(name)}">
+    const badge = `<span class="state-badge" data-state="${escapeHtml(name)}">${escapeHtml(name)}</span>`;
+    const header = opts.headerHref
+      ? `<a class="kunknown-link" href="${escapeAttr(opts.headerHref)}" title="Configure statuses">${badge}</a>`
+      : badge;
+    return `<section class="kcol${opts.extraClass ?? ""}" data-state="${escapeHtml(name)}">
   <header class="khead">
-    <span class="state-badge" data-state="${escapeHtml(name)}">${escapeHtml(name)}</span>
+    ${header}
     <span class="kcount">${list.length}</span>
   </header>
   <div class="kbody">
@@ -65,7 +75,12 @@ ${cards}
 
   const cols = statuses.map((s) => renderCol(s.name, buckets.get(s.name) ?? [])).join("\n");
   const unknownCol =
-    unknownBucket.length > 0 ? renderCol(UNKNOWN_COLUMN, unknownBucket, " kcol-unknown") : "";
+    unknownBucket.length > 0
+      ? renderCol(UNKNOWN_COLUMN, unknownBucket, {
+          extraClass: " kcol-unknown",
+          headerHref: statusesHref,
+        })
+      : "";
 
   const projectSlug = project?.slug ?? issues[0]?.project?.slug ?? DEFAULT_PROJECT_SLUG;
   const refreshUrl =

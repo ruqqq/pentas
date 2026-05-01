@@ -83,7 +83,6 @@ export function projectStatusesCreateRoute(): Route {
 interface PatchBody {
   name?: unknown;
   kind?: unknown;
-  position?: unknown;
 }
 
 export function projectStatusesUpdateRoute(): Route {
@@ -101,22 +100,37 @@ export function projectStatusesUpdateRoute(): Route {
         return Response.json({ error: { code: "bad_json" } }, { status: 400 });
       }
 
+      // Validate everything before mutating so an invalid `kind` can't slip through
+      // after a successful rename has already committed.
+      let trimmedNewName: string | null = null;
+      if (body.name !== undefined) {
+        if (typeof body.name !== "string" || body.name.trim() === "") {
+          return Response.json(
+            { error: { code: "invalid_name", fields: ["name"] } },
+            { status: 400 },
+          );
+        }
+        const trimmed = body.name.trim();
+        if (trimmed !== oldName) trimmedNewName = trimmed;
+      }
+      let kind: StatusKind | null = null;
+      if (body.kind !== undefined) {
+        if (typeof body.kind !== "string" || !isStatusKind(body.kind)) {
+          return Response.json(
+            { error: { code: "invalid_kind", fields: ["kind"] } },
+            { status: 400 },
+          );
+        }
+        kind = body.kind;
+      }
+
       try {
         let currentName = oldName;
-        if (typeof body.name === "string" && body.name.trim() && body.name.trim() !== oldName) {
-          const renamed = renameStatus(db, project.id, oldName, body.name.trim());
+        if (trimmedNewName) {
+          const renamed = renameStatus(db, project.id, oldName, trimmedNewName);
           currentName = renamed.name;
         }
-        if (typeof body.kind === "string") {
-          if (!isStatusKind(body.kind)) {
-            return Response.json(
-              { error: { code: "invalid_kind", fields: ["kind"] } },
-              { status: 400 },
-            );
-          }
-          updateStatusKind(db, project.id, currentName, body.kind as StatusKind);
-        }
-        // position-only updates aren't supported here — use the reorder endpoint.
+        if (kind) updateStatusKind(db, project.id, currentName, kind);
         return Response.json({ statuses: listStatuses(db, project.id) });
       } catch (err) {
         if (err instanceof StatusNotFoundError) {

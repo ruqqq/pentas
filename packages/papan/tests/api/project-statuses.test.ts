@@ -105,6 +105,23 @@ describe("project-statuses routes", () => {
     server.stop();
   });
 
+  test("PATCH validates kind BEFORE renaming (no partial write)", async () => {
+    const server = start();
+    const res = await fetch(`${server.url}api/v1/projects/default/statuses/Todo`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Backlog", kind: "garbage" }),
+    });
+    expect(res.status).toBe(400);
+    // The rename must NOT have committed.
+    const list = await fetch(`${server.url}api/v1/projects/default/statuses`);
+    const body = (await list.json()) as { statuses: ProjectStatus[] };
+    const names = body.statuses.map((s) => s.name);
+    expect(names).toContain("Todo");
+    expect(names).not.toContain("Backlog");
+    server.stop();
+  });
+
   test("PATCH 409 when renaming to existing name", async () => {
     const server = start();
     const res = await fetch(`${server.url}api/v1/projects/default/statuses/Todo`, {

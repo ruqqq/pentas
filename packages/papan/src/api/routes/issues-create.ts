@@ -69,7 +69,14 @@ export function issuesCreateRoute(): Route {
         const fallback = firstDispatchableStatus(db, project.id);
         if (!fallback) {
           return Response.json(
-            { error: { code: "no_statuses_configured", fields: ["state"] } },
+            {
+              error: {
+                code: "no_dispatchable_status",
+                message:
+                  "project has no dispatchable status; configure one or set state explicitly",
+                fields: ["state"],
+              },
+            },
             { status: 400 },
           );
         }
