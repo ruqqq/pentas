@@ -103,6 +103,18 @@ const PROMPT_CONTEXT: Record<string, SchemaNode> = {
   },
 };
 
+const FORLOOP_SCHEMA: SchemaNode = {
+  fields: {
+    index: true,
+    index0: true,
+    rindex: true,
+    rindex0: true,
+    first: true,
+    last: true,
+    length: true,
+  },
+};
+
 const liquid = new Liquid({ strictVariables: true, strictFilters: true });
 const KNOWN_FILTERS = getLiquidFilterNames(liquid);
 
@@ -190,7 +202,7 @@ function lintLiquidVariables(
       const collectionExpression = stripForLoopModifiers(forMatch[2]!);
       lintExpressionPaths(collectionExpression, scopes, diagnostics, seen);
       if (isLiquidRangeExpression(collectionExpression)) {
-        scopes.push(new Map([[variable, true]]));
+        scopes.push(createForLoopScope(variable, true));
         continue;
       }
       const collection = firstExpressionPath(collectionExpression);
@@ -206,7 +218,7 @@ function lintLiquidVariables(
         scopes.push(new Map());
         continue;
       }
-      scopes.push(new Map([[variable, itemNode]]));
+      scopes.push(createForLoopScope(variable, itemNode));
       continue;
     }
 
@@ -282,6 +294,13 @@ function stripForLoopModifiers(expression: string): string {
 
 function isLiquidRangeExpression(expression: string): boolean {
   return /^\(\s*[^()]+\s*\.\.\s*[^()]+\s*\)$/.test(expression.trim());
+}
+
+function createForLoopScope(variable: string, itemNode: SchemaNode): Map<string, SchemaNode> {
+  return new Map([
+    [variable, itemNode],
+    ["forloop", FORLOOP_SCHEMA],
+  ]);
 }
 
 function collectExpressionPaths(expression: string): string[] {
