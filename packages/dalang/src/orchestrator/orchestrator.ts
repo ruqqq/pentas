@@ -402,7 +402,7 @@ export class Orchestrator {
         attempt: 1,
         delayMs: CONTINUATION_RETRY_MS,
         error: null,
-        onFire: () => this.handleRetryFire(issue.id, issue.identifier),
+        onFire: (retryAttempt) => this.handleRetryFire(issue.id, issue.identifier, retryAttempt),
       });
     } else {
       const nextAttempt = (attempt ?? 0) + 1;
@@ -423,12 +423,16 @@ export class Orchestrator {
         attempt: nextAttempt,
         delayMs: delay,
         error: result.reason ?? "worker_failed",
-        onFire: () => this.handleRetryFire(issue.id, issue.identifier),
+        onFire: (retryAttempt) => this.handleRetryFire(issue.id, issue.identifier, retryAttempt),
       });
     }
   }
 
-  private async handleRetryFire(issueId: string, identifier: string): Promise<void> {
+  private async handleRetryFire(
+    issueId: string,
+    identifier: string,
+    firedAttempt: number,
+  ): Promise<void> {
     let candidates: NormalizedIssue[] = [];
     try {
       candidates = await this.controlPlane.fetchDispatchableWork({
@@ -436,15 +440,14 @@ export class Orchestrator {
         ownership: this.cfg.control_plane.ownership,
       });
     } catch {
-      const e = this.state.retry_attempts.get(issueId);
-      const next = (e?.attempt ?? 1) + 1;
+      const next = firedAttempt + 1;
       scheduleRetry(this.state, {
         issue_id: issueId,
         identifier,
         attempt: next,
         delayMs: computeBackoffMs(next, this.cfg.agent.max_retry_backoff_ms),
         error: "retry poll failed",
-        onFire: () => this.handleRetryFire(issueId, identifier),
+        onFire: (retryAttempt) => this.handleRetryFire(issueId, identifier, retryAttempt),
       });
       return;
     }
@@ -459,6 +462,7 @@ export class Orchestrator {
       releaseClaim(this.state, issueId);
       return;
     }
+    releaseClaim(this.state, issueId);
     if (
       !isEligible(issue, this.state, {
         active: this.cfg.control_plane.active_states,
@@ -466,19 +470,18 @@ export class Orchestrator {
         byState: this.cfg.agent.max_concurrent_agents_by_state,
       })
     ) {
-      const e = this.state.retry_attempts.get(issueId);
-      const next = (e?.attempt ?? 1) + 1;
+      const next = firedAttempt + 1;
       scheduleRetry(this.state, {
         issue_id: issueId,
         identifier: issue.identifier,
         attempt: next,
         delayMs: computeBackoffMs(next, this.cfg.agent.max_retry_backoff_ms),
         error: "no available orchestrator slots",
-        onFire: () => this.handleRetryFire(issueId, issue.identifier),
+        onFire: (retryAttempt) => this.handleRetryFire(issueId, issue.identifier, retryAttempt),
       });
       return;
     }
-    this.dispatch(issue, this.state.retry_attempts.get(issueId)?.attempt ?? null);
+    this.dispatch(issue, firedAttempt);
   }
 
   private buildAgentConfig(): AgentConfig {
