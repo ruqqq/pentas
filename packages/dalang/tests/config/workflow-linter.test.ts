@@ -217,6 +217,24 @@ test("lint accepts Liquid forloop object inside for-loop scopes", () => {
   expect(diagnostics).toEqual([]);
 });
 
+test("lint ignores Liquid raw and comment block bodies", () => {
+  const diagnostics = lintLiquidTemplate(`
+{% raw %}{{ issue.not_a_field }}{% endraw %}
+{% comment %}{{ issue.also_not_a_field }}{% endcomment %}
+`);
+
+  expect(diagnostics).toEqual([]);
+});
+
+test("lint accepts standard Liquid size property lookups", () => {
+  const diagnostics = lintLiquidTemplate(`
+{{ issue.labels.size }}
+{{ issue.title.size }}
+`);
+
+  expect(diagnostics).toEqual([]);
+});
+
 test("lint accepts quoted pipe characters inside filter arguments", async () => {
   const path = await writeWorkflow(`
 {{ issue.title | default: "foo|bar" }}

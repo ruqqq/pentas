@@ -165,8 +165,9 @@ export function lintLiquidTemplate(template: string): WorkflowLintDiagnostic[] {
     });
   }
 
-  lintLiquidVariables(template, diagnostics);
-  for (const filter of collectFilters(template)) {
+  const evaluatedTemplate = stripUnevaluatedLiquidBlocks(template);
+  lintLiquidVariables(evaluatedTemplate, diagnostics);
+  for (const filter of collectFilters(evaluatedTemplate)) {
     if (!KNOWN_FILTERS.has(filter)) {
       diagnostics.push({
         severity: "error",
@@ -176,6 +177,13 @@ export function lintLiquidTemplate(template: string): WorkflowLintDiagnostic[] {
     }
   }
   return diagnostics;
+}
+
+function stripUnevaluatedLiquidBlocks(template: string): string {
+  return template.replace(
+    /{%-?\s*(raw|comment)\s*-?%}[\s\S]*?{%-?\s*end\1\s*-?%}/g,
+    "",
+  );
 }
 
 type ScopeStack = Map<string, SchemaNode>[];
@@ -376,10 +384,16 @@ function resolvePath(path: string, scopes: ScopeStack): SchemaNode | null {
   let node = root ? findScopedRoot(root, scopes) : undefined;
   if (!node && root) node = PROMPT_CONTEXT[root];
   for (const part of rest) {
+    if (part === "size" && isLiquidSizeLookupNode(node)) return true;
     if (!node || node === true || !("fields" in node) || !node.fields) return null;
     node = node.fields[part];
   }
   return node ?? null;
+}
+
+function isLiquidSizeLookupNode(node: SchemaNode | undefined): boolean {
+  if (!node) return false;
+  return node === true || ("array" in node && node.array !== undefined);
 }
 
 function findScopedRoot(root: string, scopes: ScopeStack): SchemaNode | undefined {
