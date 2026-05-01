@@ -25,7 +25,7 @@ Labels: {% for label in issue.labels %}`{{ label }}` {% endfor %}
 ## Recent History
 
 {% for event in recent_history %}
-- {{ event.at }} {{ event.kind }}: {{ event.summary }}
+- {{ event.at }} {{ event.actor }} {{ event.kind }}{% if event.from_value or event.to_value %}: {{ event.from_value }} → {{ event.to_value }}{% endif %}
 {% else %}
 - No recent history was provided.
 {% endfor %}
