@@ -2,16 +2,18 @@ import { layout, escapeHtml } from "../layout";
 import { renderStateBadge } from "../partials/state-badge";
 import { renderComment } from "../partials/comment";
 import { renderHistoryItem } from "../partials/history-item";
-import { ALL_STATES, type NormalizedIssue } from "../../domain/issue";
+import type { NormalizedIssue } from "../../domain/issue";
 import type { Project } from "../../domain/project";
 import { DEFAULT_PROJECT_SLUG } from "../../domain/project";
 import type { Comment } from "../../domain/comment";
 import type { HistoryEntry } from "../../domain/history";
+import type { ProjectStatus } from "../../domain/status";
 
 export interface DetailPageInput {
   issue: NormalizedIssue;
   comments: Comment[];
   history: HistoryEntry[];
+  statuses: ProjectStatus[];
   project?: Project;
   projects?: Project[];
 }
@@ -20,12 +22,18 @@ export function renderDetailPage({
   issue,
   comments,
   history,
+  statuses,
   project,
   projects = [],
 }: DetailPageInput): string {
-  const stateOptions = ALL_STATES.map(
-    (s) => `<option value="${s}"${s === issue.state ? " selected" : ""}>${s}</option>`,
-  ).join("");
+  const names = statuses.map((s) => s.name);
+  const optionNames = names.includes(issue.state) ? names : [...names, issue.state];
+  const stateOptions = optionNames
+    .map(
+      (s) =>
+        `<option value="${escapeHtml(s)}"${s === issue.state ? " selected" : ""}>${escapeHtml(s)}</option>`,
+    )
+    .join("");
 
   const labels = issue.labels.map((l) => `<span class="label">${escapeHtml(l)}</span>`).join(" ");
   const blockers = issue.blocked_by

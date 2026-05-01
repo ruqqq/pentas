@@ -3,6 +3,8 @@ import { Database } from "bun:sqlite";
 import { runMigrations } from "../../src/db/migrations";
 import { startServer } from "../../src/api/server";
 import { issuesCreateRoute } from "../../src/api/routes/issues-create";
+import { createProject } from "../../src/db/repo/projects";
+import { addStatus, deleteStatus } from "../../src/db/repo/project-statuses";
 
 let db: Database;
 beforeEach(() => {
@@ -45,6 +47,44 @@ describe("POST /api/v1/issues", () => {
       body: JSON.stringify({ title: "t", state: "Bogus" }),
     });
     expect(res.status).toBe(400);
+    server.stop();
+  });
+
+  test("default state = first dispatchable for the resolved project", async () => {
+    // Make 'Backlog' the first dispatchable in a custom project; 'Todo' shouldn't be the default.
+    const alpha = createProject(db, { slug: "alpha", name: "Alpha" });
+    deleteStatus(db, alpha.id, "Plan"); // unrelated cleanup proves the call surface
+    addStatus(db, alpha.id, { name: "Backlog", kind: "dispatchable", position: 0 });
+    // Bump existing dispatchable kinds out of the way so Backlog is first.
+    db.query("UPDATE project_statuses SET position = position + 100 WHERE project_id = ?").run(
+      alpha.id,
+    );
+    db.query(
+      "UPDATE project_statuses SET position = 0 WHERE project_id = ? AND name = 'Backlog'",
+    ).run(alpha.id);
+
+    const server = startServer({ db, apiToken: undefined, port: 0 }, [issuesCreateRoute()]);
+    const res = await fetch(`${server.url}api/v1/issues`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "t", project_slug: "alpha" }),
+    });
+    expect(res.status).toBe(201);
+    const issue = (await res.json()) as { state: string };
+    expect(issue.state).toBe("Backlog");
+    server.stop();
+  });
+
+  test("accepts custom state when configured for the project", async () => {
+    const alpha = createProject(db, { slug: "alpha", name: "Alpha" });
+    addStatus(db, alpha.id, { name: "Triage", kind: "dispatchable" });
+    const server = startServer({ db, apiToken: undefined, port: 0 }, [issuesCreateRoute()]);
+    const res = await fetch(`${server.url}api/v1/issues`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "t", state: "Triage", project_slug: "alpha" }),
+    });
+    expect(res.status).toBe(201);
     server.stop();
   });
 });

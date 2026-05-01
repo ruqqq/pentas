@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import schema from "./schema.sql" with { type: "text" };
+import { seedDefaultStatuses } from "./repo/project-statuses";
 
 function hasTable(db: Database, table: string): boolean {
   return (
@@ -54,4 +55,8 @@ export function runMigrations(db: Database): void {
     CREATE INDEX IF NOT EXISTS issues_project_updated_at_idx ON issues(project_id, updated_at, id);
     CREATE UNIQUE INDEX IF NOT EXISTS issues_project_identifier_idx ON issues(project_id, identifier);
   `);
+  // Backfill: ensure every existing project has the default status set so the system
+  // remains usable on upgrade. Idempotent — seedDefaultStatuses no-ops when populated.
+  const projects = db.query<{ id: string }, []>("SELECT id FROM projects").all();
+  for (const p of projects) seedDefaultStatuses(db, p.id);
 }

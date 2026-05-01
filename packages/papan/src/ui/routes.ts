@@ -15,9 +15,26 @@ import { renderBoardPage, renderBoardGrid } from "./pages/board";
 import { renderDetailPage } from "./pages/detail";
 import { renderNewPage } from "./pages/new";
 import { renderNewProjectPage, renderProjectNotFound, renderProjectsPage } from "./pages/projects";
-import { ALL_STATES } from "../domain/issue";
+import {
+  StatusExistsError,
+  StatusInUseError,
+  StatusNotFoundError,
+  StatusReorderMismatchError,
+  addStatus,
+  deleteStatus,
+  firstDispatchableStatus,
+  listStatuses,
+  renameStatus,
+  reorderStatuses,
+  updateStatusKind,
+} from "../db/repo/project-statuses";
+import { isStatusKind } from "../domain/status";
 import { DEFAULT_PROJECT_SLUG, isValidProjectSlug, type Project } from "../domain/project";
 import { parseLinearUrl } from "../lib/linear-url";
+import {
+  renderProjectStatusesPage,
+  renderStatusesTablePartial,
+} from "./pages/project-statuses";
 
 const BOARD_LIMIT = 200;
 
@@ -26,21 +43,31 @@ type CreateIssueFromRequestResult =
   | { issue: ReturnType<typeof createIssue>; error?: never };
 
 function loadBoardIssues(db: Database, project: Project, q: string) {
-  const { issues } = getIssuesByStates(
-    db,
-    ALL_STATES as readonly string[] as string[],
-    null,
-    BOARD_LIMIT,
-    project.id,
-  );
-  if (!q) return issues;
+  const statuses = listStatuses(db, project.id);
+  const configuredNames = new Set(statuses.map((s) => s.name));
+  // Discover every distinct state in this project (cheap; bounded by issue count) so
+  // both configured and unknown states are rendered.
+  const allStates = db
+    .query<{ state: string }, [string]>(
+      "SELECT DISTINCT state FROM issues WHERE project_id = ?",
+    )
+    .all(project.id)
+    .map((r) => r.state);
+  const fetchStates = Array.from(new Set([...configuredNames, ...allStates]));
+  const issues =
+    fetchStates.length === 0
+      ? []
+      : getIssuesByStates(db, fetchStates, null, BOARD_LIMIT, project.id).issues;
+
+  if (!q) return { issues, statuses };
   const needle = q.toLowerCase();
-  return issues.filter(
+  const filtered = issues.filter(
     (i) =>
       i.title.toLowerCase().includes(needle) ||
       (i.description ?? "").toLowerCase().includes(needle) ||
       i.identifier.toLowerCase().includes(needle),
   );
+  return { issues: filtered, statuses };
 }
 
 function resolveUiProject(db: Database, slug: string): Project | Response {
@@ -66,6 +93,161 @@ function issuePath(issueId: string, project: Project): string {
   return project.slug === DEFAULT_PROJECT_SLUG
     ? `/issues/${issueId}`
     : `/projects/${project.slug}/issues/${issueId}`;
+}
+
+function inUseSet(db: Database, projectId: string): Set<string> {
+  const rows = db
+    .query<{ state: string }, [string]>(
+      "SELECT DISTINCT state FROM issues WHERE project_id = ?",
+    )
+    .all(projectId);
+  return new Set(rows.map((r) => r.state));
+}
+
+function tablePartial(db: Database, project: Project): Response {
+  return html(
+    renderStatusesTablePartial(project, listStatuses(db, project.id), inUseSet(db, project.id)),
+  );
+}
+
+export function uiProjectStatusesRoute(): Route {
+  return {
+    method: "GET",
+    pattern: new URLPattern({ pathname: "/projects/:slug/statuses" }),
+    handler: (_req, match, { db }) => {
+      const project = resolveUiProject(db, match.pathname.groups.slug!);
+      if (isResponse(project)) return project;
+      return html(
+        renderProjectStatusesPage({
+          project,
+          statuses: listStatuses(db, project.id),
+          inUse: inUseSet(db, project.id),
+          projects: listProjects(db),
+        }),
+      );
+    },
+  };
+}
+
+export function uiProjectStatusesAddRoute(): Route {
+  return {
+    method: "POST",
+    pattern: new URLPattern({ pathname: "/ui/projects/:slug/statuses" }),
+    handler: async (req, match, { db }) => {
+      const project = resolveUiProject(db, match.pathname.groups.slug!);
+      if (isResponse(project)) return project;
+      const form = await req.formData();
+      const name = String(form.get("name") ?? "").trim();
+      const kind = String(form.get("kind") ?? "");
+      if (!name || !isStatusKind(kind)) return html("Bad request", 400);
+      try {
+        addStatus(db, project.id, { name, kind });
+      } catch (err) {
+        if (err instanceof StatusExistsError) return html("Status already exists", 409);
+        throw err;
+      }
+      return tablePartial(db, project);
+    },
+  };
+}
+
+export function uiProjectStatusesRenameRoute(): Route {
+  return {
+    method: "POST",
+    pattern: new URLPattern({ pathname: "/ui/projects/:slug/statuses/:name/rename" }),
+    handler: async (req, match, { db }) => {
+      const project = resolveUiProject(db, match.pathname.groups.slug!);
+      if (isResponse(project)) return project;
+      const oldName = decodeURIComponent(match.pathname.groups.name!);
+      const form = await req.formData();
+      const newName = String(form.get("name") ?? "").trim();
+      if (!newName) return html("Name required", 400);
+      try {
+        renameStatus(db, project.id, oldName, newName);
+      } catch (err) {
+        if (err instanceof StatusNotFoundError) return html("Not found", 404);
+        if (err instanceof StatusExistsError) return html("Name already exists", 409);
+        throw err;
+      }
+      return tablePartial(db, project);
+    },
+  };
+}
+
+export function uiProjectStatusesKindRoute(): Route {
+  return {
+    method: "POST",
+    pattern: new URLPattern({ pathname: "/ui/projects/:slug/statuses/:name/kind" }),
+    handler: async (req, match, { db }) => {
+      const project = resolveUiProject(db, match.pathname.groups.slug!);
+      if (isResponse(project)) return project;
+      const name = decodeURIComponent(match.pathname.groups.name!);
+      const form = await req.formData();
+      const kind = String(form.get("kind") ?? "");
+      if (!isStatusKind(kind)) return html("Bad kind", 400);
+      try {
+        updateStatusKind(db, project.id, name, kind);
+      } catch (err) {
+        if (err instanceof StatusNotFoundError) return html("Not found", 404);
+        throw err;
+      }
+      return tablePartial(db, project);
+    },
+  };
+}
+
+export function uiProjectStatusesMoveRoute(): Route {
+  return {
+    method: "POST",
+    pattern: new URLPattern({ pathname: "/ui/projects/:slug/statuses/:name/move" }),
+    handler: (req, match, { db }) => {
+      const project = resolveUiProject(db, match.pathname.groups.slug!);
+      if (isResponse(project)) return project;
+      const name = decodeURIComponent(match.pathname.groups.name!);
+      const url = new URL(req.url);
+      const dir = url.searchParams.get("dir");
+      const current = listStatuses(db, project.id);
+      const idx = current.findIndex((s) => s.name === name);
+      if (idx < 0) return html("Not found", 404);
+      const target = dir === "up" ? idx - 1 : idx + 1;
+      if (target < 0 || target >= current.length) return tablePartial(db, project);
+      const reordered = [...current];
+      const tmp = reordered[idx]!;
+      reordered[idx] = reordered[target]!;
+      reordered[target] = tmp;
+      try {
+        reorderStatuses(
+          db,
+          project.id,
+          reordered.map((s) => s.name),
+        );
+      } catch (err) {
+        if (err instanceof StatusReorderMismatchError) return html("Mismatch", 400);
+        throw err;
+      }
+      return tablePartial(db, project);
+    },
+  };
+}
+
+export function uiProjectStatusesDeleteRoute(): Route {
+  return {
+    method: "DELETE",
+    pattern: new URLPattern({ pathname: "/ui/projects/:slug/statuses/:name" }),
+    handler: (_req, match, { db }) => {
+      const project = resolveUiProject(db, match.pathname.groups.slug!);
+      if (isResponse(project)) return project;
+      const name = decodeURIComponent(match.pathname.groups.name!);
+      try {
+        deleteStatus(db, project.id, name);
+      } catch (err) {
+        if (err instanceof StatusNotFoundError) return html("Not found", 404);
+        if (err instanceof StatusInUseError) return html("Status in use", 409);
+        throw err;
+      }
+      return tablePartial(db, project);
+    },
+  };
 }
 
 export function uiProjectsRoute(): Route {
@@ -129,8 +311,8 @@ export function uiBoardRoute(): Route {
       const q = url.searchParams.get("q") ?? "";
       const project = resolveUiProject(db, DEFAULT_PROJECT_SLUG);
       if (isResponse(project)) return project;
-      const issues = loadBoardIssues(db, project, q);
-      return html(renderBoardPage({ issues, q, project, projects: listProjects(db) }));
+      const { issues, statuses } = loadBoardIssues(db, project, q);
+      return html(renderBoardPage({ issues, q, statuses, project, projects: listProjects(db) }));
     },
   };
 }
@@ -144,8 +326,8 @@ export function uiProjectBoardRoute(): Route {
       const q = url.searchParams.get("q") ?? "";
       const project = resolveUiProject(db, match.pathname.groups.slug!);
       if (isResponse(project)) return project;
-      const issues = loadBoardIssues(db, project, q);
-      return html(renderBoardPage({ issues, q, project, projects: listProjects(db) }));
+      const { issues, statuses } = loadBoardIssues(db, project, q);
+      return html(renderBoardPage({ issues, q, statuses, project, projects: listProjects(db) }));
     },
   };
 }
@@ -159,8 +341,8 @@ export function uiBoardPartialRoute(): Route {
       const q = url.searchParams.get("q") ?? "";
       const project = resolveUiProject(db, DEFAULT_PROJECT_SLUG);
       if (isResponse(project)) return project;
-      const issues = loadBoardIssues(db, project, q);
-      return html(renderBoardGrid({ issues, q, project }));
+      const { issues, statuses } = loadBoardIssues(db, project, q);
+      return html(renderBoardGrid({ issues, q, statuses, project }));
     },
   };
 }
@@ -174,8 +356,8 @@ export function uiProjectBoardPartialRoute(): Route {
       const q = url.searchParams.get("q") ?? "";
       const project = resolveUiProject(db, match.pathname.groups.slug!);
       if (isResponse(project)) return project;
-      const issues = loadBoardIssues(db, project, q);
-      return html(renderBoardGrid({ issues, q, project }));
+      const { issues, statuses } = loadBoardIssues(db, project, q);
+      return html(renderBoardGrid({ issues, q, statuses, project }));
     },
   };
 }
@@ -192,7 +374,10 @@ export function uiDetailRoute(): Route {
       if (!issue) return new Response("Not Found", { status: 404 });
       const comments = listComments(db, id);
       const history = listHistory(db, id);
-      return html(renderDetailPage({ issue, comments, history, projects: listProjects(db) }));
+      const statuses = listStatuses(db, project.id);
+      return html(
+        renderDetailPage({ issue, comments, history, statuses, projects: listProjects(db) }),
+      );
     },
   };
 }
@@ -209,8 +394,16 @@ export function uiProjectDetailRoute(): Route {
       if (!issue) return new Response("Not Found", { status: 404 });
       const comments = listComments(db, id);
       const history = listHistory(db, id);
+      const statuses = listStatuses(db, project.id);
       return html(
-        renderDetailPage({ issue, comments, history, project, projects: listProjects(db) }),
+        renderDetailPage({
+          issue,
+          comments,
+          history,
+          statuses,
+          project,
+          projects: listProjects(db),
+        }),
       );
     },
   };
@@ -223,7 +416,9 @@ export function uiNewRoute(): Route {
     handler: (_req, _match, { db }) => {
       const project = resolveUiProject(db, DEFAULT_PROJECT_SLUG);
       if (isResponse(project)) return project;
-      return html(renderNewPage({ projects: listProjects(db) }));
+      const statuses = listStatuses(db, project.id);
+      const defaultState = firstDispatchableStatus(db, project.id)?.name ?? null;
+      return html(renderNewPage({ statuses, defaultState, projects: listProjects(db) }));
     },
   };
 }
@@ -235,7 +430,9 @@ export function uiProjectNewIssueRoute(): Route {
     handler: (_req, match, { db }) => {
       const project = resolveUiProject(db, match.pathname.groups.slug!);
       if (isResponse(project)) return project;
-      return html(renderNewPage({ project, projects: listProjects(db) }));
+      const statuses = listStatuses(db, project.id);
+      const defaultState = firstDispatchableStatus(db, project.id)?.name ?? null;
+      return html(renderNewPage({ statuses, defaultState, project, projects: listProjects(db) }));
     },
   };
 }
@@ -247,18 +444,22 @@ async function createIssueFromRequest(
 ): Promise<CreateIssueFromRequestResult> {
   const form = await req.formData();
   const title = String(form.get("title") ?? "").trim();
+  const statuses = listStatuses(db, project.id);
+  const defaultState = firstDispatchableStatus(db, project.id)?.name ?? null;
   if (title === "") {
     return {
       error: renderNewPage({
         error: "Title is required",
         values: { title: "" },
+        statuses,
+        defaultState,
         project,
         projects: listProjects(db),
       }),
     };
   }
   const description = String(form.get("description") ?? "");
-  const state = String(form.get("state") ?? "Todo");
+  const state = String(form.get("state") ?? defaultState ?? "");
   const priorityRaw = String(form.get("priority") ?? "");
   const priority = priorityRaw === "" ? null : Number(priorityRaw);
   const labels = String(form.get("labels") ?? "")

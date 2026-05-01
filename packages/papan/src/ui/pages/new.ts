@@ -1,11 +1,13 @@
 import { layout, escapeHtml } from "../layout";
-import { ALL_STATES } from "../../domain/issue";
 import type { Project } from "../../domain/project";
 import { DEFAULT_PROJECT_SLUG } from "../../domain/project";
+import type { ProjectStatus } from "../../domain/status";
 
 export interface NewPageInput {
   error?: string;
   values?: { title?: string; description?: string; linear_url?: string; labels?: string };
+  statuses: ProjectStatus[];
+  defaultState: string | null;
   project?: Project;
   projects?: Project[];
 }
@@ -13,12 +15,17 @@ export interface NewPageInput {
 export function renderNewPage({
   error,
   values = {},
+  statuses,
+  defaultState,
   project,
   projects = [],
 }: NewPageInput): string {
-  const stateOptions = ALL_STATES.map(
-    (s) => `<option value="${s}"${s === "Todo" ? " selected" : ""}>${s}</option>`,
-  ).join("");
+  const stateOptions = statuses
+    .map(
+      (s) =>
+        `<option value="${escapeHtml(s.name)}"${s.name === defaultState ? " selected" : ""}>${escapeHtml(s.name)}</option>`,
+    )
+    .join("");
   const projectSlug = project?.slug ?? DEFAULT_PROJECT_SLUG;
   const action =
     projectSlug === DEFAULT_PROJECT_SLUG ? "/new" : `/projects/${escapeHtml(projectSlug)}/new`;

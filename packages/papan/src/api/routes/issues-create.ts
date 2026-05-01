@@ -1,7 +1,10 @@
 import { URLPattern } from "urlpattern-polyfill";
 import { ProjectScopeMismatchError, createIssue } from "../../db/repo/issues";
 import { addHistory } from "../../db/repo/history";
-import { isValidState } from "../../domain/issue";
+import {
+  firstDispatchableStatus,
+  isValidStateForProject,
+} from "../../db/repo/project-statuses";
 import type { Route } from "../server";
 import { eventProject, isResponse, resolveProject } from "./project-scope";
 import { DEFAULT_PROJECT_SLUG } from "../../domain/project";
@@ -42,19 +45,36 @@ export function issuesCreateRoute(): Route {
         );
       }
 
-      const state = typeof body.state === "string" ? body.state : "Todo";
-      if (!isValidState(state)) {
-        return Response.json(
-          {
-            error: { code: "invalid_state", message: `unknown state ${state}`, fields: ["state"] },
-          },
-          { status: 400 },
-        );
-      }
       const projectSlug =
         typeof body.project_slug === "string" ? body.project_slug.trim() : DEFAULT_PROJECT_SLUG;
       const project = resolveProject(db, projectSlug);
       if (isResponse(project)) return project;
+
+      let state: string;
+      if (typeof body.state === "string") {
+        state = body.state;
+        if (!isValidStateForProject(db, project.id, state)) {
+          return Response.json(
+            {
+              error: {
+                code: "invalid_state",
+                message: `unknown state ${state}`,
+                fields: ["state"],
+              },
+            },
+            { status: 400 },
+          );
+        }
+      } else {
+        const fallback = firstDispatchableStatus(db, project.id);
+        if (!fallback) {
+          return Response.json(
+            { error: { code: "no_statuses_configured", fields: ["state"] } },
+            { status: 400 },
+          );
+        }
+        state = fallback.name;
+      }
 
       let issue;
       try {
