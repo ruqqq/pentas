@@ -122,6 +122,7 @@ export class Orchestrator {
     failure_budget: number;
     rerun_flakes: boolean;
     gh_executable?: string | undefined;
+    mark_pr_ready: boolean;
     wait_state?: string | undefined;
     pass_state?: string | undefined;
     fail_state?: string | undefined;
@@ -133,6 +134,8 @@ export class Orchestrator {
         poll_interval_ms: cfg.control_plane.pr_checks.poll_interval_ms,
         failure_budget: cfg.control_plane.pr_checks.failure_budget,
         rerun_flakes: cfg.control_plane.pr_checks.rerun_flakes,
+        gh_executable: cfg.control_plane.pr_checks.gh_executable,
+        mark_pr_ready: cfg.control_plane.pr_checks.mark_pr_ready,
         wait_state: cfg.control_plane.pr_checks.wait_state,
         pass_state: cfg.control_plane.pr_checks.pass_state,
         fail_state: cfg.control_plane.pr_checks.fail_state,

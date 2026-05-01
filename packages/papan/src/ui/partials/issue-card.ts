@@ -1,12 +1,23 @@
 import type { NormalizedIssue } from "../../domain/issue";
-import { ALL_STATES } from "../../domain/issue";
 import { escapeHtml } from "../layout";
 
-export function renderIssueCard(issue: NormalizedIssue, projectSlug = issue.project?.slug): string {
+export function renderIssueCard(
+  issue: NormalizedIssue,
+  projectSlug: string | undefined,
+  statusNames: readonly string[],
+): string {
   const labels = issue.labels.map((l) => `<span class="label">${escapeHtml(l)}</span>`).join("");
-  const stateOptions = ALL_STATES.map(
-    (s) => `<option value="${s}"${s === issue.state ? " selected" : ""}>${s}</option>`,
-  ).join("");
+  // Always include the issue's current state in the dropdown so an "Unknown" state
+  // remains selectable / visible to the user.
+  const optionNames = statusNames.includes(issue.state)
+    ? statusNames
+    : [...statusNames, issue.state];
+  const stateOptions = optionNames
+    .map(
+      (s) =>
+        `<option value="${escapeHtml(s)}"${s === issue.state ? " selected" : ""}>${escapeHtml(s)}</option>`,
+    )
+    .join("");
   const prio =
     issue.priority != null
       ? `<span class="card-prio" title="Priority ${escapeHtml(String(issue.priority))}">P${escapeHtml(String(issue.priority))}</span>`

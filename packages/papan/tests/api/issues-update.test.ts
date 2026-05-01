@@ -39,6 +39,20 @@ describe("PATCH/DELETE /api/v1/issues/:id", () => {
     server.stop();
   });
 
+  test("PATCH rejects state not in the issue's project status list", async () => {
+    const a = createIssue(db, { title: "t", state: "Todo" });
+    const server = startServer({ db, apiToken: undefined, port: 0 }, [issuesUpdateRoute()]);
+    const res = await fetch(`${server.url}api/v1/issues/${a.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ state: "NotConfigured" }),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("invalid_state");
+    server.stop();
+  });
+
   test("PATCH rejects project moves", async () => {
     const a = createIssue(db, { title: "t", state: "Todo" });
     const server = startServer({ db, apiToken: undefined, port: 0 }, [issuesUpdateRoute()]);

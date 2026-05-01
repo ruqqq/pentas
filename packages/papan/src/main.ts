@@ -14,6 +14,13 @@ import { commentsListRoute, commentsCreateRoute } from "./api/routes/comments";
 import { historyListRoute } from "./api/routes/history";
 import { eventsRoute } from "./api/routes/events";
 import { projectsCreateRoute, projectsDetailRoute, projectsListRoute } from "./api/routes/projects";
+import {
+  projectStatusesCreateRoute,
+  projectStatusesDeleteRoute,
+  projectStatusesListRoute,
+  projectStatusesReorderRoute,
+  projectStatusesUpdateRoute,
+} from "./api/routes/project-statuses";
 import { staticRoute } from "./ui/static";
 import {
   uiBoardRoute,
@@ -29,6 +36,12 @@ import {
   uiProjectsRoute,
   uiProjectNewRoute,
   uiProjectCreatePostRoute,
+  uiProjectStatusesRoute,
+  uiProjectStatusesAddRoute,
+  uiProjectStatusesRenameRoute,
+  uiProjectStatusesKindRoute,
+  uiProjectStatusesMoveRoute,
+  uiProjectStatusesDeleteRoute,
 } from "./ui/routes";
 
 export interface RunOptions {
@@ -54,6 +67,11 @@ export function runPapan(opts: RunOptions = {}) {
     // Order matters: more specific paths first.
     issuesByIdsRoute(),
     eventsRoute(),
+    projectStatusesReorderRoute(),
+    projectStatusesUpdateRoute(),
+    projectStatusesDeleteRoute(),
+    projectStatusesCreateRoute(),
+    projectStatusesListRoute(),
     projectsListRoute(),
     projectsCreateRoute(),
     projectsDetailRoute(),
@@ -65,6 +83,12 @@ export function runPapan(opts: RunOptions = {}) {
     issuesUpdateRoute(),
     issuesDeleteRoute(),
     issuesDetailRoute(),
+    uiProjectStatusesAddRoute(),
+    uiProjectStatusesRenameRoute(),
+    uiProjectStatusesKindRoute(),
+    uiProjectStatusesMoveRoute(),
+    uiProjectStatusesDeleteRoute(),
+    uiProjectStatusesRoute(),
     uiCreatePostRoute(),
     uiProjectCreateIssuePostRoute(),
     uiProjectCreatePostRoute(),

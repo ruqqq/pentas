@@ -11,6 +11,7 @@ export function renderProjectsPage(projects: ProjectSummary[]): string {
   <td>${p.issue_count}</td>
   <td>${p.active_issue_count}</td>
   <td>${escapeHtml(p.last_issue_updated_at ?? "-")}</td>
+  <td><a href="/projects/${escapeHtml(p.slug)}/statuses">Statuses</a></td>
 </tr>`,
     )
     .join("\n");
@@ -22,7 +23,7 @@ export function renderProjectsPage(projects: ProjectSummary[]): string {
     <a href="/projects/new">New project</a>
   </header>
   <table>
-    <thead><tr><th>Name</th><th>Slug</th><th>Issues</th><th>Active</th><th>Last updated</th></tr></thead>
+    <thead><tr><th>Name</th><th>Slug</th><th>Issues</th><th>Active</th><th>Last updated</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
   </table>
 </section>`,

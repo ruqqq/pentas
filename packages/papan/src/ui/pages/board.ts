@@ -1,18 +1,27 @@
 import { layout, escapeHtml } from "../layout";
 import { renderIssueCard } from "../partials/issue-card";
-import { ALL_STATES } from "../../domain/issue";
 import type { NormalizedIssue } from "../../domain/issue";
 import type { Project } from "../../domain/project";
 import { DEFAULT_PROJECT_SLUG } from "../../domain/project";
+import type { ProjectStatus } from "../../domain/status";
 
 export interface BoardPageInput {
   issues: NormalizedIssue[];
   q: string;
+  statuses: ProjectStatus[];
   project?: Project;
   projects?: Project[];
 }
 
-export function renderBoardPage({ issues, q, project, projects = [] }: BoardPageInput): string {
+const UNKNOWN_COLUMN = "Unknown";
+
+export function renderBoardPage({
+  issues,
+  q,
+  statuses,
+  project,
+  projects = [],
+}: BoardPageInput): string {
   const heading = project
     ? `<header class="page-title"><h1>${escapeHtml(project.name)}</h1><code>${escapeHtml(project.slug)}</code></header>`
     : "";
@@ -20,35 +29,56 @@ export function renderBoardPage({ issues, q, project, projects = [] }: BoardPage
     "Board",
     heading +
       boardChrome(q, project?.slug ?? DEFAULT_PROJECT_SLUG) +
-      renderBoardGrid({ issues, q, project }),
+      renderBoardGrid({ issues, q, statuses, project }),
     { projects, activeProject: project ?? null },
   );
 }
 
-export function renderBoardGrid({ issues, q, project }: BoardPageInput): string {
+export function renderBoardGrid({ issues, q, statuses, project }: BoardPageInput): string {
   const buckets = new Map<string, NormalizedIssue[]>();
-  for (const s of ALL_STATES) buckets.set(s, []);
+  for (const s of statuses) buckets.set(s.name, []);
+  const unknownBucket: NormalizedIssue[] = [];
   for (const i of issues) {
     const arr = buckets.get(i.state);
     if (arr) arr.push(i);
+    else unknownBucket.push(i);
   }
 
-  const cols = ALL_STATES.map((s) => {
-    const list = buckets.get(s) ?? [];
+  const statusNames = statuses.map((s) => s.name);
+  const projectSlugForLinks = project?.slug ?? issues[0]?.project?.slug ?? DEFAULT_PROJECT_SLUG;
+  const statusesHref = `/projects/${encodeURIComponent(projectSlugForLinks)}/statuses`;
+  const renderCol = (
+    name: string,
+    list: NormalizedIssue[],
+    opts: { extraClass?: string; headerHref?: string } = {},
+  ): string => {
     const cards =
       list.length === 0
         ? `<p class="kempty">No issues</p>`
-        : list.map((issue) => renderIssueCard(issue, issue.project?.slug)).join("\n");
-    return `<section class="kcol" data-state="${s}">
+        : list.map((issue) => renderIssueCard(issue, issue.project?.slug, statusNames)).join("\n");
+    const badge = `<span class="state-badge" data-state="${escapeHtml(name)}">${escapeHtml(name)}</span>`;
+    const header = opts.headerHref
+      ? `<a class="kunknown-link" href="${escapeAttr(opts.headerHref)}" title="Configure statuses">${badge}</a>`
+      : badge;
+    return `<section class="kcol${opts.extraClass ?? ""}" data-state="${escapeHtml(name)}">
   <header class="khead">
-    <span class="state-badge" data-state="${s}">${s}</span>
+    ${header}
     <span class="kcount">${list.length}</span>
   </header>
   <div class="kbody">
 ${cards}
   </div>
 </section>`;
-  }).join("\n");
+  };
+
+  const cols = statuses.map((s) => renderCol(s.name, buckets.get(s.name) ?? [])).join("\n");
+  const unknownCol =
+    unknownBucket.length > 0
+      ? renderCol(UNKNOWN_COLUMN, unknownBucket, {
+          extraClass: " kcol-unknown",
+          headerHref: statusesHref,
+        })
+      : "";
 
   const projectSlug = project?.slug ?? issues[0]?.project?.slug ?? DEFAULT_PROJECT_SLUG;
   const refreshUrl =
@@ -61,16 +91,22 @@ ${cards}
        hx-trigger="sse:issue.created,sse:issue.updated,sse:state.changed,sse:issue.deleted"
        hx-swap="outerHTML">
 ${cols}
+${unknownCol}
 </div>`;
 }
 
 function boardChrome(q: string, projectSlug: string): string {
   const action =
     projectSlug === DEFAULT_PROJECT_SLUG ? "/" : `/projects/${encodeURIComponent(projectSlug)}`;
+  const statusesHref =
+    projectSlug === DEFAULT_PROJECT_SLUG
+      ? `/projects/${encodeURIComponent(DEFAULT_PROJECT_SLUG)}/statuses`
+      : `/projects/${encodeURIComponent(projectSlug)}/statuses`;
   return `
 <form method="get" action="${escapeAttr(action)}" class="filters board-filters">
   <input type="search" name="q" value="${escapeAttr(q)}" placeholder="Search issues">
   <button type="submit">Filter</button>
+  <a class="board-manage" href="${escapeAttr(statusesHref)}">Manage statuses</a>
 </form>`;
 }
 

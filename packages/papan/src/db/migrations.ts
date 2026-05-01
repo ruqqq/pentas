@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import schema from "./schema.sql" with { type: "text" };
+import { seedDefaultStatuses } from "./repo/project-statuses";
 
 function hasTable(db: Database, table: string): boolean {
   return (
@@ -22,29 +23,11 @@ function hasColumn(db: Database, table: string, column: string): boolean {
   );
 }
 
-function createProjectsTable(db: Database): void {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS projects (
-      id          TEXT PRIMARY KEY,
-      slug        TEXT NOT NULL UNIQUE,
-      name        TEXT NOT NULL,
-      description TEXT,
-      created_at  TEXT NOT NULL,
-      updated_at  TEXT NOT NULL
-    );
-  `);
-  db.query(
-    `INSERT OR IGNORE INTO projects
-       (id, slug, name, description, created_at, updated_at)
-     VALUES
-       ('default', 'default', 'Default', NULL, ?, ?)`,
-  ).run(new Date().toISOString(), new Date().toISOString());
-}
-
 export function runMigrations(db: Database): void {
   db.exec("PRAGMA foreign_keys = ON;");
+  // Pre-schema migration: legacy single-project DBs predate the projects table.
+  // Add project_id, then let schema.sql create projects (and seed 'default').
   if (hasTable(db, "issues") && !hasColumn(db, "issues", "project_id")) {
-    createProjectsTable(db);
     db.exec("ALTER TABLE issues ADD COLUMN project_id TEXT;");
     db.query("UPDATE issues SET project_id = ? WHERE project_id IS NULL").run("default");
   }
@@ -54,4 +37,8 @@ export function runMigrations(db: Database): void {
     CREATE INDEX IF NOT EXISTS issues_project_updated_at_idx ON issues(project_id, updated_at, id);
     CREATE UNIQUE INDEX IF NOT EXISTS issues_project_identifier_idx ON issues(project_id, identifier);
   `);
+  // Backfill: ensure every existing project has the default status set so the system
+  // remains usable on upgrade. Idempotent — seedDefaultStatuses no-ops when populated.
+  const projects = db.query<{ id: string }, []>("SELECT id FROM projects").all();
+  for (const p of projects) seedDefaultStatuses(db, p.id);
 }

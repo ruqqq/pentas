@@ -1,7 +1,7 @@
 import { URLPattern } from "urlpattern-polyfill";
 import { ProjectScopeMismatchError, getIssueById, updateIssue } from "../../db/repo/issues";
 import { addHistory } from "../../db/repo/history";
-import { isValidState } from "../../domain/issue";
+import { isValidStateForProject } from "../../db/repo/project-statuses";
 import type { Route } from "../server";
 import { eventProject, isResponse, projectSlugFromUrl, resolveProject } from "./project-scope";
 
@@ -61,7 +61,7 @@ export function issuesUpdateRoute(): Route {
 
       if (
         body.state !== undefined &&
-        (typeof body.state !== "string" || !isValidState(body.state))
+        (typeof body.state !== "string" || !isValidStateForProject(db, project.id, body.state))
       ) {
         return Response.json(
           { error: { code: "invalid_state", message: "unknown state", fields: ["state"] } },

@@ -68,6 +68,20 @@ CREATE TABLE IF NOT EXISTS history (
 );
 CREATE INDEX IF NOT EXISTS history_issue_id_idx ON history(issue_id);
 
+-- ON DELETE CASCADE here removes a project's status rows when the project is
+-- deleted. Note that issues.project_id uses ON DELETE RESTRICT, so a project
+-- with any issue cannot be deleted in the first place — this CASCADE only
+-- fires once those issues are gone.
+CREATE TABLE IF NOT EXISTS project_statuses (
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  position   INTEGER NOT NULL,
+  kind       TEXT NOT NULL CHECK (kind IN ('dispatchable','waiting','terminal')),
+  PRIMARY KEY (project_id, name)
+);
+CREATE INDEX IF NOT EXISTS project_statuses_order_idx
+  ON project_statuses(project_id, position);
+
 CREATE TABLE IF NOT EXISTS seq (
   name   TEXT PRIMARY KEY,
   value  INTEGER NOT NULL

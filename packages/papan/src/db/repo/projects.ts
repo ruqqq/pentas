@@ -6,6 +6,7 @@ import {
   isValidProjectSlug,
   type Project,
 } from "../../domain/project";
+import { seedDefaultStatuses } from "./project-statuses";
 
 export interface CreateProjectInput {
   slug: string;
@@ -32,6 +33,7 @@ export function ensureDefaultProject(db: Database): Project {
   ).run(DEFAULT_PROJECT_ID, DEFAULT_PROJECT_SLUG, "Default", now, now);
   const project = getProjectBySlug(db, DEFAULT_PROJECT_SLUG);
   if (!project) throw new Error("default project was not created");
+  seedDefaultStatuses(db, project.id);
   return project;
 }
 
@@ -48,7 +50,10 @@ export function listProjectSummaries(db: Database): ProjectSummary[] {
     .query<ProjectSummary, []>(
       `SELECT p.*,
               COUNT(i.id) AS issue_count,
-              SUM(CASE WHEN i.state NOT IN ('Done', 'Cancelled') THEN 1 ELSE 0 END) AS active_issue_count,
+              SUM(CASE WHEN i.state NOT IN (
+                SELECT name FROM project_statuses
+                 WHERE project_id = p.id AND kind = 'terminal'
+              ) THEN 1 ELSE 0 END) AS active_issue_count,
               MAX(i.updated_at) AS last_issue_updated_at
          FROM projects p
          LEFT JOIN issues i ON i.project_id = p.id
@@ -78,5 +83,6 @@ export function createProject(db: Database, input: CreateProjectInput): Project 
   ).run(id, slug, name, input.description ?? null, now, now);
   const project = getProjectBySlug(db, slug);
   if (!project) throw new Error("createProject: row vanished");
+  seedDefaultStatuses(db, project.id);
   return project;
 }
