@@ -212,12 +212,13 @@ codex:
   model: gpt-5.5
   sandbox_mode: workspace-write
   approval_policy: never
+  network_access_enabled: true
   turn_timeout_ms: 3600000
   read_timeout_ms: 5000
   stall_timeout_ms: 300000
 ```
 
-`approval_policy: never` is the headless setting. Interactive approval prompts would deadlock an unattended dalang worker.
+`approval_policy: never` is the headless setting. Interactive approval prompts would deadlock an unattended dalang worker. `network_access_enabled` defaults to `true` for Codex so GitHub handoff commands can comment, push, and update Project fields.
 
 #### Workflow prompt and agent skills
 

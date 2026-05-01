@@ -10,7 +10,7 @@ test("codexRunQuery returns an async iterable (smoke)", () => {
   const it = codexRunQuery({
     prompt: "hello",
     cwd: "/tmp",
-    codex: { sandboxMode: "read-only", approvalPolicy: "never" },
+    codex: { sandboxMode: "read-only", approvalPolicy: "never", networkAccessEnabled: false },
     model: "gpt-5.5",
     executablePath: "codex",
   });

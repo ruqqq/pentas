@@ -66,6 +66,7 @@ codex:
   model: gpt-5.5
   sandbox_mode: workspace-write # "read-only" | "workspace-write" | "danger-full-access"
   approval_policy: never # "untrusted" | "on-failure" | "on-request" | "never"
+  network_access_enabled: true
   turn_timeout_ms: 3600000
   read_timeout_ms: 5000
   stall_timeout_ms: 300000
@@ -79,6 +80,7 @@ codex:
 | `model`            | `"gpt-5.5"`         | Codex model to use.                                                  |
 | `sandbox_mode`     | `"workspace-write"` | File system access granted to the agent.                             |
 | `approval_policy`  | `"never"`           | `"never"` is the recommended headless value; `"ask"` would deadlock. |
+| `network_access_enabled` | `true`       | Allows workspace-write Codex runs to perform GitHub handoff commands. |
 | `turn_timeout_ms`  | `3600000`           | Max time for a single agent turn.                                    |
 | `read_timeout_ms`  | `5000`              | Max silence before declaring a stall.                                |
 | `stall_timeout_ms` | `300000`            | Max total stall time before aborting.                                |

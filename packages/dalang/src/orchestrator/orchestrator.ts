@@ -12,7 +12,7 @@ import { GitWorktreeManager } from "../workspace/git-worktree";
 import { runHook, truncateLogged } from "../workspace/hooks";
 import { runAttempt, type RunQuery, type AgentConfig } from "../agent/agent-runner";
 import { transcriptPathFor } from "../agent/transcript";
-import { expandPath, resolveTrackerApiKey } from "../config/env-resolver";
+import { expandPath, resolveGithubToken, resolveTrackerApiKey } from "../config/env-resolver";
 import { ValidationError } from "../config/validate";
 import { createLogger, type Logger } from "../logging/logger";
 
@@ -325,6 +325,11 @@ export class Orchestrator {
             "session started",
           );
         }
+        if (e.usage) {
+          entry.session.input_tokens += e.usage.input_tokens ?? 0;
+          entry.session.output_tokens += e.usage.output_tokens ?? 0;
+          entry.session.total_tokens += e.usage.total_tokens ?? 0;
+        }
         entry.session.last_event = e.event;
         entry.session.last_event_at = e.timestamp;
         entry.session.last_message = e.message ?? null;
@@ -452,6 +457,8 @@ export class Orchestrator {
         stallTimeoutMs: this.cfg.codex.stall_timeout_ms,
         sandboxMode: this.cfg.codex.sandbox_mode,
         approvalPolicy: this.cfg.codex.approval_policy,
+        networkAccessEnabled: this.cfg.codex.network_access_enabled,
+        env: this.buildCodexEnv(),
       };
     }
     if (this.cfg.agent_provider === "opencode") {
@@ -479,6 +486,19 @@ export class Orchestrator {
       stallTimeoutMs: this.cfg.claude.stall_timeout_ms,
       permissionMode: this.cfg.claude.permission_mode,
     };
+  }
+
+  private buildCodexEnv(): Record<string, string> | undefined {
+    if (this.cfg.control_plane.kind !== "github-projects") return undefined;
+    const token = resolveGithubToken(this.cfg.control_plane.token);
+    if (!token) return undefined;
+    const env: Record<string, string> = {};
+    for (const [key, value] of Object.entries(process.env)) {
+      if (value !== undefined) env[key] = value;
+    }
+    env.GITHUB_TOKEN = token;
+    env.GH_TOKEN = token;
+    return env;
   }
 
   private buildControlPlanePromptContext(): {
