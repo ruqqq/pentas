@@ -1,10 +1,7 @@
 import { URLPattern } from "urlpattern-polyfill";
 import { ProjectScopeMismatchError, createIssue } from "../../db/repo/issues";
 import { addHistory } from "../../db/repo/history";
-import {
-  firstDispatchableStatus,
-  isValidStateForProject,
-} from "../../db/repo/project-statuses";
+import { firstDispatchableStatus, isValidStateForProject } from "../../db/repo/project-statuses";
 import type { Route } from "../server";
 import { eventProject, isResponse, resolveProject } from "./project-scope";
 import { DEFAULT_PROJECT_SLUG } from "../../domain/project";

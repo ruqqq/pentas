@@ -55,9 +55,7 @@ export function renderBoardGrid({ issues, q, statuses, project }: BoardPageInput
     const cards =
       list.length === 0
         ? `<p class="kempty">No issues</p>`
-        : list
-            .map((issue) => renderIssueCard(issue, issue.project?.slug, statusNames))
-            .join("\n");
+        : list.map((issue) => renderIssueCard(issue, issue.project?.slug, statusNames)).join("\n");
     const badge = `<span class="state-badge" data-state="${escapeHtml(name)}">${escapeHtml(name)}</span>`;
     const header = opts.headerHref
       ? `<a class="kunknown-link" href="${escapeAttr(opts.headerHref)}" title="Configure statuses">${badge}</a>`

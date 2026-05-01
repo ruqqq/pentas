@@ -12,11 +12,10 @@ export interface ProjectStatusesPageInput {
 }
 
 export function renderProjectStatusesPage(input: ProjectStatusesPageInput): string {
-  return layout(
-    `Statuses · ${input.project.name}`,
-    renderProjectStatusesBody(input),
-    { projects: input.projects ?? [], activeProject: input.project },
-  );
+  return layout(`Statuses · ${input.project.name}`, renderProjectStatusesBody(input), {
+    projects: input.projects ?? [],
+    activeProject: input.project,
+  });
 }
 
 export function renderProjectStatusesBody(input: ProjectStatusesPageInput): string {
@@ -79,12 +78,14 @@ function renderRow(
   const slug = escapeHtml(project.slug);
   const name = escapeHtml(s.name);
   const targetSel = "#statuses-table";
-  const moveUp = idx > 0
-    ? `<button hx-post="/ui/projects/${slug}/statuses/${name}/move?dir=up" hx-target="${targetSel}" hx-swap="outerHTML">↑</button>`
-    : "";
-  const moveDown = idx < total - 1
-    ? `<button hx-post="/ui/projects/${slug}/statuses/${name}/move?dir=down" hx-target="${targetSel}" hx-swap="outerHTML">↓</button>`
-    : "";
+  const moveUp =
+    idx > 0
+      ? `<button hx-post="/ui/projects/${slug}/statuses/${name}/move?dir=up" hx-target="${targetSel}" hx-swap="outerHTML">↑</button>`
+      : "";
+  const moveDown =
+    idx < total - 1
+      ? `<button hx-post="/ui/projects/${slug}/statuses/${name}/move?dir=down" hx-target="${targetSel}" hx-swap="outerHTML">↓</button>`
+      : "";
   const renameForm = `<form class="inline" hx-post="/ui/projects/${slug}/statuses/${name}/rename" hx-target="${targetSel}" hx-swap="outerHTML">
     <input type="text" name="name" value="${name}">
     <button type="submit">Rename</button>

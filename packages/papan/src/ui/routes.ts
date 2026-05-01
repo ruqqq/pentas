@@ -10,11 +10,7 @@ import { renderBoardPage, renderBoardGrid } from "./pages/board";
 import { renderDetailPage } from "./pages/detail";
 import { renderNewPage } from "./pages/new";
 import { renderNewProjectPage, renderProjectsPage } from "./pages/projects";
-import {
-  firstDispatchableStatus,
-  firstStatus,
-  listStatuses,
-} from "../db/repo/project-statuses";
+import { firstDispatchableStatus, firstStatus, listStatuses } from "../db/repo/project-statuses";
 import { DEFAULT_PROJECT_SLUG, isValidProjectSlug, type Project } from "../domain/project";
 import { parseLinearUrl } from "../lib/linear-url";
 import { html, isResponse, resolveUiProject } from "./route-helpers";
@@ -40,9 +36,7 @@ function loadBoardIssues(db: Database, project: Project, q: string) {
   // Discover every distinct state in this project (cheap; bounded by issue count) so
   // both configured and unknown states are rendered.
   const allStates = db
-    .query<{ state: string }, [string]>(
-      "SELECT DISTINCT state FROM issues WHERE project_id = ?",
-    )
+    .query<{ state: string }, [string]>("SELECT DISTINCT state FROM issues WHERE project_id = ?")
     .all(project.id)
     .map((r) => r.state);
   const fetchStates = Array.from(new Set([...configuredNames, ...allStates]));
@@ -67,7 +61,6 @@ function issuePath(issueId: string, project: Project): string {
     ? `/issues/${issueId}`
     : `/projects/${project.slug}/issues/${issueId}`;
 }
-
 
 export function uiProjectsRoute(): Route {
   return {

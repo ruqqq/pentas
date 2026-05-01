@@ -17,10 +17,7 @@ import { listProjects } from "../db/repo/projects";
 import { isStatusKind } from "../domain/status";
 import type { Project } from "../domain/project";
 import { html, isResponse, resolveUiProject } from "./route-helpers";
-import {
-  renderProjectStatusesPage,
-  renderStatusesTablePartial,
-} from "./pages/project-statuses";
+import { renderProjectStatusesPage, renderStatusesTablePartial } from "./pages/project-statuses";
 
 function inUseSet(db: Database, projectId: string): Set<string> {
   const rows = db

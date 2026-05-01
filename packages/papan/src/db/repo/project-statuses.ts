@@ -64,10 +64,7 @@ export interface AddStatusInput {
 }
 
 function isUniqueOrPkError(err: unknown): boolean {
-  return (
-    err instanceof Error &&
-    /UNIQUE constraint failed|PRIMARY KEY/i.test(err.message)
-  );
+  return err instanceof Error && /UNIQUE constraint failed|PRIMARY KEY/i.test(err.message);
 }
 
 export function addStatus(db: Database, projectId: string, input: AddStatusInput): ProjectStatus {

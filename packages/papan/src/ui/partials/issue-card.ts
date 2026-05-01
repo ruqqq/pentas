@@ -9,7 +9,9 @@ export function renderIssueCard(
   const labels = issue.labels.map((l) => `<span class="label">${escapeHtml(l)}</span>`).join("");
   // Always include the issue's current state in the dropdown so an "Unknown" state
   // remains selectable / visible to the user.
-  const optionNames = statusNames.includes(issue.state) ? statusNames : [...statusNames, issue.state];
+  const optionNames = statusNames.includes(issue.state)
+    ? statusNames
+    : [...statusNames, issue.state];
   const stateOptions = optionNames
     .map(
       (s) =>
