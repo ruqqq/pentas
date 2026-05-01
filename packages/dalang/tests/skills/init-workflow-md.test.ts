@@ -1,7 +1,10 @@
 // packages/dalang/tests/skills/init-workflow-md.test.ts
 import { expect, test } from "bun:test";
 
-const rootSkillPath = new URL("../../../../.agents/skills/init-workflow-md/SKILL.md", import.meta.url);
+const rootSkillPath = new URL(
+  "../../../../.agents/skills/init-workflow-md/SKILL.md",
+  import.meta.url,
+);
 const packageSkillPath = new URL("../../skills/init-workflow-md/SKILL.md", import.meta.url);
 
 test("init-workflow-md is packaged as a generic repo-local agents skill", async () => {
