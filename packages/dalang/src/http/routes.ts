@@ -91,11 +91,7 @@ export async function handleRequest(req: Request, deps: RouteDeps): Promise<Resp
   const sessionTranscriptMatch = path.match(/^\/api\/v1\/sessions\/([^/]+)\/transcript$/);
   if (sessionTranscriptMatch) {
     if (method !== "GET")
-      return envelope(
-        "method_not_allowed",
-        "use GET for /api/v1/sessions/:id/transcript",
-        405,
-      );
+      return envelope("method_not_allowed", "use GET for /api/v1/sessions/:id/transcript", 405);
     const id = decodeURIComponent(sessionTranscriptMatch[1]!);
     const entry = findRunningSession(deps.state.running.values(), id);
     if (!entry) return envelope("session_not_found", `no running session for ${id}`, 404);

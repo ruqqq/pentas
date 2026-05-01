@@ -59,7 +59,7 @@ test("resolveGithubToken: falls back to gh auth token", () => {
   const path = join(dir, "gh");
   writeFileSync(
     path,
-    "#!/bin/sh\nif [ \"$1\" = auth ] && [ \"$2\" = token ]; then echo gh-token; exit 0; fi\nexit 1\n",
+    '#!/bin/sh\nif [ "$1" = auth ] && [ "$2" = token ]; then echo gh-token; exit 0; fi\nexit 1\n',
     { mode: 0o755 },
   );
   chmodSync(path, 0o755);

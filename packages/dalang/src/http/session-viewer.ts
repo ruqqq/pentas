@@ -86,9 +86,9 @@ export async function readTranscriptView(
   const text = await Bun.file(session.transcript_path).text();
   const lines = text.split(/\r?\n/).filter((line) => line.length > 0);
   const start = Math.max(0, lines.length - maxLines);
-  const events = lines.slice(start).map((line, index) =>
-    parseTranscriptLine(line, start + index + 1, entry.agent_provider),
-  );
+  const events = lines
+    .slice(start)
+    .map((line, index) => parseTranscriptLine(line, start + index + 1, entry.agent_provider));
   return {
     session,
     line_count: lines.length,
