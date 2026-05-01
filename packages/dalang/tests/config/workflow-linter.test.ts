@@ -82,6 +82,30 @@ test("lint accepts assigned Liquid variables", async () => {
   expect(result.diagnostics).toEqual([]);
 });
 
+test("lint accepts assigned aliases to known Liquid objects", async () => {
+  const path = await writeWorkflow(`
+{% assign alias = issue %}
+{{ alias.title }}
+`);
+
+  const result = await lintWorkflow(path);
+
+  expect(result.ok).toBe(true);
+  expect(result.diagnostics).toEqual([]);
+});
+
+test("lint accepts captured Liquid variables after capture blocks", async () => {
+  const path = await writeWorkflow(`
+{% capture title %}{{ issue.title }}{% endcapture %}
+{{ title }}
+`);
+
+  const result = await lintWorkflow(path);
+
+  expect(result.ok).toBe(true);
+  expect(result.diagnostics).toEqual([]);
+});
+
 test("lint rejects unknown prompt context fields", async () => {
   const path = await writeWorkflow(`
 {{ issue.not_a_field }}
@@ -140,6 +164,17 @@ test("lint rejects loop variables used outside their for block", async () => {
 test("lint accepts filtered Liquid for-loop collections", async () => {
   const path = await writeWorkflow(`
 {% for label in issue.labels | sort %}{{ label }}{% endfor %}
+`);
+
+  const result = await lintWorkflow(path);
+
+  expect(result.ok).toBe(true);
+  expect(result.diagnostics).toEqual([]);
+});
+
+test("lint accepts reversed Liquid for-loop collections", async () => {
+  const path = await writeWorkflow(`
+{% for label in issue.labels reversed %}{{ label }}{% endfor %}
 `);
 
   const result = await lintWorkflow(path);

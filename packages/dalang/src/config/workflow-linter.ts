@@ -174,6 +174,7 @@ function lintLiquidVariables(
 ): void {
   const scopes: ScopeStack = [new Map()];
   const seen = new Set<string>();
+  const pendingCaptures: string[] = [];
   const tokenPattern = /{{\s*([\s\S]*?)\s*}}|{%\s*([\s\S]*?)\s*%}/g;
 
   for (const match of template.matchAll(tokenPattern)) {
@@ -186,7 +187,7 @@ function lintLiquidVariables(
     const forMatch = tag.match(/^for\s+([A-Za-z_]\w*)\s+in\s+([\s\S]+)$/);
     if (forMatch) {
       const variable = forMatch[1]!;
-      const collectionExpression = forMatch[2]!;
+      const collectionExpression = stripForLoopModifiers(forMatch[2]!);
       lintExpressionPaths(collectionExpression, scopes, diagnostics, seen);
       const collection = firstExpressionPath(collectionExpression);
       const collectionNode = collection ? resolvePath(collection, scopes) : null;
@@ -212,8 +213,24 @@ function lintLiquidVariables(
 
     const assignMatch = tag.match(/^assign\s+([A-Za-z_]\w*)\s*=\s*([\s\S]+)$/);
     if (assignMatch) {
-      lintExpressionPaths(assignMatch[2]!, scopes, diagnostics, seen);
-      scopes[scopes.length - 1]!.set(assignMatch[1]!, true);
+      const expression = assignMatch[2]!;
+      lintExpressionPaths(expression, scopes, diagnostics, seen);
+      scopes[scopes.length - 1]!.set(
+        assignMatch[1]!,
+        directPathExpressionNode(expression, scopes) ?? true,
+      );
+      continue;
+    }
+
+    const captureMatch = tag.match(/^capture\s+([A-Za-z_]\w*)$/);
+    if (captureMatch) {
+      pendingCaptures.push(captureMatch[1]!);
+      continue;
+    }
+
+    if (tag === "endcapture") {
+      const variable = pendingCaptures.pop();
+      if (variable) scopes[scopes.length - 1]!.set(variable, true);
       continue;
     }
 
@@ -243,6 +260,16 @@ function lintExpressionPaths(
 
 function firstExpressionPath(expression: string): string | null {
   return collectPathCandidates((expression.split("|")[0] ?? expression).trim())[0] ?? null;
+}
+
+function directPathExpressionNode(expression: string, scopes: ScopeStack): SchemaNode | null {
+  const expressionHead = (expression.split("|")[0] ?? "").trim();
+  if (!/^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*$/.test(normalizePath(expressionHead))) return null;
+  return resolvePath(expressionHead, scopes);
+}
+
+function stripForLoopModifiers(expression: string): string {
+  return expression.trim().replace(/\s+reversed\s*$/, "");
 }
 
 function collectExpressionPaths(expression: string): string[] {
