@@ -290,7 +290,7 @@ function collectExpressionPaths(expression: string): string[] {
 function collectPathCandidates(expression: string): string[] {
   const out = new Set<string>();
   const pathPattern = /\b[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\b/g;
-  for (const match of stripLiquidStrings(expression).matchAll(pathPattern)) {
+  for (const match of stripLiquidStrings(normalizePath(expression)).matchAll(pathPattern)) {
     const candidate = normalizePath(match[0]!);
     if (!LIQUID_EXPRESSION_KEYWORDS.has(candidate)) out.add(candidate);
   }

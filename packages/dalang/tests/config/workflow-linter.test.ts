@@ -2,7 +2,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "bun:test";
-import { lintWorkflow } from "../../src/config/workflow-linter";
+import { lintLiquidTemplate, lintWorkflow } from "../../src/config/workflow-linter";
 
 async function writeWorkflow(body: string, frontMatter = ""): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "dalang-lint-"));
@@ -173,6 +173,14 @@ test("lint rejects unknown Liquid references inside when tags", async () => {
 
   expect(result.ok).toBe(false);
   expect(result.diagnostics.map((d) => d.message)).toContain(
+    "Unknown Liquid variable path `issue.not_a_field`",
+  );
+});
+
+test("lint rejects unknown Liquid references using bracket notation", () => {
+  const diagnostics = lintLiquidTemplate('{{ issue["not_a_field"] }}');
+
+  expect(diagnostics.map((d) => d.message)).toContain(
     "Unknown Liquid variable path `issue.not_a_field`",
   );
 });
