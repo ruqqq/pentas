@@ -183,6 +183,28 @@ test("lint accepts reversed Liquid for-loop collections", async () => {
   expect(result.diagnostics).toEqual([]);
 });
 
+test("lint accepts limit Liquid for-loop collections", async () => {
+  const path = await writeWorkflow(`
+{% for label in issue.labels limit: 2 %}{{ label }}{% endfor %}
+`);
+
+  const result = await lintWorkflow(path);
+
+  expect(result.ok).toBe(true);
+  expect(result.diagnostics).toEqual([]);
+});
+
+test("lint accepts offset Liquid for-loop collections", async () => {
+  const path = await writeWorkflow(`
+{% for label in issue.labels offset: 1 %}{{ label }}{% endfor %}
+`);
+
+  const result = await lintWorkflow(path);
+
+  expect(result.ok).toBe(true);
+  expect(result.diagnostics).toEqual([]);
+});
+
 test("lint scans imported prompt body after expansion", async () => {
   const dir = await mkdtemp(join(tmpdir(), "dalang-lint-import-"));
   await writeFile(join(dir, "preamble.md"), "{{ recent_history.summary }}");

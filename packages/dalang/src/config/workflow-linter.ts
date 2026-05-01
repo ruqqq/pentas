@@ -269,7 +269,11 @@ function directPathExpressionNode(expression: string, scopes: ScopeStack): Schem
 }
 
 function stripForLoopModifiers(expression: string): string {
-  return expression.trim().replace(/\s+reversed\s*$/, "");
+  return expression
+    .trim()
+    .replace(/\s+reversed\b/g, "")
+    .replace(/\s+offset\s*:\s*continue\b/g, " ")
+    .replace(/\s+(?:limit|offset)\s*:/g, " ");
 }
 
 function collectExpressionPaths(expression: string): string[] {
