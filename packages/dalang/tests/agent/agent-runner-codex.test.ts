@@ -51,6 +51,7 @@ test("runAttempt drives a Codex-shaped event stream end-to-end", async () => {
       provider: "codex" as const,
       sandboxMode: "workspace-write",
       approvalPolicy: "never",
+      networkAccessEnabled: false,
       model: "gpt-5.5",
       executablePath: "codex",
       turnTimeoutMs: 60000,
@@ -76,4 +77,62 @@ test("runAttempt drives a Codex-shaped event stream end-to-end", async () => {
   expect(result.tokens.total_tokens).toBe(22);
   expect(collected.some((e) => e.event === "session_started")).toBe(true);
   expect(collected.some((e) => e.event === "turn_completed")).toBe(true);
+});
+
+test("runAttempt treats Codex CLI task_complete envelope as turn completion", async () => {
+  const collected: RuntimeEvent[] = [];
+  const result = await runAttempt({
+    issue,
+    attempt: 1,
+    promptTemplate: "{{ issue.title }}",
+    workspacePath: "/tmp/workspace",
+    config: {
+      provider: "codex" as const,
+      sandboxMode: "workspace-write",
+      approvalPolicy: "never",
+      networkAccessEnabled: false,
+      model: "gpt-5.5",
+      executablePath: "codex",
+      turnTimeoutMs: 60000,
+      readTimeoutMs: 5000,
+      stallTimeoutMs: 30000,
+      maxTurns: 1,
+    },
+    controlPlane: { kind: "papan", endpoint: "http://localhost", api_key: null },
+    trackerRefresh: async () => null,
+    isActiveState: () => false,
+    runQuery: async function* () {
+      yield { type: "thread.started", thread_id: "codex-thread-2" };
+      yield {
+        type: "event_msg",
+        payload: {
+          type: "token_count",
+          info: {
+            last_token_usage: {
+              input_tokens: 20,
+              cached_input_tokens: 0,
+              output_tokens: 5,
+              reasoning_output_tokens: 2,
+            },
+          },
+        },
+      };
+      yield {
+        type: "event_msg",
+        payload: {
+          type: "task_complete",
+          last_agent_message: "done",
+        },
+      };
+    },
+    onEvent: (e) => {
+      collected.push(e);
+    },
+  });
+
+  expect(result.success).toBe(true);
+  expect(result.thread_id).toBe("codex-thread-2");
+  expect(result.tokens).toEqual({ input_tokens: 20, output_tokens: 7, total_tokens: 27 });
+  expect(collected.at(-1)?.event).toBe("turn_completed");
+  expect(collected.at(-1)?.message).toBe("done");
 });

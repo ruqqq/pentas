@@ -16,6 +16,56 @@ function notification(message: string): RuntimeEvent {
   return { event: "notification", timestamp: nowIso(), message };
 }
 
+function usageFromTokenCount(info: unknown): RuntimeEvent["usage"] | null {
+  if (info === null || typeof info !== "object") return null;
+  const last = (info as { last_token_usage?: unknown }).last_token_usage;
+  if (last === null || typeof last !== "object") return null;
+  const usage = last as Record<string, unknown>;
+  const input = typeof usage.input_tokens === "number" ? usage.input_tokens : 0;
+  const output = typeof usage.output_tokens === "number" ? usage.output_tokens : 0;
+  const reasoning =
+    typeof usage.reasoning_output_tokens === "number" ? usage.reasoning_output_tokens : 0;
+  return {
+    input_tokens: input,
+    output_tokens: output + reasoning,
+    total_tokens: input + output + reasoning,
+  };
+}
+
+function mapCodexCliEvent(raw: Record<string, unknown>): RuntimeEvent | null {
+  if (raw.type !== "event_msg") return null;
+  const payload = raw.payload;
+  if (payload === null || typeof payload !== "object") return null;
+  const p = payload as Record<string, unknown>;
+  switch (p.type) {
+    case "agent_message": {
+      const message = typeof p.message === "string" ? p.message : "";
+      return notification(truncate(message));
+    }
+    case "token_count": {
+      const evt = notification("token_count");
+      const usage = usageFromTokenCount(p.info);
+      if (usage) evt.usage = usage;
+      return evt;
+    }
+    case "task_complete": {
+      const evt: RuntimeEvent = { event: "turn_completed", timestamp: nowIso() };
+      if (typeof p.last_agent_message === "string") evt.message = truncate(p.last_agent_message);
+      return evt;
+    }
+    case "error": {
+      const evt: RuntimeEvent = { event: "turn_ended_with_error", timestamp: nowIso() };
+      if (typeof p.message === "string") evt.reason = p.message;
+      return evt;
+    }
+    case "task_started":
+    case "user_message":
+      return null;
+    default:
+      return notification(String(p.type ?? "event_msg"));
+  }
+}
+
 function mapItemStarted(item: ThreadItem): RuntimeEvent | null {
   switch (item.type) {
     case "command_execution":
@@ -54,6 +104,8 @@ function mapItemCompleted(item: ThreadItem): RuntimeEvent | null {
 // by the tests in codex-event-mapper.test.ts.
 export function mapCodexEvent(raw: unknown): RuntimeEvent | null {
   if (raw === null || raw === undefined || typeof raw !== "object") return null;
+  const cliEvent = mapCodexCliEvent(raw as Record<string, unknown>);
+  if (cliEvent) return cliEvent;
   const e = raw as ThreadEvent;
 
   switch (e.type) {

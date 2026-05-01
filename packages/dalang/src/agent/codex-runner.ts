@@ -7,13 +7,17 @@ export const codexRunQuery: RunQuery = (opts: RunQueryOptions) => {
     throw new Error("codexRunQuery requires opts.codex (provider mismatch)");
   }
 
-  const codex = new Codex({ codexPathOverride: opts.executablePath });
+  const codex = new Codex({
+    codexPathOverride: opts.executablePath,
+    ...(opts.codex.env ? { env: opts.codex.env } : {}),
+  });
 
   const threadOptions = {
     workingDirectory: opts.cwd,
     model: opts.model,
     sandboxMode: opts.codex.sandboxMode,
     approvalPolicy: opts.codex.approvalPolicy,
+    networkAccessEnabled: opts.codex.networkAccessEnabled,
   };
 
   const thread = opts.resumeSessionId

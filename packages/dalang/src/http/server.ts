@@ -2,6 +2,7 @@
 import type { OrchestratorState } from "../types";
 import { handleRequest, createRouteDeps } from "./routes";
 import { renderDashboardHtml } from "./dashboard";
+import { findRunningSession, renderSessionViewerHtml } from "./session-viewer";
 
 export interface ServerOptions {
   state: OrchestratorState;
@@ -26,6 +27,17 @@ export function startServer(opts: ServerOptions): ServerHandle {
       const url = new URL(req.url);
       if (url.pathname === "/") {
         return new Response(renderDashboardHtml(opts.state), {
+          headers: { "content-type": "text/html; charset=utf-8" },
+        });
+      }
+      const sessionMatch = url.pathname.match(/^\/sessions\/([^/]+)$/);
+      if (sessionMatch) {
+        const id = decodeURIComponent(sessionMatch[1]!);
+        const entry = findRunningSession(opts.state.running.values(), id);
+        if (!entry) {
+          return new Response("session not found", { status: 404 });
+        }
+        return new Response(await renderSessionViewerHtml(entry), {
           headers: { "content-type": "text/html; charset=utf-8" },
         });
       }

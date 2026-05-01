@@ -76,6 +76,7 @@ test("isEligible: respects per-state concurrency limit", () => {
       issue: mkIssue({ id, state: "In Progress" }),
       identifier: id,
       workspace_path: "/",
+      agent_provider: "claude",
       started_at: "",
       abort_controller: new AbortController(),
       retry_attempt: null,
