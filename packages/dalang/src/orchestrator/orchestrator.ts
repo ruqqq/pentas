@@ -302,6 +302,7 @@ export class Orchestrator {
             session_id: e.thread_id ? `${e.thread_id}-1` : "?-1",
             thread_id: e.thread_id ?? "?",
             turn_id: "1",
+            transcript_path: transcriptPath,
             claude_session_pid: null,
             last_event: e.event,
             last_event_at: e.timestamp,
@@ -330,19 +331,39 @@ export class Orchestrator {
         if (e.thread_id && entry.session.thread_id !== e.thread_id) {
           entry.session.thread_id = e.thread_id;
           entry.session.session_id = `${e.thread_id}-1`;
+          entry.session.transcript_path = transcriptPathFor(
+            entry.workspace_path,
+            e.thread_id,
+            entry.agent_provider,
+          );
           this.log.info(
             {
               issue_id: issue.id,
               identifier: issue.identifier,
               session_id: entry.session.session_id,
-              transcript_path: transcriptPathFor(
-                entry.workspace_path,
-                e.thread_id,
-                entry.agent_provider,
-              ),
+              transcript_path: entry.session.transcript_path,
             },
             "session started",
           );
+        }
+        if (!entry.session.transcript_path) {
+          const transcriptPath = transcriptPathFor(
+            entry.workspace_path,
+            entry.session.thread_id,
+            entry.agent_provider,
+          );
+          if (transcriptPath) {
+            entry.session.transcript_path = transcriptPath;
+            this.log.info(
+              {
+                issue_id: issue.id,
+                identifier: issue.identifier,
+                session_id: entry.session.session_id,
+                transcript_path: transcriptPath,
+              },
+              "session transcript available",
+            );
+          }
         }
         if (e.usage) {
           entry.session.input_tokens += e.usage.input_tokens ?? 0;

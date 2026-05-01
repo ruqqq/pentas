@@ -88,6 +88,7 @@ export interface LiveSession {
   session_id: string;
   thread_id: string;
   turn_id: string;
+  transcript_path: string | null;
   claude_session_pid: string | null;
   last_event: string | null;
   last_event_at: string | null;

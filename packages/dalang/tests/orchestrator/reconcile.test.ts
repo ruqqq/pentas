@@ -22,6 +22,7 @@ function makeRunning(
           session_id: "t-1",
           thread_id: "t",
           turn_id: "1",
+          transcript_path: null,
           claude_session_pid: null,
           last_event: "notification",
           last_event_at: lastEventAt,
