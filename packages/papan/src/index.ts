@@ -1,12 +1,11 @@
 #!/usr/bin/env bun
+import { PAPAN_HELP, parseArgs } from "./cli/args";
 import { runPapan } from "./main";
 
-const args = Bun.argv.slice(2);
-let port: number | undefined;
-let dbPath: string | undefined;
-for (let i = 0; i < args.length; i++) {
-  const a = args[i];
-  if (a === "--port") port = Number(args[++i]);
-  else if (a === "--db") dbPath = args[++i];
+const args = parseArgs(Bun.argv.slice(2));
+if (args.help) {
+  console.log(PAPAN_HELP.trimEnd());
+  process.exit(0);
 }
-runPapan({ port, dbPath });
+
+runPapan({ port: args.port, dbPath: args.dbPath });
