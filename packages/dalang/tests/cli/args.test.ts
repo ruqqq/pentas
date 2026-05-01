@@ -67,3 +67,8 @@ test("rejects unknown flag", () => {
 test("rejects --port without value", () => {
   expect(() => parseArgs(["--port"])).toThrow();
 });
+
+test("rejects empty or blank --port values", () => {
+  expect(() => parseArgs(["--port", ""])).toThrow("invalid --port value");
+  expect(() => parseArgs(["--port", "   "])).toThrow("invalid --port value");
+});

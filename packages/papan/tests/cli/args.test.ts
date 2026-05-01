@@ -58,6 +58,11 @@ test("rejects invalid --port values", () => {
   expect(() => parseArgs(["--port", "1.5"])).toThrow("invalid --port value: 1.5");
 });
 
+test("rejects empty or blank --port values", () => {
+  expect(() => parseArgs(["--port", ""])).toThrow("invalid --port value");
+  expect(() => parseArgs(["--port", "   "])).toThrow("invalid --port value");
+});
+
 test("rejects --db without value", () => {
   expect(() => parseArgs(["--db"])).toThrow("--db requires a value");
 });

@@ -25,6 +25,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     if (a === "--port") {
       const value = argv[++i];
       if (value === undefined) throw new Error("--port requires a value");
+      if (value.trim().length === 0) throw new Error("invalid --port value");
       const n = Number(value);
       if (!Number.isInteger(n) || n < 0) throw new Error(`invalid --port value: ${value}`);
       port = n;
