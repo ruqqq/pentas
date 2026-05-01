@@ -16,6 +16,7 @@ const issue: NormalizedIssue = {
   internal_ref: null,
   labels: [],
   blocked_by: [],
+  project: null,
   created_at: "2026-04-30T00:00:00Z",
   updated_at: "2026-04-30T00:00:00Z",
 };

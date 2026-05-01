@@ -5,6 +5,20 @@ import { createLogger } from "./logging/logger";
 
 const log = createLogger({ name: "dalang", level: "info" });
 const args = parseArgs(Bun.argv.slice(2));
+
+if (args.command === "lint") {
+  const { lintWorkflow } = await import("./config/workflow-linter");
+  const result = await lintWorkflow(args.workflowPath);
+  if (result.ok) {
+    console.log(`OK: ${args.workflowPath}`);
+    process.exit(0);
+  }
+  for (const diagnostic of result.diagnostics) {
+    console.error(`${diagnostic.severity}: ${diagnostic.message}`);
+  }
+  process.exit(1);
+}
+
 const boot = new Bootstrap({ workflowPath: args.workflowPath, port: args.port });
 
 const shutdown = async () => {

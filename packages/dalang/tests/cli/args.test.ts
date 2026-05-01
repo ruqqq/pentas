@@ -3,19 +3,53 @@ import { test, expect } from "bun:test";
 import { parseArgs } from "../../src/cli/args";
 
 test("default workflow path is ./WORKFLOW.md", () => {
-  expect(parseArgs([])).toEqual({ workflowPath: "./WORKFLOW.md", port: null });
+  expect(parseArgs([])).toEqual({ command: "serve", workflowPath: "./WORKFLOW.md", port: null });
 });
 
 test("positional arg sets workflowPath", () => {
-  expect(parseArgs(["custom/WF.md"])).toEqual({ workflowPath: "custom/WF.md", port: null });
+  expect(parseArgs(["custom/WF.md"])).toEqual({
+    command: "serve",
+    workflowPath: "custom/WF.md",
+    port: null,
+  });
 });
 
 test("--port overrides", () => {
-  expect(parseArgs(["--port", "8080"])).toEqual({ workflowPath: "./WORKFLOW.md", port: 8080 });
+  expect(parseArgs(["--port", "8080"])).toEqual({
+    command: "serve",
+    workflowPath: "./WORKFLOW.md",
+    port: 8080,
+  });
 });
 
 test("positional + --port together", () => {
-  expect(parseArgs(["./x.md", "--port", "0"])).toEqual({ workflowPath: "./x.md", port: 0 });
+  expect(parseArgs(["./x.md", "--port", "0"])).toEqual({
+    command: "serve",
+    workflowPath: "./x.md",
+    port: 0,
+  });
+});
+
+test("parses lint subcommand with explicit workflow path", () => {
+  expect(parseArgs(["lint", "custom/WORKFLOW.md"])).toEqual({
+    command: "lint",
+    workflowPath: "custom/WORKFLOW.md",
+    port: null,
+  });
+});
+
+test("parses lint subcommand with default workflow path", () => {
+  expect(parseArgs(["lint"])).toEqual({
+    command: "lint",
+    workflowPath: "./WORKFLOW.md",
+    port: null,
+  });
+});
+
+test("rejects --port for lint", () => {
+  expect(() => parseArgs(["lint", "--port", "3000"])).toThrow(
+    "--port is only valid for serve mode",
+  );
 });
 
 test("rejects unknown flag", () => {

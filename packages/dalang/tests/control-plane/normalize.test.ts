@@ -15,6 +15,7 @@ test("normalizeWorkItem accepts a complete work item", () => {
     internal_ref: "org/repo#12",
     labels: ["Dalang", "Bug"],
     blocked_by: [{ id: "i1", identifier: "PENTAS-1", state: "Done" }],
+    project: "Pentas",
     created_at: "2026-04-30T01:02:03.000Z",
     updated_at: "2026-04-30T02:03:04.000Z",
   });
@@ -32,9 +33,22 @@ test("normalizeWorkItem accepts a complete work item", () => {
     internal_ref: "org/repo#12",
     labels: ["dalang", "bug"],
     blocked_by: [{ id: "i1", identifier: "PENTAS-1", state: "Done" }],
+    project: "Pentas",
     created_at: "2026-04-30T01:02:03.000Z",
     updated_at: "2026-04-30T02:03:04.000Z",
   });
+});
+
+test("normalizeWorkItem defaults malformed project to null", () => {
+  const got = normalizeWorkItem({
+    id: "PVTI_1",
+    identifier: "org/repo#12",
+    title: "Fix checkout",
+    state: "In Dev",
+    project: 123,
+  });
+
+  expect(got?.project).toBeNull();
 });
 
 test("normalizeWorkItem rejects malformed required fields", () => {

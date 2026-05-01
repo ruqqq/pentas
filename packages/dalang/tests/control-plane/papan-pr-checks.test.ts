@@ -58,6 +58,7 @@ const issue: NormalizedIssue = {
   internal_ref: "tj-1",
   labels: [],
   blocked_by: [],
+  project: null,
   created_at: null,
   updated_at: null,
 };

@@ -1,14 +1,6 @@
 // packages/dalang/tests/types.test.ts
 import { test, expect } from "bun:test";
-import type {
-  NormalizedIssue,
-  RunAttempt,
-  LiveSession,
-  RetryEntry,
-  OrchestratorState,
-  WorkspaceMeta,
-  RuntimeEvent,
-} from "../src/types";
+import type { NormalizedIssue, OrchestratorState } from "../src/types";
 
 test("NormalizedIssue is constructible", () => {
   const issue: NormalizedIssue = {
@@ -24,6 +16,7 @@ test("NormalizedIssue is constructible", () => {
     internal_ref: null,
     labels: [],
     blocked_by: [],
+    project: null,
     created_at: null,
     updated_at: null,
   };

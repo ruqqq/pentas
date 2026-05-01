@@ -1,10 +1,18 @@
 // packages/dalang/src/cli/args.ts
 export interface ParsedArgs {
+  command: "serve" | "lint";
   workflowPath: string;
   port: number | null;
 }
 
 export function parseArgs(argv: string[]): ParsedArgs {
+  if (argv[0] === "lint") {
+    const rest = argv.slice(1);
+    if (rest.includes("--port")) throw new Error("--port is only valid for serve mode");
+    if (rest.length > 1) throw new Error(`unexpected positional argument: ${rest[1]}`);
+    return { command: "lint", workflowPath: rest[0] ?? "./WORKFLOW.md", port: null };
+  }
+
   let workflowPath: string | null = null;
   let port: number | null = null;
   for (let i = 0; i < argv.length; i++) {
@@ -21,5 +29,5 @@ export function parseArgs(argv: string[]): ParsedArgs {
     if (workflowPath !== null) throw new Error(`unexpected positional argument: ${a}`);
     workflowPath = a;
   }
-  return { workflowPath: workflowPath ?? "./WORKFLOW.md", port };
+  return { command: "serve", workflowPath: workflowPath ?? "./WORKFLOW.md", port };
 }
