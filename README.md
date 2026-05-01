@@ -254,7 +254,7 @@ Each state fragment under `workflow/states/` should do one job: explain the curr
 bun run packages/dalang/src/index.ts ./WORKFLOW.md --port 7474
 ```
 
-Then open <http://127.0.0.1:7474/> for the dashboard. JSON state at `/api/v1/state`. Manual reconcile via `POST /api/v1/refresh`.
+Then open <http://127.0.0.1:7474/> for the dashboard. Running sessions link to `/sessions/:id`, which renders the provider JSONL transcript with parsed events and expandable raw lines. JSON state is available at `/api/v1/state`, and parsed session JSON at `/api/v1/sessions/:id/transcript`. Manual reconcile via `POST /api/v1/refresh`.
 
 `WORKFLOW.md` is hot-reloaded — edit and save it, dalang picks up the new config (validation failures keep the last-good config).
 

@@ -13,10 +13,14 @@ export function transcriptPathFor(
   provider: "claude" | "codex" | "opencode" = "claude",
 ): string | null {
   if (!sessionId || sessionId === "?" || sessionId.startsWith("?")) return null;
-  if (provider === "opencode") return null;
+  if (provider === "opencode") return opencodeTranscriptPathFor(sessionId);
   if (provider === "codex") return codexTranscriptPathFor(sessionId);
   const slug = workspacePath.replace(/[/.]/g, "-");
   return join(homedir(), ".claude", "projects", slug, `${sessionId}.jsonl`);
+}
+
+export function opencodeTranscriptPathFor(sessionId: string): string {
+  return join(homedir(), ".dalang", "opencode-sessions", `${sessionId}.jsonl`);
 }
 
 export function codexTranscriptPathFor(

@@ -130,6 +130,18 @@ opencode:
 
 ---
 
+## Session Viewer
+
+The HTTP server includes a simple parsed JSONL session viewer for running agents:
+
+- `GET /` shows running work and links each active item to `/sessions/:id`.
+- `GET /sessions/:id` renders the transcript as a table with raw JSON expandable per line.
+- `GET /api/v1/sessions/:id/transcript?max_lines=1000` returns the parsed transcript JSON.
+
+`:id` can be the issue id, issue identifier, session id, or provider thread id. Claude and Codex use their native transcript JSONL paths. opencode events are captured by dalang under `~/.dalang/opencode-sessions/<session_id>.jsonl`.
+
+---
+
 ## Common gotchas
 
 **I changed `agent_provider` and nothing happened.**
