@@ -203,6 +203,12 @@ test("lint accepts whitespace-controlled Liquid for-loop scopes", () => {
   expect(diagnostics).toEqual([]);
 });
 
+test("lint accepts Liquid range for-loop scopes", () => {
+  const diagnostics = lintLiquidTemplate("{% for i in (1..3) %}{{ i }}{% endfor %}");
+
+  expect(diagnostics).toEqual([]);
+});
+
 test("lint accepts quoted pipe characters inside filter arguments", async () => {
   const path = await writeWorkflow(`
 {{ issue.title | default: "foo|bar" }}

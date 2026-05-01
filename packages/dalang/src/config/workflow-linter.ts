@@ -189,6 +189,10 @@ function lintLiquidVariables(
       const variable = forMatch[1]!;
       const collectionExpression = stripForLoopModifiers(forMatch[2]!);
       lintExpressionPaths(collectionExpression, scopes, diagnostics, seen);
+      if (isLiquidRangeExpression(collectionExpression)) {
+        scopes.push(new Map([[variable, true]]));
+        continue;
+      }
       const collection = firstExpressionPath(collectionExpression);
       const collectionNode = collection ? resolvePath(collection, scopes) : null;
       const itemNode =
@@ -274,6 +278,10 @@ function stripForLoopModifiers(expression: string): string {
     .replace(/\s+reversed\b/g, "")
     .replace(/\s+offset\s*:\s*continue\b/g, " ")
     .replace(/\s+(?:limit|offset)\s*:/g, " ");
+}
+
+function isLiquidRangeExpression(expression: string): boolean {
+  return /^\(\s*[^()]+\s*\.\.\s*[^()]+\s*\)$/.test(expression.trim());
 }
 
 function collectExpressionPaths(expression: string): string[] {
