@@ -12,5 +12,6 @@ Use repo and installed skills deliberately as part of the workflow:
 - Use `interactive-pr-review` only when the goal is to stage review comments for a PR without directly submitting them.
 - Use `linear-cli` only when the issue references a Linear ticket and project state needs to stay aligned.
 - Use `ruqqq-voice` for PR descriptions, review comments, and project comments that should read like ruqqq.
+- Use `superpowers:systematic-debugging` for persistent Papan QA failures before proposing a fix, and use `superpowers:test-driven-development` when adding missing Playwright coverage in `In QA`.
 
 If a skill is relevant, open its `SKILL.md` first and follow its workflow. If a skill is missing or blocked in the runtime environment, continue with the closest local workflow and mention the gap in the project comment.

@@ -19,10 +19,12 @@ export const DEFAULT_STATUSES: readonly ProjectStatus[] = [
   { name: "Ready for Dev", position: 3, kind: "dispatchable" },
   { name: "In Dev", position: 4, kind: "dispatchable" },
   { name: "Ready for Review", position: 5, kind: "dispatchable" },
-  { name: "Waiting PR Checks", position: 6, kind: "waiting" },
-  { name: "Ready for Human Review", position: 7, kind: "waiting" },
-  { name: "Done", position: 8, kind: "terminal" },
-  { name: "Cancelled", position: 9, kind: "terminal" },
+  { name: "Ready for QA", position: 6, kind: "dispatchable" },
+  { name: "In QA", position: 7, kind: "dispatchable" },
+  { name: "Waiting PR Checks", position: 8, kind: "waiting" },
+  { name: "Ready for Human Review", position: 9, kind: "waiting" },
+  { name: "Done", position: 10, kind: "terminal" },
+  { name: "Cancelled", position: 11, kind: "terminal" },
 ];
 
 export function isDispatchable(s: ProjectStatus): boolean {

@@ -17,6 +17,8 @@ The `Status` field needs these options:
 - `Ready for Dev`: approved plan, ready for implementation.
 - `In Dev`: implementation is in progress.
 - `Ready for Review`: implementation is complete and should be reviewed by an agent before handoff.
+- `Ready for QA`: automated review passed and Papan-changing work is waiting for browser QA.
+- `In QA`: Papan browser QA is in progress.
 - `Waiting PR Checks`: PR exists and dalang is reconciling CI.
 - `Ready for Human Review`: CI passed or automated review has escalated to a human.
 - `Blocked`: waiting on external input; not dispatched.

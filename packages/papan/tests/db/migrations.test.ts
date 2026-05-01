@@ -66,4 +66,74 @@ describe("runMigrations", () => {
     expect(project?.slug).toBe("default");
     expect(issue?.project_id).toBe("default");
   });
+
+  test("backfills missing QA statuses into existing project status rows", () => {
+    const db = new Database(":memory:");
+    db.exec(`
+      CREATE TABLE projects (
+        id          TEXT PRIMARY KEY,
+        slug        TEXT NOT NULL UNIQUE,
+        name        TEXT NOT NULL,
+        description TEXT,
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT NOT NULL
+      );
+      CREATE TABLE project_statuses (
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        name       TEXT NOT NULL,
+        position   INTEGER NOT NULL,
+        kind       TEXT NOT NULL CHECK (kind IN ('dispatchable','waiting','terminal')),
+        PRIMARY KEY (project_id, name)
+      );
+      INSERT INTO projects
+        (id, slug, name, description, created_at, updated_at)
+      VALUES
+        ('default', 'default', 'Default', NULL,
+         '1970-01-01T00:00:00.000Z', '1970-01-01T00:00:00.000Z');
+      INSERT INTO project_statuses (project_id, name, position, kind)
+      VALUES
+        ('default', 'Todo', 0, 'dispatchable'),
+        ('default', 'Plan', 1, 'dispatchable'),
+        ('default', 'Review Plan', 2, 'dispatchable'),
+        ('default', 'Ready for Dev', 3, 'dispatchable'),
+        ('default', 'In Dev', 4, 'dispatchable'),
+        ('default', 'Ready for Review', 5, 'dispatchable'),
+        ('default', 'Waiting PR Checks', 6, 'waiting'),
+        ('default', 'Ready for Human Review', 7, 'waiting'),
+        ('default', 'Done', 8, 'terminal'),
+        ('default', 'Cancelled', 9, 'terminal');
+    `);
+
+    runMigrations(db);
+
+    const statuses = db
+      .query<{ name: string; position: number; kind: string }, []>(
+        "SELECT name, position, kind FROM project_statuses WHERE project_id = 'default' ORDER BY position",
+      )
+      .all();
+    expect(statuses.map((s) => s.name)).toEqual([
+      "Todo",
+      "Plan",
+      "Review Plan",
+      "Ready for Dev",
+      "In Dev",
+      "Ready for Review",
+      "Waiting PR Checks",
+      "Ready for Human Review",
+      "Done",
+      "Cancelled",
+      "Ready for QA",
+      "In QA",
+    ]);
+    expect(statuses.at(-2)).toEqual({
+      name: "Ready for QA",
+      position: 10,
+      kind: "dispatchable",
+    });
+    expect(statuses.at(-1)).toEqual({
+      name: "In QA",
+      position: 11,
+      kind: "dispatchable",
+    });
+  });
 });

@@ -170,13 +170,16 @@ export function deleteStatus(db: Database, projectId: string, name: string): voi
 
 export function seedDefaultStatuses(db: Database, projectId: string): void {
   const existing = listStatuses(db, projectId);
-  if (existing.length > 0) return;
+  const existingNames = new Set(existing.map((s) => s.name));
+  const missing = DEFAULT_STATUSES.filter((s) => !existingNames.has(s.name));
+  if (missing.length === 0) return;
+  const startPosition = existing.reduce((max, s) => Math.max(max, s.position), -1) + 1;
   const tx = db.transaction(() => {
-    for (const s of DEFAULT_STATUSES) {
+    missing.forEach((s, i) => {
       db.query(
         "INSERT INTO project_statuses (project_id, name, position, kind) VALUES (?, ?, ?, ?)",
-      ).run(projectId, s.name, s.position, s.kind);
-    }
+      ).run(projectId, s.name, startPosition + i, s.kind);
+    });
   });
   tx();
 }

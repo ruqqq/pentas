@@ -20,7 +20,7 @@ describe("project status defaults", () => {
     expect(isStatusKind("garbage")).toBe(false);
   });
 
-  test("DEFAULT_STATUSES preserves the legacy 10-state ordering", () => {
+  test("DEFAULT_STATUSES preserves the workflow state ordering", () => {
     expect(DEFAULT_STATUSES.map((s) => s.name)).toEqual([
       "Todo",
       "Plan",
@@ -28,6 +28,8 @@ describe("project status defaults", () => {
       "Ready for Dev",
       "In Dev",
       "Ready for Review",
+      "Ready for QA",
+      "In QA",
       "Waiting PR Checks",
       "Ready for Human Review",
       "Done",
@@ -41,6 +43,8 @@ describe("project status defaults", () => {
     expect(byName.get("Todo")).toBe("dispatchable");
     expect(byName.get("In Dev")).toBe("dispatchable");
     expect(byName.get("Ready for Review")).toBe("dispatchable");
+    expect(byName.get("Ready for QA")).toBe("dispatchable");
+    expect(byName.get("In QA")).toBe("dispatchable");
     expect(byName.get("Waiting PR Checks")).toBe("waiting");
     expect(byName.get("Ready for Human Review")).toBe("waiting");
     expect(byName.get("Done")).toBe("terminal");

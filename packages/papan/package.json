@@ -12,11 +12,15 @@
   "scripts": {
     "start": "bun run src/index.ts",
     "test": "bun test",
+    "test:e2e": "playwright test --config playwright.config.ts",
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
     "isomorphic-dompurify": "^2.0.0",
     "marked": "^14.0.0",
     "urlpattern-polyfill": "^10.1.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0"
   }
 }

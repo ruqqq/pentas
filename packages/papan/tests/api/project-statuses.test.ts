@@ -36,7 +36,7 @@ describe("project-statuses routes", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { statuses: ProjectStatus[] };
     expect(body.statuses.map((s) => s.name)).toContain("Todo");
-    expect(body.statuses).toHaveLength(10);
+    expect(body.statuses).toHaveLength(12);
     server.stop();
   });
 

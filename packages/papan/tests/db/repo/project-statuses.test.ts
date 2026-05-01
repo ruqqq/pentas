@@ -26,7 +26,7 @@ function freshDb(): Database {
 }
 
 describe("project-statuses repo", () => {
-  test("default project is seeded with the legacy 10 statuses on migration", () => {
+  test("default project is seeded with the workflow statuses on migration", () => {
     const db = freshDb();
     const statuses = listStatuses(db, "default");
     expect(statuses.map((s) => s.name)).toEqual([
@@ -36,33 +36,36 @@ describe("project-statuses repo", () => {
       "Ready for Dev",
       "In Dev",
       "Ready for Review",
+      "Ready for QA",
+      "In QA",
       "Waiting PR Checks",
       "Ready for Human Review",
       "Done",
       "Cancelled",
     ]);
     expect(statuses[0]?.kind).toBe("dispatchable");
-    expect(statuses[6]?.kind).toBe("waiting");
-    expect(statuses[8]?.kind).toBe("terminal");
+    expect(statuses[6]?.kind).toBe("dispatchable");
+    expect(statuses[8]?.kind).toBe("waiting");
+    expect(statuses[10]?.kind).toBe("terminal");
   });
 
   test("createProject seeds the default statuses for the new project", () => {
     const db = freshDb();
     const p = createProject(db, { slug: "alpha", name: "Alpha" });
-    expect(listStatuses(db, p.id)).toHaveLength(10);
+    expect(listStatuses(db, p.id)).toHaveLength(12);
   });
 
   test("seedDefaultStatuses is idempotent", () => {
     const db = freshDb();
     seedDefaultStatuses(db, "default");
-    expect(listStatuses(db, "default")).toHaveLength(10);
+    expect(listStatuses(db, "default")).toHaveLength(12);
   });
 
   test("addStatus appends with auto-position; rejects duplicates", () => {
     const db = freshDb();
     const p = createProject(db, { slug: "alpha", name: "Alpha" });
     const s = addStatus(db, p.id, { name: "Custom", kind: "waiting" });
-    expect(s.position).toBe(10);
+    expect(s.position).toBe(12);
     expect(s.kind).toBe("waiting");
     expect(() => addStatus(db, p.id, { name: "Custom", kind: "waiting" })).toThrow(
       StatusExistsError,

@@ -168,6 +168,8 @@ const DEFAULT_ACTIVE_STATES = [
   "Ready for Dev",
   "In Dev",
   "Ready for Review",
+  "Ready for QA",
+  "In QA",
 ];
 
 const DEFAULT_TERMINAL_STATES = ["Done", "Cancelled"];
