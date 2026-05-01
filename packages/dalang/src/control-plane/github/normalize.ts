@@ -123,6 +123,7 @@ export function githubProjectItemToWorkItem(
   const externalRef = `${cfg.repository}#${c.number}`;
   const issueUpdated = typeof c.updatedAt === "string" ? c.updatedAt : null;
   const itemUpdated = typeof i.updatedAt === "string" ? i.updatedAt : null;
+  const project = typeof i.project === "string" ? i.project : null;
   return {
     id: i.id,
     identifier: `${cfg.repository}#${c.number}`,
@@ -137,6 +138,7 @@ export function githubProjectItemToWorkItem(
     internal_ref: c.id,
     labels: lowerNames(c.labels),
     blocked_by: [],
+    project,
     created_at: typeof c.createdAt === "string" ? new Date(c.createdAt).toISOString() : null,
     updated_at:
       [issueUpdated, itemUpdated]

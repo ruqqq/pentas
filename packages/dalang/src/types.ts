@@ -19,6 +19,7 @@ export interface WorkItem {
   internal_ref: string | null;
   labels: string[];
   blocked_by: BlockerRef[];
+  project: string | null;
   created_at: string | null;
   updated_at: string | null;
 }

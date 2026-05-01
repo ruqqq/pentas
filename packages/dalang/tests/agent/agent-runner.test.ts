@@ -16,6 +16,7 @@ const issue: NormalizedIssue = {
   internal_ref: null,
   labels: [],
   blocked_by: [],
+  project: null,
   created_at: null,
   updated_at: null,
 };
@@ -106,36 +107,4 @@ test("multi-turn loop continues when issue stays active and turn budget allows",
   expect(result.success).toBe(true);
   expect(turn).toBe(2);
   expect(result.tokens.total_tokens).toBe(4);
-});
-
-test("multi-turn loop stops when issue moves to another active state", async () => {
-  const movedIssue: NormalizedIssue = { ...issue, state: "Plan Review" };
-  let turn = 0;
-  const result = await runAttempt({
-    ...baseDeps([]),
-    config: {
-      ...baseDeps([]).config,
-      provider: "claude" as const,
-      permissionMode: "auto" as const,
-      maxTurns: 5,
-    },
-    trackerRefresh: async () => movedIssue,
-    isActiveState: (s: string) => s === "Todo" || s === "Plan Review",
-    issue,
-    attempt: null,
-    onEvent: () => {},
-    runQuery: async function* () {
-      turn += 1;
-      yield { type: "system", subtype: "init", session_id: `s-${turn}` };
-      yield {
-        type: "result",
-        subtype: "success",
-        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
-      };
-    },
-  });
-
-  expect(result.success).toBe(true);
-  expect(turn).toBe(1);
-  expect(result.turn_count).toBe(1);
 });

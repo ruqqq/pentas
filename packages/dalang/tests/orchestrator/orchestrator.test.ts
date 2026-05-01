@@ -31,6 +31,7 @@ const issue = (id: string, state = "Todo"): NormalizedIssue => ({
   internal_ref: null,
   labels: [],
   blocked_by: [],
+  project: null,
   created_at: "2026-01-01",
   updated_at: null,
 });
@@ -267,6 +268,7 @@ test("tick runs pr_checks reconciler when enabled, bouncing red checks to In Dev
     internal_ref: null,
     labels: [],
     blocked_by: [],
+    project: null,
     created_at: "2026-01-01",
     updated_at: null,
   };

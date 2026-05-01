@@ -16,6 +16,7 @@ function work(state = "Waiting PR Checks"): WorkItem {
     internal_ref: "acme/app#12",
     labels: [],
     blocked_by: [],
+    project: null,
     created_at: null,
     updated_at: null,
   };

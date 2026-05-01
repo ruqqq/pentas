@@ -18,6 +18,7 @@ function mkIssue(p: Partial<NormalizedIssue>): NormalizedIssue {
     internal_ref: null,
     labels: [],
     blocked_by: p.blocked_by ?? [],
+    project: p.project ?? null,
     created_at: p.created_at ?? null,
     updated_at: null,
   };
@@ -52,6 +53,7 @@ test("isEligible: Todo with non-terminal blocker not eligible", () => {
   const issue = mkIssue({
     state: "Todo",
     blocked_by: [{ id: "x", identifier: "X-9", state: "In Progress" }],
+    project: null,
   });
   expect(isEligible(issue, s, { active: ["Todo"], terminal: ["Done"], byState: {} })).toBe(false);
 });
@@ -61,6 +63,7 @@ test("isEligible: Todo with all-terminal blockers eligible", () => {
   const issue = mkIssue({
     state: "Todo",
     blocked_by: [{ id: "x", identifier: "X-9", state: "Done" }],
+    project: null,
   });
   expect(isEligible(issue, s, { active: ["Todo"], terminal: ["Done"], byState: {} })).toBe(true);
 });

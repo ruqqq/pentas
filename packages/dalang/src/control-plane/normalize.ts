@@ -58,6 +58,7 @@ export function normalizeWorkItem(raw: unknown): WorkItem | null {
     internal_ref: isString(r.internal_ref) ? r.internal_ref : null,
     labels: coerceLabels(r.labels),
     blocked_by: coerceBlockers(r.blocked_by),
+    project: isString(r.project) ? r.project : null,
     created_at: coerceTimestamp(r.created_at),
     updated_at: coerceTimestamp(r.updated_at),
   };

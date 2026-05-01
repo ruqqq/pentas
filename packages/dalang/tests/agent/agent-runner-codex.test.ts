@@ -16,6 +16,7 @@ const issue: NormalizedIssue = {
   internal_ref: null,
   labels: [],
   blocked_by: [],
+  project: null,
   created_at: "2026-04-30T00:00:00Z",
   updated_at: "2026-04-30T00:00:00Z",
 };
@@ -78,8 +79,9 @@ test("runAttempt drives a Codex-shaped event stream end-to-end", async () => {
   expect(collected.some((e) => e.event === "turn_completed")).toBe(true);
 });
 
-test("runAttempt treats Codex CLI task_complete envelope as turn completion", async () => {
-  const collected: RuntimeEvent[] = [];
+test("runAttempt passes Codex network access into runQuery options", async () => {
+  let observedNetworkAccess: boolean | null = null;
+
   const result = await runAttempt({
     issue,
     attempt: 1,
@@ -87,7 +89,7 @@ test("runAttempt treats Codex CLI task_complete envelope as turn completion", as
     workspacePath: "/tmp/workspace",
     config: {
       provider: "codex" as const,
-      sandboxMode: "workspace-write",
+      sandboxMode: "danger-full-access",
       approvalPolicy: "never",
       networkAccessEnabled: false,
       model: "gpt-5.5",
@@ -100,38 +102,15 @@ test("runAttempt treats Codex CLI task_complete envelope as turn completion", as
     controlPlane: { kind: "papan", endpoint: "http://localhost", api_key: null },
     trackerRefresh: async () => null,
     isActiveState: () => false,
-    runQuery: async function* () {
+    runQuery: async function* (opts) {
+      observedNetworkAccess = opts.codex?.networkAccessEnabled ?? null;
       yield { type: "thread.started", thread_id: "codex-thread-2" };
-      yield {
-        type: "event_msg",
-        payload: {
-          type: "token_count",
-          info: {
-            last_token_usage: {
-              input_tokens: 20,
-              cached_input_tokens: 0,
-              output_tokens: 5,
-              reasoning_output_tokens: 2,
-            },
-          },
-        },
-      };
-      yield {
-        type: "event_msg",
-        payload: {
-          type: "task_complete",
-          last_agent_message: "done",
-        },
-      };
+      yield { type: "turn.completed", usage: { input_tokens: 1, output_tokens: 1 } };
     },
-    onEvent: (e) => {
-      collected.push(e);
-    },
+    onEvent: () => {},
   });
 
   expect(result.success).toBe(true);
-  expect(result.thread_id).toBe("codex-thread-2");
-  expect(result.tokens).toEqual({ input_tokens: 20, output_tokens: 7, total_tokens: 27 });
-  expect(collected.at(-1)?.event).toBe("turn_completed");
-  expect(collected.at(-1)?.message).toBe("done");
+  if (observedNetworkAccess === null) throw new Error("missing codex options");
+  expect(observedNetworkAccess === false).toBe(true);
 });

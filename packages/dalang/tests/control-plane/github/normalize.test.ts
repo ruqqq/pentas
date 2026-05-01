@@ -7,6 +7,7 @@ import {
 
 const item = {
   id: "PVTI_1",
+  project: "Pentas",
   updatedAt: "2026-04-30T02:00:00Z",
   fieldValues: {
     nodes: [
@@ -58,7 +59,19 @@ test("githubProjectItemToWorkItem maps issue project item", () => {
     url: "https://github.com/acme/app/issues/12",
     external_ref: "acme/app#12",
     labels: ["dalang", "bug"],
+    project: "Pentas",
   });
+});
+
+test("githubProjectItemToWorkItem defaults missing project metadata to null", () => {
+  const { project: _project, ...withoutProject } = item;
+  const got = githubProjectItemToWorkItem(withoutProject, {
+    repository: "acme/app",
+    statusField: "Status",
+    branchField: "Branch",
+  });
+
+  expect(got?.project).toBeNull();
 });
 
 test("githubProjectItemToWorkItem ignores draft issues and pull requests", () => {
