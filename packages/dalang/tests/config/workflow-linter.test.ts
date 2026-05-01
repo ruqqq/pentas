@@ -162,6 +162,32 @@ test("lint rejects unknown Liquid references inside case tags", async () => {
   );
 });
 
+test("lint rejects unknown Liquid references inside when tags", async () => {
+  const path = await writeWorkflow(`
+{% case issue.state %}
+{% when issue.not_a_field %}x
+{% endcase %}
+`);
+
+  const result = await lintWorkflow(path);
+
+  expect(result.ok).toBe(false);
+  expect(result.diagnostics.map((d) => d.message)).toContain(
+    "Unknown Liquid variable path `issue.not_a_field`",
+  );
+});
+
+test("lint accepts quoted pipe characters inside filter arguments", async () => {
+  const path = await writeWorkflow(`
+{{ issue.title | default: "foo|bar" }}
+`);
+
+  const result = await lintWorkflow(path);
+
+  expect(result.ok).toBe(true);
+  expect(result.diagnostics).toEqual([]);
+});
+
 test("lint rejects loop variables used outside their for block", async () => {
   const path = await writeWorkflow(`
 {% for comment in recent_comments %}{{ comment.author }}{% endfor %}

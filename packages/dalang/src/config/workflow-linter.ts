@@ -234,7 +234,7 @@ function lintLiquidVariables(
       continue;
     }
 
-    const conditionalMatch = tag.match(/^(?:if|elsif|unless|case)\s+([\s\S]+)$/);
+    const conditionalMatch = tag.match(/^(?:if|elsif|unless|case|when)\s+([\s\S]+)$/);
     if (conditionalMatch) lintExpressionPaths(conditionalMatch[1]!, scopes, diagnostics, seen);
   }
 }
@@ -259,11 +259,11 @@ function lintExpressionPaths(
 }
 
 function firstExpressionPath(expression: string): string | null {
-  return collectPathCandidates((expression.split("|")[0] ?? expression).trim())[0] ?? null;
+  return collectPathCandidates((splitLiquidPipeline(expression)[0] ?? expression).trim())[0] ?? null;
 }
 
 function directPathExpressionNode(expression: string, scopes: ScopeStack): SchemaNode | null {
-  const expressionHead = (expression.split("|")[0] ?? "").trim();
+  const expressionHead = (splitLiquidPipeline(expression)[0] ?? "").trim();
   if (!/^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*$/.test(normalizePath(expressionHead))) return null;
   return resolvePath(expressionHead, scopes);
 }
@@ -278,7 +278,7 @@ function stripForLoopModifiers(expression: string): string {
 
 function collectExpressionPaths(expression: string): string[] {
   const out = new Set<string>();
-  const segments = expression.split("|");
+  const segments = splitLiquidPipeline(expression);
   collectPathCandidates(segments[0] ?? "").forEach((path) => out.add(path));
   for (const segment of segments.slice(1)) {
     const args = segment.replace(/^\s*[A-Za-z_]\w*\s*:?\s*/, "");
@@ -299,16 +299,48 @@ function collectPathCandidates(expression: string): string[] {
 
 function collectFilters(template: string): string[] {
   const out = new Set<string>();
-  const expressionPattern = /{{\s*([\s\S]*?)\s*}}|{%\s*(?:assign\s+[A-Za-z_]\w*\s*=\s*|for\s+[A-Za-z_]\w*\s+in\s+|if\s+|elsif\s+|unless\s+|case\s+)([\s\S]*?)\s*%}/g;
+  const expressionPattern = /{{\s*([\s\S]*?)\s*}}|{%\s*(?:assign\s+[A-Za-z_]\w*\s*=\s*|for\s+[A-Za-z_]\w*\s+in\s+|if\s+|elsif\s+|unless\s+|case\s+|when\s+)([\s\S]*?)\s*%}/g;
   for (const match of template.matchAll(expressionPattern)) {
     const expression = match[1] ?? match[2] ?? "";
-    const parts = expression.split("|").slice(1);
+    const parts = splitLiquidPipeline(expression).slice(1);
     for (const part of parts) {
       const filter = part.trim().match(/^([A-Za-z_]\w*)/)?.[1];
       if (filter) out.add(filter);
     }
   }
   return [...out];
+}
+
+function splitLiquidPipeline(expression: string): string[] {
+  const parts: string[] = [];
+  let current = "";
+  let quote: '"' | "'" | null = null;
+
+  for (let i = 0; i < expression.length; i++) {
+    const char = expression[i]!;
+    if (quote) {
+      current += char;
+      if (char === quote && expression[i - 1] !== "\\") quote = null;
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      quote = char;
+      current += char;
+      continue;
+    }
+
+    if (char === "|") {
+      parts.push(current);
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  parts.push(current);
+  return parts;
 }
 
 function resolvePath(path: string, scopes: ScopeStack): SchemaNode | null {
