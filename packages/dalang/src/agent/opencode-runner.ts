@@ -1,9 +1,6 @@
 // packages/dalang/src/agent/opencode-runner.ts
-import { appendFileSync, mkdirSync } from "node:fs";
-import { dirname } from "node:path";
 import type { RunQuery, RunQueryOptions } from "./agent-runner";
 import { getOpencodeClient, subscribeSession, unsubscribeSession } from "./opencode-server";
-import { opencodeTranscriptPathFor } from "./transcript";
 
 interface OpencodeClient {
   event(): Promise<unknown>;
@@ -92,7 +89,6 @@ export const opencodeRunQuery: RunQuery = (opts: RunQueryOptions) => {
       });
 
       for await (const evt of sub) {
-        appendOpencodeTranscript(sessionId, evt);
         yield evt;
       }
     } finally {
@@ -103,13 +99,3 @@ export const opencodeRunQuery: RunQuery = (opts: RunQueryOptions) => {
 
   return iterate();
 };
-
-function appendOpencodeTranscript(sessionId: string, event: unknown): void {
-  const path = opencodeTranscriptPathFor(sessionId);
-  try {
-    mkdirSync(dirname(path), { recursive: true });
-    appendFileSync(path, `${JSON.stringify(event)}\n`);
-  } catch {
-    // Transcript capture is best-effort; agent execution must continue.
-  }
-}

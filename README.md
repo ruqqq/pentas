@@ -201,10 +201,6 @@ gh project field-list 1 --owner ruqqq --format json
 
 Every issue that dalang should pick up must be added to the project, have `Agent = dalang`, and be in one of the configured active `Status` values. `Blocked`, `Inbox`, `Waiting PR Checks`, `Ready for Human Review`, and terminal states are intentionally not directly dispatched by the normal poll loop.
 
-When an agent moves an item from one active `Status` to another, dalang ends the current provider session. The next poll dispatches a fresh session for the new column, so the agent receives the full state-specific workflow prompt instead of a generic continuation prompt.
-
-Agent-authored GitHub comments must start with `[AGENT MESSAGE]` on the first line. This keeps automation comments identifiable even when GitHub attributes them to the user token that dalang is running with.
-
 #### Codex agent provider
 
 For Codex-driven runs, use:
@@ -214,19 +210,16 @@ agent_provider: codex
 codex:
   executable_path: codex
   model: gpt-5.5
-  sandbox_mode: danger-full-access
+  sandbox_mode: workspace-write
   approval_policy: never
-  network_access_enabled: true
   turn_timeout_ms: 3600000
   read_timeout_ms: 5000
   stall_timeout_ms: 300000
 ```
 
-`approval_policy: never` is the headless setting. Interactive approval prompts would deadlock an unattended dalang worker. Use `sandbox_mode: danger-full-access` for workflows where the agent must stage, commit, or push; Codex `workspace-write` can edit files, but its sandbox mounts `.git` read-only. `network_access_enabled` defaults to `true` for Codex so GitHub handoff commands can comment, push, and update Project fields.
+`approval_policy: never` is the headless setting. Interactive approval prompts would deadlock an unattended dalang worker.
 
 #### Workflow prompt and agent skills
-
-Repo-local generic agents skills live under `.agents/skills/`. The `init-workflow-md` skill there scaffolds dalang-compatible `WORKFLOW.md` files with current control-plane, provider, and PR-checks settings.
 
 For anything beyond a prototype, keep the root `WORKFLOW.md` small and import prompt fragments from `workflow/`:
 
@@ -256,7 +249,7 @@ Each state fragment under `workflow/states/` should do one job: explain the curr
 bun run packages/dalang/src/index.ts ./WORKFLOW.md --port 7474
 ```
 
-Then open <http://127.0.0.1:7474/> for the dashboard. Running sessions link to `/sessions/:id`, which renders the provider JSONL transcript with parsed events and expandable raw lines. JSON state is available at `/api/v1/state`, and parsed session JSON at `/api/v1/sessions/:id/transcript`. Manual reconcile via `POST /api/v1/refresh`.
+Then open <http://127.0.0.1:7474/> for the dashboard. JSON state at `/api/v1/state`. Manual reconcile via `POST /api/v1/refresh`.
 
 `WORKFLOW.md` is hot-reloaded — edit and save it, dalang picks up the new config (validation failures keep the last-good config).
 

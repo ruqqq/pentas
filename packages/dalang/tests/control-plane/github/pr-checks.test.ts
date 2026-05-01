@@ -113,45 +113,6 @@ test("passed checks still move state when markReady fails", async () => {
   expect(comments[0]!.body).toContain("[pr_checks_passed] sha=abc123");
 });
 
-test("no checks built still moves to pass state", async () => {
-  const comments: ControlPlaneComment[] = [];
-  const states: string[] = [];
-  let ready = false;
-
-  await reconcileGithubPrChecks({
-    work: [work()],
-    polls: new Map(),
-    config,
-    now: () => new Date("2026-04-30T00:00:00Z"),
-    listComments: async () => comments,
-    addComment: async (_id, body) => {
-      comments.push({
-        id: String(comments.length + 1),
-        author: "agent",
-        body,
-        created_at: new Date().toISOString(),
-      });
-    },
-    updateState: async (_id, state) => {
-      states.push(state);
-    },
-    resolvePullRequest: async () => ({
-      number: 9,
-      url: "https://github.com/acme/app/pull/9",
-      sha: "abc123",
-    }),
-    fetchChecks: async () => [],
-    rerunFailedChecks: async () => 0,
-    markReady: async () => {
-      ready = true;
-    },
-  });
-
-  expect(states).toEqual(["Ready for Human Review"]);
-  expect(comments[0]!.body).toContain("[pr_checks_passed] sha=abc123");
-  expect(ready).toBe(true);
-});
-
 test("failed checks bounce until failure budget then escalate", async () => {
   const comments: ControlPlaneComment[] = [
     {

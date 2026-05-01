@@ -28,8 +28,6 @@ export interface CodexAgentConfig extends CommonAgentConfig {
   provider: "codex";
   sandboxMode: "read-only" | "workspace-write" | "danger-full-access";
   approvalPolicy: "untrusted" | "on-failure" | "on-request" | "never";
-  networkAccessEnabled: boolean;
-  env?: Record<string, string>;
 }
 
 export interface OpencodeAgentConfig extends CommonAgentConfig {
@@ -57,8 +55,6 @@ export type CodexRunQueryOptions = CommonRunQueryOptions & {
   codex: {
     sandboxMode: CodexAgentConfig["sandboxMode"];
     approvalPolicy: CodexAgentConfig["approvalPolicy"];
-    networkAccessEnabled: boolean;
-    env?: Record<string, string>;
   };
   claude?: never;
   opencode?: never;
@@ -151,10 +147,8 @@ export async function runAttempt(deps: RunAttemptDeps): Promise<RunAttemptResult
 
     const refreshed = await deps.trackerRefresh(issue.id).catch(() => null);
     if (!refreshed) break;
-    const previousState = issue.state;
     issue = refreshed;
     if (!deps.isActiveState(issue.state)) break;
-    if (issue.state !== previousState) break;
     if (turnCount >= deps.config.maxTurns) break;
   }
 
@@ -205,8 +199,6 @@ async function driveOneTurn(opts: DriveOneTurnOptions): Promise<DriveOneTurnResu
               codex: {
                 sandboxMode: opts.config.sandboxMode,
                 approvalPolicy: opts.config.approvalPolicy,
-                networkAccessEnabled: opts.config.networkAccessEnabled,
-                ...(opts.config.env ? { env: opts.config.env } : {}),
               },
             }
           : { ...baseOpts, opencode: {} };
@@ -224,7 +216,7 @@ async function driveOneTurn(opts: DriveOneTurnOptions): Promise<DriveOneTurnResu
             : mapSdkMessage(raw);
       if (!evt) continue;
       if (evt.event === "session_started" && evt.thread_id) threadId = evt.thread_id;
-      if (evt.usage) {
+      if (evt.event === "turn_completed" && evt.usage) {
         tokens.input_tokens += evt.usage.input_tokens ?? 0;
         tokens.output_tokens += evt.usage.output_tokens ?? 0;
         tokens.total_tokens += evt.usage.total_tokens ?? 0;

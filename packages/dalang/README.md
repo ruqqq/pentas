@@ -64,9 +64,8 @@ agent_provider: codex
 codex:
   executable_path: codex
   model: gpt-5.5
-  sandbox_mode: danger-full-access # "read-only" | "workspace-write" | "danger-full-access"
+  sandbox_mode: workspace-write # "read-only" | "workspace-write" | "danger-full-access"
   approval_policy: never # "untrusted" | "on-failure" | "on-request" | "never"
-  network_access_enabled: true
   turn_timeout_ms: 3600000
   read_timeout_ms: 5000
   stall_timeout_ms: 300000
@@ -78,9 +77,8 @@ codex:
 | ------------------ | ------------------- | -------------------------------------------------------------------- |
 | `executable_path`  | `"codex"`           | Path or name of the `codex` binary.                                  |
 | `model`            | `"gpt-5.5"`         | Codex model to use.                                                  |
-| `sandbox_mode`     | `"workspace-write"` | File system access granted to the agent. Use `"danger-full-access"` when Codex workers must stage, commit, or push because `workspace-write` can mount `.git` read-only. |
+| `sandbox_mode`     | `"workspace-write"` | File system access granted to the agent.                             |
 | `approval_policy`  | `"never"`           | `"never"` is the recommended headless value; `"ask"` would deadlock. |
-| `network_access_enabled` | `true`       | Allows Codex runs to perform GitHub handoff commands.                 |
 | `turn_timeout_ms`  | `3600000`           | Max time for a single agent turn.                                    |
 | `read_timeout_ms`  | `5000`              | Max silence before declaring a stall.                                |
 | `stall_timeout_ms` | `300000`            | Max total stall time before aborting.                                |
@@ -127,18 +125,6 @@ opencode:
 - dalang spawns one shared opencode HTTP server at daemon startup. All opencode workers route through it. The server is shut down when dalang exits.
 - Permissions for `edit`, `bash`, `webfetch`, and `doom_loop` are hardcoded to `allow`. These are not configurable. dalang is headless — `ask` would deadlock, and there is no v1 use case for `deny`.
 - Sessions persist in opencode's local data directory. They survive opencode-server crashes (the supervisor restarts the server and leaves the data directory untouched) and dalang restarts on the same host. Sessions do not survive machine changes — failures surface as `turn_ended_with_error` and recover via the worker's existing retry path.
-
----
-
-## Session Viewer
-
-The HTTP server includes a simple parsed JSONL session viewer for running agents:
-
-- `GET /` shows running work and links each active item to `/sessions/:id`.
-- `GET /sessions/:id` renders the transcript as a table with raw JSON expandable per line.
-- `GET /api/v1/sessions/:id/transcript?max_lines=1000` returns the parsed transcript JSON.
-
-`:id` can be the issue id, issue identifier, session id, or provider thread id. Claude and Codex use their native transcript JSONL paths. opencode events are captured by dalang under `~/.dalang/opencode-sessions/<session_id>.jsonl`.
 
 ---
 

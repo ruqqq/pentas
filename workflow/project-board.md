@@ -25,9 +25,3 @@ The `Status` field needs these options:
 - `Duplicate`: terminal duplicate state.
 
 State transitions should preserve evidence. When moving a project item, add a concise issue comment explaining what changed, what was verified, and any unresolved risk.
-
-Every GitHub issue or Project comment posted by the agent must start with this exact first line:
-
-```text
-[AGENT MESSAGE]
-```

@@ -1,11 +1,7 @@
 // packages/dalang/tests/http/routes.test.ts
 import { test, expect } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { handleRequest, createRouteDeps } from "../../src/http/routes";
 import { createInitialState } from "../../src/orchestrator/state";
-import type { NormalizedIssue, RunningEntry } from "../../src/types";
 
 const baseDeps = () => {
   const state = createInitialState({ poll_interval_ms: 30000, max_concurrent_agents: 4 });
@@ -77,85 +73,3 @@ test("unknown route returns 404 with envelope", async () => {
   const body = (await res.json()) as { error: { code: string } };
   expect(body.error.code).toBe("not_found");
 });
-
-test("GET /api/v1/sessions/:id/transcript returns parsed jsonl", async () => {
-  const deps = baseDeps();
-  const dir = mkdtempSync(join(tmpdir(), "dalang-session-viewer-"));
-  const transcriptPath = join(dir, "session.jsonl");
-  writeFileSync(
-    transcriptPath,
-    `${JSON.stringify({ type: "event_msg", payload: { type: "agent_message", message: "hello" } })}\n`,
-  );
-  deps.state.running.set("PVTI_1", runningEntry({ provider: "codex", transcriptPath }));
-
-  const res = await handleRequest(
-    new Request("http://x/api/v1/sessions/PVTI_1/transcript?max_lines=10"),
-    deps,
-  );
-  expect(res.status).toBe(200);
-  const body = (await res.json()) as {
-    session: { provider: string; transcript_path: string };
-    events: Array<{ raw_type: string; summary: string; runtime_event: { event: string } }>;
-  };
-  expect(body.session.provider).toBe("codex");
-  expect(body.session.transcript_path).toBe(transcriptPath);
-  expect(body.events[0]?.raw_type).toBe("event_msg:agent_message");
-  expect(body.events[0]?.summary).toContain("hello");
-  expect(body.events[0]?.runtime_event.event).toBe("notification");
-});
-
-test("GET /api/v1/sessions/:id/transcript returns 404 for missing session", async () => {
-  const deps = baseDeps();
-  const res = await handleRequest(new Request("http://x/api/v1/sessions/missing/transcript"), deps);
-  expect(res.status).toBe(404);
-  const body = (await res.json()) as { error: { code: string } };
-  expect(body.error.code).toBe("session_not_found");
-});
-
-function runningEntry(opts: {
-  provider: RunningEntry["agent_provider"];
-  transcriptPath: string;
-}): RunningEntry {
-  const issue: NormalizedIssue = {
-    id: "PVTI_1",
-    identifier: "acme/app#1",
-    title: "Task",
-    description: null,
-    priority: null,
-    state: "In Dev",
-    branch_name: null,
-    url: null,
-    external_ref: null,
-    internal_ref: null,
-    labels: [],
-    blocked_by: [],
-    created_at: null,
-    updated_at: null,
-  };
-  return {
-    issue,
-    identifier: issue.identifier,
-    workspace_path: "/tmp/workspace",
-    agent_provider: opts.provider,
-    started_at: new Date().toISOString(),
-    abort_controller: new AbortController(),
-    retry_attempt: null,
-    session: {
-      session_id: "session-1",
-      thread_id: "thread-1",
-      turn_id: "turn-1",
-      transcript_path: opts.transcriptPath,
-      claude_session_pid: null,
-      last_event: "notification",
-      last_event_at: new Date().toISOString(),
-      last_message: "hello",
-      input_tokens: 0,
-      output_tokens: 0,
-      total_tokens: 0,
-      last_reported_input_tokens: 0,
-      last_reported_output_tokens: 0,
-      last_reported_total_tokens: 0,
-      turn_count: 1,
-    },
-  };
-}

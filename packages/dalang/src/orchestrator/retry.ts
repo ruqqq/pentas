@@ -14,15 +14,14 @@ export interface ScheduleRetryOptions {
   attempt: number;
   delayMs: number;
   error: string | null;
-  onFire: (attempt: number) => void;
+  onFire: () => void;
 }
 
 export function scheduleRetry(state: OrchestratorState, opts: ScheduleRetryOptions): void {
   cancelRetry(state, opts.issue_id);
   const handle = setTimeout(() => {
-    const retry = state.retry_attempts.get(opts.issue_id);
     state.retry_attempts.delete(opts.issue_id);
-    opts.onFire(retry?.attempt ?? opts.attempt);
+    opts.onFire();
   }, opts.delayMs);
   state.retry_attempts.set(opts.issue_id, {
     issue_id: opts.issue_id,

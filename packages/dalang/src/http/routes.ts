@@ -1,7 +1,6 @@
 // packages/dalang/src/http/routes.ts
 import type { OrchestratorState } from "../types";
 import { buildStateSnapshot, buildIssueSnapshot } from "./snapshot";
-import { findRunningSession, readTranscriptView } from "./session-viewer";
 
 export interface RouteDeps {
   state: OrchestratorState;
@@ -88,29 +87,6 @@ export async function handleRequest(req: Request, deps: RouteDeps): Promise<Resp
     );
   }
 
-  const sessionTranscriptMatch = path.match(/^\/api\/v1\/sessions\/([^/]+)\/transcript$/);
-  if (sessionTranscriptMatch) {
-    if (method !== "GET")
-      return envelope(
-        "method_not_allowed",
-        "use GET for /api/v1/sessions/:id/transcript",
-        405,
-      );
-    const id = decodeURIComponent(sessionTranscriptMatch[1]!);
-    const entry = findRunningSession(deps.state.running.values(), id);
-    if (!entry) return envelope("session_not_found", `no running session for ${id}`, 404);
-    const maxLines = parseMaxLines(url.searchParams.get("max_lines"));
-    try {
-      return json(await readTranscriptView(entry, maxLines));
-    } catch (err) {
-      return envelope(
-        "transcript_unavailable",
-        err instanceof Error ? err.message : String(err),
-        404,
-      );
-    }
-  }
-
   // /api/v1/:identifier
   const m = path.match(/^\/api\/v1\/([^/]+)$/);
   if (m) {
@@ -126,11 +102,4 @@ export async function handleRequest(req: Request, deps: RouteDeps): Promise<Resp
   }
 
   return envelope("not_found", `unknown route ${path}`, 404);
-}
-
-function parseMaxLines(raw: string | null): number {
-  if (!raw) return 1000;
-  const parsed = Number.parseInt(raw, 10);
-  if (!Number.isFinite(parsed) || parsed < 1) return 1000;
-  return Math.min(parsed, 5000);
 }

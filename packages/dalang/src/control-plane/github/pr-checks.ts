@@ -63,7 +63,7 @@ function summaryFromGithubChecks(checks: GithubCheck[]): Summary {
   const failures = normalised.filter((c) => c.bucket === "fail" || c.bucket === "cancel");
   if (failures.length > 0) return { kind: "failed", failures };
   const anyPending = normalised.some((c) => c.bucket === "pending");
-  if (anyPending) return { kind: "pending", failures: [] };
+  if (anyPending || normalised.length === 0) return { kind: "pending", failures: [] };
   return { kind: "passed", failures: [] };
 }
 

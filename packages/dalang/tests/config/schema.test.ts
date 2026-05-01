@@ -117,7 +117,6 @@ test("applyDefaults fills codex block when agent_provider=codex and omits claude
   expect(result.codex?.model).toBe("gpt-5.5");
   expect(result.codex?.sandbox_mode).toBe("workspace-write");
   expect(result.codex?.approval_policy).toBe("never");
-  expect(result.codex?.network_access_enabled).toBe(true);
 });
 
 test("accepts agent_provider=codex with a codex block", () => {
