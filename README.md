@@ -226,6 +226,8 @@ codex:
 
 #### Workflow prompt and agent skills
 
+Repo-local generic agents skills live under `.agents/skills/`. The `init-workflow-md` skill there scaffolds dalang-compatible `WORKFLOW.md` files with current control-plane, provider, and PR-checks settings.
+
 For anything beyond a prototype, keep the root `WORKFLOW.md` small and import prompt fragments from `workflow/`:
 
 ```markdown
