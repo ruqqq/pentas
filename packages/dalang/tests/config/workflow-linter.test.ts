@@ -70,6 +70,18 @@ test("lint accepts Liquid filters exposed by the runtime engine", async () => {
   expect(result.diagnostics).toEqual([]);
 });
 
+test("lint accepts assigned Liquid variables", async () => {
+  const path = await writeWorkflow(`
+{% assign title = issue.title %}
+{{ title }}
+`);
+
+  const result = await lintWorkflow(path);
+
+  expect(result.ok).toBe(true);
+  expect(result.diagnostics).toEqual([]);
+});
+
 test("lint rejects unknown prompt context fields", async () => {
   const path = await writeWorkflow(`
 {{ issue.not_a_field }}
@@ -95,6 +107,45 @@ test("lint rejects unknown prompt context fields", async () => {
   expect(result.diagnostics.map((d) => d.message)).toContain(
     "Unknown Liquid variable path `entry.summary`",
   );
+});
+
+test("lint rejects unknown Liquid references inside assignment tags", async () => {
+  const path = await writeWorkflow(`
+{% assign title = issue.not_a_field %}
+{{ issue.title }}
+`);
+
+  const result = await lintWorkflow(path);
+
+  expect(result.ok).toBe(false);
+  expect(result.diagnostics.map((d) => d.message)).toContain(
+    "Unknown Liquid variable path `issue.not_a_field`",
+  );
+});
+
+test("lint rejects loop variables used outside their for block", async () => {
+  const path = await writeWorkflow(`
+{% for comment in recent_comments %}{{ comment.author }}{% endfor %}
+{{ comment.author }}
+`);
+
+  const result = await lintWorkflow(path);
+
+  expect(result.ok).toBe(false);
+  expect(result.diagnostics.map((d) => d.message)).toContain(
+    "Unknown Liquid variable path `comment.author`",
+  );
+});
+
+test("lint accepts filtered Liquid for-loop collections", async () => {
+  const path = await writeWorkflow(`
+{% for label in issue.labels | sort %}{{ label }}{% endfor %}
+`);
+
+  const result = await lintWorkflow(path);
+
+  expect(result.ok).toBe(true);
+  expect(result.diagnostics).toEqual([]);
 });
 
 test("lint scans imported prompt body after expansion", async () => {

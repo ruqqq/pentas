@@ -153,16 +153,7 @@ export function lintLiquidTemplate(template: string): WorkflowLintDiagnostic[] {
     });
   }
 
-  const loopScopes = collectLoopScopes(template, diagnostics);
-  for (const variablePath of collectVariablePaths(template)) {
-    if (!isKnownPath(variablePath, loopScopes)) {
-      diagnostics.push({
-        severity: "error",
-        code: "unknown_liquid_variable",
-        message: `Unknown Liquid variable path \`${variablePath}\``,
-      });
-    }
-  }
+  lintLiquidVariables(template, diagnostics);
   for (const filter of collectFilters(template)) {
     if (!KNOWN_FILTERS.has(filter)) {
       diagnostics.push({
@@ -175,58 +166,112 @@ export function lintLiquidTemplate(template: string): WorkflowLintDiagnostic[] {
   return diagnostics;
 }
 
-function collectLoopScopes(
+type ScopeStack = Map<string, SchemaNode>[];
+
+function lintLiquidVariables(
   template: string,
   diagnostics: WorkflowLintDiagnostic[],
-): Map<string, SchemaNode> {
-  const scopes = new Map<string, SchemaNode>();
-  const forTag = /{%\s*for\s+([A-Za-z_]\w*)\s+in\s+([^%]+?)\s*%}/g;
-  for (const match of template.matchAll(forTag)) {
-    const variable = match[1]!;
-    const collection = normalizePath(stripLiquidStrings(match[2]!.trim()));
-    const collectionNode = resolvePath(collection, scopes);
-    const itemNode =
-      collectionNode && typeof collectionNode === "object" ? collectionNode.array : undefined;
-    if (!itemNode) {
-      diagnostics.push({
-        severity: "error",
-        code: "invalid_liquid_for",
-        message: `Invalid Liquid for-loop collection \`${collection}\``,
-      });
+): void {
+  const scopes: ScopeStack = [new Map()];
+  const seen = new Set<string>();
+  const tokenPattern = /{{\s*([\s\S]*?)\s*}}|{%\s*([\s\S]*?)\s*%}/g;
+
+  for (const match of template.matchAll(tokenPattern)) {
+    if (match[1] !== undefined) {
+      lintExpressionPaths(match[1], scopes, diagnostics, seen);
       continue;
     }
-    scopes.set(variable, itemNode);
+
+    const tag = match[2]?.trim() ?? "";
+    const forMatch = tag.match(/^for\s+([A-Za-z_]\w*)\s+in\s+([\s\S]+)$/);
+    if (forMatch) {
+      const variable = forMatch[1]!;
+      const collectionExpression = forMatch[2]!;
+      lintExpressionPaths(collectionExpression, scopes, diagnostics, seen);
+      const collection = firstExpressionPath(collectionExpression);
+      const collectionNode = collection ? resolvePath(collection, scopes) : null;
+      const itemNode =
+        collectionNode && typeof collectionNode === "object" ? collectionNode.array : undefined;
+      if (!itemNode) {
+        diagnostics.push({
+          severity: "error",
+          code: "invalid_liquid_for",
+          message: `Invalid Liquid for-loop collection \`${collection ?? collectionExpression.trim()}\``,
+        });
+        scopes.push(new Map());
+        continue;
+      }
+      scopes.push(new Map([[variable, itemNode]]));
+      continue;
+    }
+
+    if (tag === "endfor") {
+      if (scopes.length > 1) scopes.pop();
+      continue;
+    }
+
+    const assignMatch = tag.match(/^assign\s+([A-Za-z_]\w*)\s*=\s*([\s\S]+)$/);
+    if (assignMatch) {
+      lintExpressionPaths(assignMatch[2]!, scopes, diagnostics, seen);
+      scopes[scopes.length - 1]!.set(assignMatch[1]!, true);
+      continue;
+    }
+
+    const conditionalMatch = tag.match(/^(?:if|elsif|unless)\s+([\s\S]+)$/);
+    if (conditionalMatch) lintExpressionPaths(conditionalMatch[1]!, scopes, diagnostics, seen);
   }
-  return scopes;
 }
 
-function collectVariablePaths(template: string): string[] {
-  const out = new Set<string>();
-  const outputTag = /{{\s*([^}]+?)\s*}}/g;
-  const ifTag = /{%\s*(?:if|elsif|unless)\s+([^%]+?)\s*%}/g;
-  for (const match of template.matchAll(outputTag)) {
-    collectExpressionPaths(match[1]!, out);
+function lintExpressionPaths(
+  expression: string,
+  scopes: ScopeStack,
+  diagnostics: WorkflowLintDiagnostic[],
+  seen: Set<string>,
+): void {
+  for (const variablePath of collectExpressionPaths(expression)) {
+    if (resolvePath(variablePath, scopes)) continue;
+    const key = `unknown_liquid_variable:${variablePath}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    diagnostics.push({
+      severity: "error",
+      code: "unknown_liquid_variable",
+      message: `Unknown Liquid variable path \`${variablePath}\``,
+    });
   }
-  for (const match of template.matchAll(ifTag)) {
-    collectExpressionPaths(match[1]!, out);
+}
+
+function firstExpressionPath(expression: string): string | null {
+  return collectPathCandidates((expression.split("|")[0] ?? expression).trim())[0] ?? null;
+}
+
+function collectExpressionPaths(expression: string): string[] {
+  const out = new Set<string>();
+  const segments = expression.split("|");
+  collectPathCandidates(segments[0] ?? "").forEach((path) => out.add(path));
+  for (const segment of segments.slice(1)) {
+    const args = segment.replace(/^\s*[A-Za-z_]\w*\s*:?\s*/, "");
+    collectPathCandidates(args).forEach((path) => out.add(path));
   }
   return [...out];
 }
 
-function collectExpressionPaths(expression: string, out: Set<string>): void {
-  const beforeFilters = expression.split("|")[0] ?? expression;
+function collectPathCandidates(expression: string): string[] {
+  const out = new Set<string>();
   const pathPattern = /\b[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\b/g;
-  for (const match of stripLiquidStrings(beforeFilters).matchAll(pathPattern)) {
+  for (const match of stripLiquidStrings(expression).matchAll(pathPattern)) {
     const candidate = normalizePath(match[0]!);
     if (!LIQUID_EXPRESSION_KEYWORDS.has(candidate)) out.add(candidate);
   }
+  return [...out];
 }
 
 function collectFilters(template: string): string[] {
   const out = new Set<string>();
-  const outputTag = /{{\s*([^}]+?)\s*}}/g;
-  for (const match of template.matchAll(outputTag)) {
-    const parts = match[1]!.split("|").slice(1);
+  const expressionPattern = /{{\s*([\s\S]*?)\s*}}|{%\s*(?:assign\s+[A-Za-z_]\w*\s*=\s*|for\s+[A-Za-z_]\w*\s+in\s+|if\s+|elsif\s+|unless\s+)([\s\S]*?)\s*%}/g;
+  for (const match of template.matchAll(expressionPattern)) {
+    const expression = match[1] ?? match[2] ?? "";
+    const parts = expression.split("|").slice(1);
     for (const part of parts) {
       const filter = part.trim().match(/^([A-Za-z_]\w*)/)?.[1];
       if (filter) out.add(filter);
@@ -235,19 +280,24 @@ function collectFilters(template: string): string[] {
   return [...out];
 }
 
-function isKnownPath(path: string, loopScopes: Map<string, SchemaNode>): boolean {
-  return resolvePath(path, loopScopes) !== null;
-}
-
-function resolvePath(path: string, loopScopes: Map<string, SchemaNode>): SchemaNode | null {
+function resolvePath(path: string, scopes: ScopeStack): SchemaNode | null {
   const parts = normalizePath(path).split(".");
   const [root, ...rest] = parts;
-  let node = root ? (loopScopes.get(root) ?? PROMPT_CONTEXT[root]) : undefined;
+  let node = root ? findScopedRoot(root, scopes) : undefined;
+  if (!node && root) node = PROMPT_CONTEXT[root];
   for (const part of rest) {
     if (!node || node === true || !("fields" in node) || !node.fields) return null;
     node = node.fields[part];
   }
   return node ?? null;
+}
+
+function findScopedRoot(root: string, scopes: ScopeStack): SchemaNode | undefined {
+  for (let i = scopes.length - 1; i >= 0; i--) {
+    const node = scopes[i]!.get(root);
+    if (node) return node;
+  }
+  return undefined;
 }
 
 function normalizePath(path: string): string {
