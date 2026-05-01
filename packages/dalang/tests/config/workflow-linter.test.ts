@@ -186,9 +186,7 @@ test("lint rejects unknown Liquid references using bracket notation", () => {
 });
 
 test("lint rejects unknown Liquid references inside whitespace-controlled tags", () => {
-  const diagnostics = lintLiquidTemplate(
-    "{%- if issue.not_a_field -%}x{%- endif -%}",
-  );
+  const diagnostics = lintLiquidTemplate("{%- if issue.not_a_field -%}x{%- endif -%}");
 
   expect(diagnostics.map((d) => d.message)).toContain(
     "Unknown Liquid variable path `issue.not_a_field`",

@@ -42,11 +42,9 @@ const ISSUE_FIELDS = [
   "updated_at",
 ] as const;
 
-const ISSUE_FIELD_SCHEMA: Record<(typeof ISSUE_FIELDS)[number], SchemaNode> =
-  Object.fromEntries(ISSUE_FIELDS.map((field) => [field, true])) as Record<
-    (typeof ISSUE_FIELDS)[number],
-    SchemaNode
-  >;
+const ISSUE_FIELD_SCHEMA: Record<(typeof ISSUE_FIELDS)[number], SchemaNode> = Object.fromEntries(
+  ISSUE_FIELDS.map((field) => [field, true]),
+) as Record<(typeof ISSUE_FIELDS)[number], SchemaNode>;
 
 ISSUE_FIELD_SCHEMA.labels = { array: true };
 ISSUE_FIELD_SCHEMA.blocked_by = {
@@ -180,18 +178,12 @@ export function lintLiquidTemplate(template: string): WorkflowLintDiagnostic[] {
 }
 
 function stripUnevaluatedLiquidBlocks(template: string): string {
-  return template.replace(
-    /{%-?\s*(raw|comment)\s*-?%}[\s\S]*?{%-?\s*end\1\s*-?%}/g,
-    "",
-  );
+  return template.replace(/{%-?\s*(raw|comment)\s*-?%}[\s\S]*?{%-?\s*end\1\s*-?%}/g, "");
 }
 
 type ScopeStack = Map<string, SchemaNode>[];
 
-function lintLiquidVariables(
-  template: string,
-  diagnostics: WorkflowLintDiagnostic[],
-): void {
+function lintLiquidVariables(template: string, diagnostics: WorkflowLintDiagnostic[]): void {
   const scopes: ScopeStack = [new Map()];
   const seen = new Set<string>();
   const pendingCaptures: string[] = [];
@@ -283,7 +275,9 @@ function lintExpressionPaths(
 }
 
 function firstExpressionPath(expression: string): string | null {
-  return collectPathCandidates((splitLiquidPipeline(expression)[0] ?? expression).trim())[0] ?? null;
+  return (
+    collectPathCandidates((splitLiquidPipeline(expression)[0] ?? expression).trim())[0] ?? null
+  );
 }
 
 function directPathExpressionNode(expression: string, scopes: ScopeStack): SchemaNode | null {
@@ -334,7 +328,8 @@ function collectPathCandidates(expression: string): string[] {
 
 function collectFilters(template: string): string[] {
   const out = new Set<string>();
-  const expressionPattern = /{{-?\s*([\s\S]*?)\s*-?}}|{%-?\s*(?:assign\s+[A-Za-z_]\w*\s*=\s*|for\s+[A-Za-z_]\w*\s+in\s+|if\s+|elsif\s+|unless\s+|case\s+|when\s+)([\s\S]*?)\s*-?%}/g;
+  const expressionPattern =
+    /{{-?\s*([\s\S]*?)\s*-?}}|{%-?\s*(?:assign\s+[A-Za-z_]\w*\s*=\s*|for\s+[A-Za-z_]\w*\s+in\s+|if\s+|elsif\s+|unless\s+|case\s+|when\s+)([\s\S]*?)\s*-?%}/g;
   for (const match of template.matchAll(expressionPattern)) {
     const expression = match[1] ?? match[2] ?? "";
     const parts = splitLiquidPipeline(expression).slice(1);

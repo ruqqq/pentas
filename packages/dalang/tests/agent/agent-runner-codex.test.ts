@@ -51,6 +51,7 @@ test("runAttempt drives a Codex-shaped event stream end-to-end", async () => {
       provider: "codex" as const,
       sandboxMode: "workspace-write",
       approvalPolicy: "never",
+      networkAccessEnabled: false,
       model: "gpt-5.5",
       executablePath: "codex",
       turnTimeoutMs: 60000,
@@ -76,4 +77,40 @@ test("runAttempt drives a Codex-shaped event stream end-to-end", async () => {
   expect(result.tokens.total_tokens).toBe(22);
   expect(collected.some((e) => e.event === "session_started")).toBe(true);
   expect(collected.some((e) => e.event === "turn_completed")).toBe(true);
+});
+
+test("runAttempt passes Codex network access into runQuery options", async () => {
+  let observedNetworkAccess: boolean | null = null;
+
+  const result = await runAttempt({
+    issue,
+    attempt: 1,
+    promptTemplate: "{{ issue.title }}",
+    workspacePath: "/tmp/workspace",
+    config: {
+      provider: "codex" as const,
+      sandboxMode: "danger-full-access",
+      approvalPolicy: "never",
+      networkAccessEnabled: false,
+      model: "gpt-5.5",
+      executablePath: "codex",
+      turnTimeoutMs: 60000,
+      readTimeoutMs: 5000,
+      stallTimeoutMs: 30000,
+      maxTurns: 1,
+    },
+    controlPlane: { kind: "papan", endpoint: "http://localhost", api_key: null },
+    trackerRefresh: async () => null,
+    isActiveState: () => false,
+    runQuery: async function* (opts) {
+      observedNetworkAccess = opts.codex?.networkAccessEnabled ?? null;
+      yield { type: "thread.started", thread_id: "codex-thread-2" };
+      yield { type: "turn.completed", usage: { input_tokens: 1, output_tokens: 1 } };
+    },
+    onEvent: () => {},
+  });
+
+  expect(result.success).toBe(true);
+  if (observedNetworkAccess === null) throw new Error("missing codex options");
+  expect(observedNetworkAccess === false).toBe(true);
 });

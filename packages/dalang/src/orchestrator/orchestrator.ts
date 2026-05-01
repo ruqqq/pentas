@@ -12,7 +12,7 @@ import { GitWorktreeManager } from "../workspace/git-worktree";
 import { runHook, truncateLogged } from "../workspace/hooks";
 import { runAttempt, type RunQuery, type AgentConfig } from "../agent/agent-runner";
 import { transcriptPathFor } from "../agent/transcript";
-import { expandPath, resolveTrackerApiKey } from "../config/env-resolver";
+import { expandPath, resolveGithubToken, resolveTrackerApiKey } from "../config/env-resolver";
 import { ValidationError } from "../config/validate";
 import { createLogger, type Logger } from "../logging/logger";
 
@@ -296,15 +296,16 @@ export class Orchestrator {
         const entry = this.state.running.get(issue.id);
         if (!entry) return;
         if (entry.session === null) {
+          const transcriptPath = transcriptPathFor(
+            entry.workspace_path,
+            e.thread_id,
+            entry.agent_provider,
+          );
           entry.session = {
             session_id: e.thread_id ? `${e.thread_id}-1` : "?-1",
             thread_id: e.thread_id ?? "?",
             turn_id: "1",
-            transcript_path: transcriptPathFor(
-              entry.workspace_path,
-              e.thread_id,
-              entry.agent_provider,
-            ),
+            transcript_path: transcriptPath,
             claude_session_pid: null,
             last_event: e.event,
             last_event_at: e.timestamp,
@@ -317,6 +318,15 @@ export class Orchestrator {
             last_reported_total_tokens: 0,
             turn_count: 1,
           };
+          this.log.info(
+            {
+              issue_id: issue.id,
+              identifier: issue.identifier,
+              session_id: entry.session.session_id,
+              transcript_path: transcriptPath,
+            },
+            "session started",
+          );
         }
         // Once the SDK reveals a real session id (it's on every message but the
         // very first event we receive may not have been routed through us as a
@@ -338,6 +348,30 @@ export class Orchestrator {
             },
             "session started",
           );
+        }
+        if (!entry.session.transcript_path) {
+          const transcriptPath = transcriptPathFor(
+            entry.workspace_path,
+            entry.session.thread_id,
+            entry.agent_provider,
+          );
+          if (transcriptPath) {
+            entry.session.transcript_path = transcriptPath;
+            this.log.info(
+              {
+                issue_id: issue.id,
+                identifier: issue.identifier,
+                session_id: entry.session.session_id,
+                transcript_path: transcriptPath,
+              },
+              "session transcript available",
+            );
+          }
+        }
+        if (e.usage) {
+          entry.session.input_tokens += e.usage.input_tokens ?? 0;
+          entry.session.output_tokens += e.usage.output_tokens ?? 0;
+          entry.session.total_tokens += e.usage.total_tokens ?? 0;
         }
         entry.session.last_event = e.event;
         entry.session.last_event_at = e.timestamp;
@@ -371,7 +405,7 @@ export class Orchestrator {
         attempt: 1,
         delayMs: CONTINUATION_RETRY_MS,
         error: null,
-        onFire: () => this.handleRetryFire(issue.id, issue.identifier),
+        onFire: (retryAttempt) => this.handleRetryFire(issue.id, issue.identifier, retryAttempt),
       });
     } else {
       const nextAttempt = (attempt ?? 0) + 1;
@@ -392,12 +426,16 @@ export class Orchestrator {
         attempt: nextAttempt,
         delayMs: delay,
         error: result.reason ?? "worker_failed",
-        onFire: () => this.handleRetryFire(issue.id, issue.identifier),
+        onFire: (retryAttempt) => this.handleRetryFire(issue.id, issue.identifier, retryAttempt),
       });
     }
   }
 
-  private async handleRetryFire(issueId: string, identifier: string): Promise<void> {
+  private async handleRetryFire(
+    issueId: string,
+    identifier: string,
+    firedAttempt: number,
+  ): Promise<void> {
     let candidates: NormalizedIssue[] = [];
     try {
       candidates = await this.controlPlane.fetchDispatchableWork({
@@ -405,15 +443,14 @@ export class Orchestrator {
         ownership: this.cfg.control_plane.ownership,
       });
     } catch {
-      const e = this.state.retry_attempts.get(issueId);
-      const next = (e?.attempt ?? 1) + 1;
+      const next = firedAttempt + 1;
       scheduleRetry(this.state, {
         issue_id: issueId,
         identifier,
         attempt: next,
         delayMs: computeBackoffMs(next, this.cfg.agent.max_retry_backoff_ms),
         error: "retry poll failed",
-        onFire: () => this.handleRetryFire(issueId, identifier),
+        onFire: (retryAttempt) => this.handleRetryFire(issueId, identifier, retryAttempt),
       });
       return;
     }
@@ -428,6 +465,7 @@ export class Orchestrator {
       releaseClaim(this.state, issueId);
       return;
     }
+    releaseClaim(this.state, issueId);
     if (
       !isEligible(issue, this.state, {
         active: this.cfg.control_plane.active_states,
@@ -435,19 +473,18 @@ export class Orchestrator {
         byState: this.cfg.agent.max_concurrent_agents_by_state,
       })
     ) {
-      const e = this.state.retry_attempts.get(issueId);
-      const next = (e?.attempt ?? 1) + 1;
+      const next = firedAttempt + 1;
       scheduleRetry(this.state, {
         issue_id: issueId,
         identifier: issue.identifier,
         attempt: next,
         delayMs: computeBackoffMs(next, this.cfg.agent.max_retry_backoff_ms),
         error: "no available orchestrator slots",
-        onFire: () => this.handleRetryFire(issueId, issue.identifier),
+        onFire: (retryAttempt) => this.handleRetryFire(issueId, issue.identifier, retryAttempt),
       });
       return;
     }
-    this.dispatch(issue, this.state.retry_attempts.get(issueId)?.attempt ?? null);
+    this.dispatch(issue, firedAttempt);
   }
 
   private buildAgentConfig(): AgentConfig {
@@ -466,6 +503,8 @@ export class Orchestrator {
         stallTimeoutMs: this.cfg.codex.stall_timeout_ms,
         sandboxMode: this.cfg.codex.sandbox_mode,
         approvalPolicy: this.cfg.codex.approval_policy,
+        networkAccessEnabled: this.cfg.codex.network_access_enabled,
+        env: this.buildCodexEnv(),
       };
     }
     if (this.cfg.agent_provider === "opencode") {
@@ -493,6 +532,19 @@ export class Orchestrator {
       stallTimeoutMs: this.cfg.claude.stall_timeout_ms,
       permissionMode: this.cfg.claude.permission_mode,
     };
+  }
+
+  private buildCodexEnv(): Record<string, string> | undefined {
+    if (this.cfg.control_plane.kind !== "github-projects") return undefined;
+    const token = resolveGithubToken(this.cfg.control_plane.token);
+    if (!token) return undefined;
+    const env: Record<string, string> = {};
+    for (const [key, value] of Object.entries(process.env)) {
+      if (value !== undefined) env[key] = value;
+    }
+    env.GITHUB_TOKEN = token;
+    env.GH_TOKEN = token;
+    return env;
   }
 
   private buildControlPlanePromptContext(): {

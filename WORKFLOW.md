@@ -62,8 +62,9 @@ agent_provider: codex
 codex:
   executable_path: codex
   model: gpt-5.5
-  sandbox_mode: workspace-write
+  sandbox_mode: danger-full-access
   approval_policy: never
+  network_access_enabled: true
   turn_timeout_ms: 3600000
   read_timeout_ms: 5000
   stall_timeout_ms: 300000
@@ -80,6 +81,7 @@ pr_checks:
 ---
 
 @workflow/preamble.md
+@workflow/session-lifecycle.md
 @workflow/project-board.md
 @workflow/superpowers.md
 @workflow/state-dispatch.md
