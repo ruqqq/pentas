@@ -7,7 +7,12 @@ import {
 import type { ControlPlaneComment, WorkItem } from "../../types";
 import { GithubClient } from "./client";
 import { githubItemMatchesOwnership, githubProjectItemToWorkItem } from "./normalize";
-import { reconcileGithubPrChecks, type GithubCheck, type GithubPullRequestRef } from "./pr-checks";
+import {
+  reconcileGithubPrChecks,
+  type GithubCheck,
+  type GithubPullRequestRef,
+  type Mergeability,
+} from "./pr-checks";
 import type { GithubProjectMetadata } from "./types";
 
 const PROJECT_METADATA_FIELDS = `
@@ -113,6 +118,16 @@ const MARK_READY_MUTATION = `
   }
 `;
 
+const PR_MERGEABILITY_QUERY = `
+  query PullRequestMergeability($pullRequestId: ID!) {
+    node(id: $pullRequestId) {
+      ... on PullRequest {
+        mergeable
+      }
+    }
+  }
+`;
+
 const STATUS_CHECK_ROLLUP_QUERY = `
   query StatusCheckRollup($pullRequestId: ID!, $cursor: String) {
     node(id: $pullRequestId) {
@@ -173,6 +188,8 @@ export interface GithubProjectsAdapterConfig {
     pass_state: string;
     fail_state: string;
     escalation_state: string;
+    conflict_watch_state?: string | undefined;
+    conflict_target_state?: string | undefined;
   } | null;
 }
 
@@ -200,9 +217,11 @@ export class GithubProjectsControlPlaneAdapter implements ControlPlaneAdapter {
             this.cfg.prChecks.pass_state,
             this.cfg.prChecks.fail_state,
             this.cfg.prChecks.escalation_state,
+            this.cfg.prChecks.conflict_watch_state ?? "Ready for Human Review",
+            this.cfg.prChecks.conflict_target_state ?? "Ready for Dev",
           ]
         : []),
-    ];
+    ].filter((state): state is string => typeof state === "string");
     for (const state of requiredStates) {
       if (!meta.statusOptions.has(state.toLowerCase())) {
         throw new ControlPlaneError(
@@ -324,6 +343,7 @@ export class GithubProjectsControlPlaneAdapter implements ControlPlaneAdapter {
       updateState: (id, state) => this.updateState(id, state),
       resolvePullRequest: (item) => this.resolvePullRequest(item),
       fetchChecks: (pr) => this.fetchChecks(pr),
+      fetchMergeability: (pr) => this.fetchMergeability(pr),
       rerunFailedChecks: (pr, checks) => this.rerunFailedChecks(pr, checks),
       markReady: (pr) => this.markReady(pr),
     });
@@ -564,6 +584,24 @@ export class GithubProjectsControlPlaneAdapter implements ControlPlaneAdapter {
     }));
   }
 
+  private async fetchMergeability(pr: GithubPullRequestRef): Promise<Mergeability> {
+    if (pr.nodeId) {
+      const data = await this.client.graphql<{ node?: { mergeable?: string | null } }>(
+        PR_MERGEABILITY_QUERY,
+        {
+          pullRequestId: pr.nodeId,
+        },
+      );
+      return graphQlMergeability(data.node?.mergeable);
+    }
+    const [owner, repo] = this.repoParts();
+    const data = await this.client.restJson<{ mergeable_state?: string | null }>(
+      `/repos/${owner}/${repo}/pulls/${pr.number}`,
+      "GET",
+    );
+    return restMergeability(data.mergeable_state);
+  }
+
   private async fetchStatusCheckRollup(pr: GithubPullRequestRef): Promise<GithubCheck[]> {
     const out: GithubCheck[] = [];
     let cursor: string | null = null;
@@ -736,4 +774,16 @@ function statusContextBucket(state: unknown): GithubCheck["bucket"] {
     return "pending";
   if (state === "CANCELLED" || state === "cancelled") return "cancel";
   return "fail";
+}
+
+function graphQlMergeability(value: string | null | undefined): Mergeability {
+  if (value === "CONFLICTING") return "conflicted";
+  if (value === "MERGEABLE") return "clean";
+  return "unknown";
+}
+
+function restMergeability(value: string | null | undefined): Mergeability {
+  if (value === "dirty") return "conflicted";
+  if (value === "clean") return "clean";
+  return "unknown";
 }

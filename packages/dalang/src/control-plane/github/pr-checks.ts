@@ -26,6 +26,8 @@ export interface GithubPullRequestRef {
   nodeId?: string | null | undefined;
 }
 
+export type Mergeability = "conflicted" | "clean" | "unknown";
+
 export interface GithubPrChecksArgs {
   work: WorkItem[];
   polls: Map<string, PrChecksPollEntry>;
@@ -38,6 +40,8 @@ export interface GithubPrChecksArgs {
     pass_state: string;
     fail_state: string;
     escalation_state: string;
+    conflict_watch_state?: string | undefined;
+    conflict_target_state?: string | undefined;
   };
   now: () => Date;
   listComments: (id: string) => Promise<ControlPlaneComment[]>;
@@ -45,6 +49,7 @@ export interface GithubPrChecksArgs {
   updateState: (id: string, state: string) => Promise<void>;
   resolvePullRequest: (work: WorkItem) => Promise<GithubPullRequestRef | null>;
   fetchChecks: (pr: GithubPullRequestRef) => Promise<GithubCheck[]>;
+  fetchMergeability: (pr: GithubPullRequestRef) => Promise<Mergeability>;
   rerunFailedChecks: (pr: GithubPullRequestRef, checks: GithubCheck[]) => Promise<number>;
   markReady: (pr: GithubPullRequestRef) => Promise<void>;
 }
@@ -67,10 +72,58 @@ function summaryFromGithubChecks(checks: GithubCheck[]): Summary {
   return { kind: "passed", failures: [] };
 }
 
+function shortSha(sha: string): string {
+  return sha.slice(0, 7);
+}
+
+export function formatConflictComment(args: {
+  sha: string;
+  prNumber: number;
+  targetState: string;
+}): string {
+  return [
+    "[AGENT MESSAGE]",
+    "",
+    `[pr_conflicts_detected] sha=${shortSha(args.sha)}`,
+    `PR #${args.prNumber} is currently conflicted with the base branch. Moving this item back to ${args.targetState} so the conflict can be resolved.`,
+  ].join("\n");
+}
+
+function hasConflictCommentForSha(comments: ControlPlaneComment[], sha: string): boolean {
+  const target = `[pr_conflicts_detected] sha=${shortSha(sha)}`;
+  return comments.some((c) => c.body.includes(target));
+}
+
 export async function reconcileGithubPrChecks(args: GithubPrChecksArgs): Promise<void> {
   if (!args.config.enabled) return;
 
   for (const item of args.work) {
+    const conflictWatchState = args.config.conflict_watch_state ?? "Ready for Human Review";
+    const conflictTargetState = args.config.conflict_target_state ?? "Ready for Dev";
+    if (item.state.toLowerCase() === conflictWatchState.toLowerCase()) {
+      try {
+        const pr = await args.resolvePullRequest(item);
+        if (!pr) continue;
+        const mergeability = await args.fetchMergeability(pr);
+        if (mergeability !== "conflicted") continue;
+        const comments = await args.listComments(item.id);
+        if (!hasConflictCommentForSha(comments, pr.sha)) {
+          await args.addComment(
+            item.id,
+            formatConflictComment({
+              sha: pr.sha,
+              prNumber: pr.number,
+              targetState: conflictTargetState,
+            }),
+          );
+        }
+        await args.updateState(item.id, conflictTargetState);
+      } catch {
+        continue;
+      }
+      continue;
+    }
+
     if (item.state.toLowerCase() !== args.config.wait_state.toLowerCase()) continue;
     const cached = args.polls.get(item.id);
     const nowMs = args.now().getTime();

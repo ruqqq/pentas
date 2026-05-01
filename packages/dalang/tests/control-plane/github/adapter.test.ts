@@ -88,6 +88,15 @@ function metadataResponse() {
   };
 }
 
+function metadataResponseWithStates(states: string[]) {
+  const response = metadataResponse();
+  response.organization.projectV2.fields.nodes[0]!.options = states.map((name, i) => ({
+    id: `OPT_${i}`,
+    name,
+  }));
+  return response;
+}
+
 function itemResponse() {
   return {
     node: {
@@ -296,6 +305,25 @@ test("validateConnection resolves status field from second metadata page", async
   await adapter(client).validateConnection();
 
   expect(client.queries[1]!.variables.fieldCursor).toBe("cursor-1");
+});
+
+test("validateConnection requires configured conflict watch states", async () => {
+  const client = new FakeClient();
+  client.responses.push(
+    metadataResponseWithStates([
+      "Todo",
+      "Done",
+      "Waiting PR Checks",
+      "Ready for Human Review",
+      "In Dev",
+    ]),
+  );
+
+  await expect(
+    adapter(client, true, { conflict_target_state: "Needs Conflict Fix" }).validateConnection(),
+  ).rejects.toMatchObject({
+    code: "control_plane_validation_error",
+  });
 });
 
 test("reconcilePrChecks observes status contexts from rollup", async () => {
@@ -597,4 +625,174 @@ test("reconcilePrChecks deduplicates reruns by workflow run", async () => {
     (c) => c.path === "/repos/acme/app/actions/runs/123/rerun-failed-jobs",
   );
   expect(reruns).toHaveLength(1);
+});
+
+test("reconcilePrChecks fetches GraphQL mergeability for human-review items", async () => {
+  const client = new FakeClient();
+  client.restResponses.push(
+    [
+      {
+        number: 9,
+        html_url: "https://github.com/acme/app/pull/9",
+        node_id: "PR_1",
+        head: { sha: "abc1234" },
+      },
+    ],
+    [],
+    { ok: true },
+  );
+  client.responses.push(
+    { node: { mergeable: "CONFLICTING" } },
+    {
+      node: {
+        content: { __typename: "Issue", number: 12, repository: { nameWithOwner: "acme/app" } },
+      },
+    },
+    {
+      node: {
+        content: { __typename: "Issue", number: 12, repository: { nameWithOwner: "acme/app" } },
+      },
+    },
+    metadataResponseWithStates(["Ready for Dev"]),
+    { updateProjectV2ItemFieldValue: { projectV2Item: { id: "PVTI_1" } } },
+  );
+
+  await adapter(client, true).reconcilePrChecks({
+    work: [
+      {
+        id: "PVTI_1",
+        identifier: "acme/app#12",
+        title: "Fix",
+        description: null,
+        priority: null,
+        state: "Ready for Human Review",
+        branch_name: "pentas/acme-app-12",
+        url: "https://github.com/acme/app/issues/12",
+        external_ref: "acme/app#12",
+        internal_ref: "ISSUE_1",
+        labels: [],
+        blocked_by: [],
+        project: null,
+        created_at: null,
+        updated_at: null,
+      },
+    ],
+    polls: new Map(),
+    config: { enabled: true, poll_interval_ms: 60000, failure_budget: 3, rerun_flakes: true },
+    repoCwd: process.cwd(),
+    now: () => new Date("2026-05-01T00:00:00Z"),
+  });
+
+  expect(client.queries.some((q) => q.query.includes("PullRequestMergeability"))).toBe(true);
+  const posted = client.restCalls.find(
+    (c) => c.path === "/repos/acme/app/issues/12/comments" && c.method === "POST",
+  );
+  expect((posted!.payload as { body: string }).body).toContain(
+    "[pr_conflicts_detected] sha=abc1234",
+  );
+});
+
+test("GraphQL mergeable and unknown PRs stay in human review", async () => {
+  for (const mergeable of ["MERGEABLE", "UNKNOWN"]) {
+    const client = new FakeClient();
+    client.restResponses.push([
+      {
+        number: 9,
+        html_url: "https://github.com/acme/app/pull/9",
+        node_id: "PR_1",
+        head: { sha: "abc1234" },
+      },
+    ]);
+    client.responses.push({ node: { mergeable } });
+
+    await adapter(client, true).reconcilePrChecks({
+      work: [
+        {
+          id: "PVTI_1",
+          identifier: "acme/app#12",
+          title: "Fix",
+          description: null,
+          priority: null,
+          state: "Ready for Human Review",
+          branch_name: "pentas/acme-app-12",
+          url: "https://github.com/acme/app/issues/12",
+          external_ref: "acme/app#12",
+          internal_ref: "ISSUE_1",
+          labels: [],
+          blocked_by: [],
+          project: null,
+          created_at: null,
+          updated_at: null,
+        },
+      ],
+      polls: new Map(),
+      config: { enabled: true, poll_interval_ms: 60000, failure_budget: 3, rerun_flakes: true },
+      repoCwd: process.cwd(),
+      now: () => new Date("2026-05-01T00:00:00Z"),
+    });
+
+    expect(client.restCalls.some((c) => c.method === "POST")).toBe(false);
+  }
+});
+
+test("REST mergeable_state dirty maps to conflicted when PR node id is absent", async () => {
+  const client = new FakeClient();
+  client.restResponses.push(
+    [
+      {
+        number: 9,
+        html_url: "https://github.com/acme/app/pull/9",
+        head: { sha: "abc1234" },
+      },
+    ],
+    { mergeable_state: "dirty" },
+    [],
+    { ok: true },
+  );
+  client.responses.push(
+    {
+      node: {
+        content: { __typename: "Issue", number: 12, repository: { nameWithOwner: "acme/app" } },
+      },
+    },
+    {
+      node: {
+        content: { __typename: "Issue", number: 12, repository: { nameWithOwner: "acme/app" } },
+      },
+    },
+    metadataResponseWithStates(["Ready for Dev"]),
+    { updateProjectV2ItemFieldValue: { projectV2Item: { id: "PVTI_1" } } },
+  );
+
+  await adapter(client, true).reconcilePrChecks({
+    work: [
+      {
+        id: "PVTI_1",
+        identifier: "acme/app#12",
+        title: "Fix",
+        description: null,
+        priority: null,
+        state: "Ready for Human Review",
+        branch_name: "pentas/acme-app-12",
+        url: "https://github.com/acme/app/issues/12",
+        external_ref: "acme/app#12",
+        internal_ref: "ISSUE_1",
+        labels: [],
+        blocked_by: [],
+        project: null,
+        created_at: null,
+        updated_at: null,
+      },
+    ],
+    polls: new Map(),
+    config: { enabled: true, poll_interval_ms: 60000, failure_budget: 3, rerun_flakes: true },
+    repoCwd: process.cwd(),
+    now: () => new Date("2026-05-01T00:00:00Z"),
+  });
+
+  expect(client.restCalls.some((c) => c.path === "/repos/acme/app/pulls/9")).toBe(true);
+  const posted = client.restCalls.find(
+    (c) => c.path === "/repos/acme/app/issues/12/comments" && c.method === "POST",
+  );
+  expect((posted!.payload as { body: string }).body).toContain("[pr_conflicts_detected]");
 });

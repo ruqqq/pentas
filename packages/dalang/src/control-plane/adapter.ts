@@ -29,6 +29,8 @@ export interface PrChecksReconcileArgs {
     pass_state?: string | undefined;
     fail_state?: string | undefined;
     escalation_state?: string | undefined;
+    conflict_watch_state?: string | undefined;
+    conflict_target_state?: string | undefined;
   };
   repoCwd: string;
   now: () => Date;

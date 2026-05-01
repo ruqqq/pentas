@@ -294,6 +294,38 @@ test("defaults omitted github-projects pr_checks fields", () => {
   if (parsed.control_plane.kind !== "github-projects")
     throw new Error("expected github-projects control plane");
   expect(parsed.control_plane.pr_checks?.poll_interval_ms).toBe(60000);
+  expect(parsed.control_plane.pr_checks?.conflict_watch_state).toBe("Ready for Human Review");
+  expect(parsed.control_plane.pr_checks?.conflict_target_state).toBe("Ready for Dev");
+});
+
+test("accepts configured github-projects conflict watch states", () => {
+  const cfg = applyDefaults({
+    control_plane: {
+      kind: "github-projects",
+      owner_type: "user",
+      owner: "ruqqq",
+      project_number: 1,
+      repository: "ruqqq/pentas",
+      status_field: "Status",
+      active_states: ["Ready for Dev"],
+      terminal_states: ["Done"],
+      ownership: { mode: "project_field", field: "Agent", value: "dalang" },
+      pr_checks: {
+        enabled: true,
+        wait_state: "Waiting PR Checks",
+        pass_state: "Ready for Human Review",
+        fail_state: "In Dev",
+        escalation_state: "Ready for Human Review",
+        conflict_watch_state: "Human Review",
+        conflict_target_state: "Needs Conflict Fix",
+      },
+    },
+  });
+  const parsed = WorkflowFrontMatterSchema.parse(cfg);
+  if (parsed.control_plane.kind !== "github-projects")
+    throw new Error("expected github-projects control plane");
+  expect(parsed.control_plane.pr_checks?.conflict_watch_state).toBe("Human Review");
+  expect(parsed.control_plane.pr_checks?.conflict_target_state).toBe("Needs Conflict Fix");
 });
 
 test("maps legacy tracker input to papan control_plane", () => {
