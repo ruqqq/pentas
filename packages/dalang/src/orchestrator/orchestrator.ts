@@ -590,13 +590,10 @@ export class Orchestrator {
     if (this.cfg.control_plane.kind !== "github-projects") return undefined;
     const token = resolveGithubToken(this.cfg.control_plane.token);
     if (!token) return undefined;
-    const env: Record<string, string> = {};
-    for (const [key, value] of Object.entries(process.env)) {
-      if (value !== undefined) env[key] = value;
-    }
-    env.GITHUB_TOKEN = token;
-    env.GH_TOKEN = token;
-    return env;
+    return {
+      GITHUB_TOKEN: token,
+      GH_TOKEN: token,
+    };
   }
 
   private buildControlPlanePromptContext(): {

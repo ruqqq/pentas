@@ -22,7 +22,7 @@ export async function* runCodex(
       );
     }
   }
-  const env = buildCodexChildEnv(inv.codex.env);
+  const env = buildCodexChildEnv(inv.codex.env, { preserveProcessKeys: ["CODEX_HOME"] });
   await setupGitIdentity(inv.codex.git, env);
   await setupGithubGitAuth(env);
 

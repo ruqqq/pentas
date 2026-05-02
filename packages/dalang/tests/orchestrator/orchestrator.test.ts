@@ -112,6 +112,70 @@ test("tick dispatches eligible issue and runs an attempt to completion", async (
   expect(orch.state.completed.has("i1")).toBe(true);
 });
 
+test("github-projects codex env injects only GitHub tokens", async () => {
+  const oldGithubToken = process.env.GITHUB_TOKEN;
+  const oldCodexHome = process.env.CODEX_HOME;
+  try {
+    process.env.GITHUB_TOKEN = "ghp_test";
+    process.env.CODEX_HOME = "/home/host/.codex";
+
+    const root = await tmpRoot();
+    const tracker = new FakeControlPlane();
+    tracker.candidates = [issue("i1", "Ready for Dev")];
+    tracker.byIds["i1"] = issue("i1", "Ready for Dev");
+    let observedEnv: Record<string, string> | undefined;
+
+    const cfg = applyDefaults({
+      control_plane: {
+        kind: "github-projects",
+        owner_type: "organization",
+        owner: "UseMeem",
+        project_number: 1,
+        repository: "UseMeem/meem-class",
+        status_field: "Status",
+        active_states: ["Ready for Dev"],
+        terminal_states: ["Done"],
+        ownership: { mode: "none" },
+      },
+      workspace: { root },
+      agent_provider: "codex",
+      codex: {
+        executable_path: "codex",
+        model: "gpt-5.5",
+        sandbox_mode: "danger-full-access",
+        approval_policy: "never",
+        network_access_enabled: true,
+        turn_timeout_ms: 60000,
+        read_timeout_ms: 5000,
+        stall_timeout_ms: 30000,
+      },
+      agent: { max_concurrent_agents: 1, max_turns: 1 },
+      polling: { interval_ms: 1000 },
+    });
+
+    const orch = new Orchestrator({
+      controlPlane: tracker,
+      config: cfg,
+      promptTemplate: "x",
+      runQuery: async function* (opts) {
+        observedEnv = opts.codex?.env;
+        yield { type: "thread.started", thread_id: "codex-thread" };
+        yield { type: "turn.completed", usage: { input_tokens: 1, output_tokens: 1 } };
+      },
+    });
+
+    await orch.tick();
+    await orch.drainPendingForTest();
+
+    expect(observedEnv).toEqual({ GITHUB_TOKEN: "ghp_test", GH_TOKEN: "ghp_test" });
+  } finally {
+    if (oldGithubToken === undefined) delete process.env.GITHUB_TOKEN;
+    else process.env.GITHUB_TOKEN = oldGithubToken;
+    if (oldCodexHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = oldCodexHome;
+  }
+});
+
 test("workspace is removed when issue disappears between completion and continuation retry", async () => {
   const root = await tmpRoot();
   const tracker = new FakeControlPlane();
