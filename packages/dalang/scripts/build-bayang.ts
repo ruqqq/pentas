@@ -4,7 +4,7 @@ import { mkdir } from "node:fs/promises";
 const root = resolve(import.meta.dir, "..");
 const entry = resolve(root, "src/worker/main.ts");
 const outDir = resolve(root, "dist");
-const outFile = resolve(outDir, "dalang-worker");
+const outFile = resolve(outDir, "bayang");
 
 await mkdir(outDir, { recursive: true });
 

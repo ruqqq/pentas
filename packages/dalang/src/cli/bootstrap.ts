@@ -17,7 +17,7 @@ import { startServer, type ServerHandle } from "../http/server";
 import { createLogger, type Logger } from "../logging/logger";
 import type { RunQuery } from "../agent/agent-runner";
 
-export const DEFAULT_SANDBOX_WORKER_PATH = "/opt/dalang/dalang-worker";
+export const DEFAULT_SANDBOX_WORKER_PATH = "/opt/dalang/bayang";
 
 export function sandboxWorkerCommand(): string[] {
   return [DEFAULT_SANDBOX_WORKER_PATH];
@@ -123,7 +123,7 @@ export class Bootstrap {
       const { expandPath } = await import("../config/env-resolver");
       const sandboxesRoot = resolve(expandPath(wf.config.workspace.root), ".dalang", "sandboxes");
 
-      // Best-effort cleanup of dalang-worker artifacts whose owning dalang
+      // Best-effort cleanup of bayang artifacts whose owning dalang
       // process is no longer running. Safe to run even if other dalang
       // instances are active — those instances' live workers are skipped.
       const swept = await sweepOrphanWorkers();
@@ -138,7 +138,7 @@ export class Bootstrap {
             composeProjectsRemoved: swept.composeProjectsRemoved,
             skippedLive: swept.skippedLive,
           },
-          "swept dalang-worker artifacts (other live dalang workers skipped)",
+          "swept bayang artifacts (other live dalang workers skipped)",
         );
       }
       this.log.info(

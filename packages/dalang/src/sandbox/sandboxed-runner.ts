@@ -14,7 +14,7 @@ export interface SandboxedRunnerDeps {
   /** Absolute path to the repo on the host. */
   repoDir: string;
   config: SandboxConfig;
-  /** Override the exec command (testing). Default uses `/opt/dalang/dalang-worker`. */
+  /** Override the exec command (testing). Default uses `/opt/dalang/bayang`. */
   shimCmdOverride?: string[];
   /** Override the invocation payload (testing). Default builds from RunQueryOptions. */
   invocationOverride?: unknown;
@@ -24,7 +24,7 @@ export interface SandboxedRunnerDeps {
   workerIdFactory?: () => string;
 }
 
-const DEFAULT_SHIM_CONTAINER_PATH = "/opt/dalang/dalang-worker";
+const DEFAULT_SHIM_CONTAINER_PATH = "/opt/dalang/bayang";
 
 let workerCounter = 0;
 
@@ -91,8 +91,7 @@ export function createSandboxedRunQuery(deps: SandboxedRunnerDeps): RunQuery {
     return {
       [Symbol.asyncIterator]: async function* () {
         const provider = providerOf(opts);
-        const workerId =
-          deps.workerIdFactory?.() ?? `dalang-worker-${process.pid}-${++workerCounter}`;
+        const workerId = deps.workerIdFactory?.() ?? `bayang-${process.pid}-${++workerCounter}`;
 
         const image = await resolveImage(deps.config.image, deps.repoDir);
 

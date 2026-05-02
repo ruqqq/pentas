@@ -39,7 +39,7 @@ class WorkerReadyHost extends FakeContainerHost {
       name: fake.name,
       exec: async (execOpts: ExecOptions): Promise<ExecResult> => {
         const script = execOpts.cmd.join(" ");
-        if (script.includes("/opt/dalang/dalang-worker")) {
+        if (script.includes("/opt/dalang/bayang")) {
           return {
             stdout: (async function* () {})(),
             stderr: (async function* () {})(),
@@ -76,7 +76,7 @@ test("runSandboxDoctor reports ok checks for provider CLI, gh, credentials, and 
 
   expect(result.ok).toBe(true);
   expect(result.checks.map((c) => [c.name, c.ok])).toEqual([
-    ["worker shim: /opt/dalang/dalang-worker", true],
+    ["bayang shim: /opt/dalang/bayang", true],
     ["provider cli: sh", true],
     ["required cli: sh", true],
     ["provider credentials", true],

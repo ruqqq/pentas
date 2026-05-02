@@ -2,7 +2,7 @@ import type { ContainerHandle } from "./types";
 
 export interface RemoteRunOptions {
   handle: ContainerHandle;
-  /** The command to exec inside the container, e.g. `["/opt/dalang/dalang-worker"]` or `["bun", "run", "src/worker/main.ts"]`. */
+  /** The command to exec inside the container, e.g. `["/opt/dalang/bayang"]` or `["bun", "run", "src/worker/main.ts"]`. */
   shimCmd: string[];
   /** Working directory inside the container for the shim. Optional. */
   cwd?: string;
@@ -44,14 +44,14 @@ async function collectStderrTail(stderr: AsyncIterable<string>): Promise<string>
 
 export async function* remoteRunQuery(opts: RemoteRunOptions): AsyncGenerator<unknown> {
   // ContainerHandle.exec doesn't support stdin in Phase 1's API. We pass the
-  // invocation JSON via an env var: the shim reads it from env when stdin is
+  // invocation JSON via an env var: bayang reads it from env when stdin is
   // empty. (Stdin support is a Phase 4 follow-up.)
   const invocationJson = JSON.stringify(opts.invocation);
 
   const exec = await opts.handle.exec({
     cmd: opts.shimCmd,
     cwd: opts.cwd,
-    env: { ...opts.env, DALANG_WORKER_INVOCATION: invocationJson },
+    env: { ...opts.env, BAYANG_INVOCATION: invocationJson },
     abortSignal: opts.abortSignal,
   });
 

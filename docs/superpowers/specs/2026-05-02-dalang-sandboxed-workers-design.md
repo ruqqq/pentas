@@ -8,7 +8,7 @@
 
 Run each per-issue worker's tool calls inside a container so that an autonomous agent's filesystem, shell, and network side effects cannot reach the host. dalang stays on the host as the supervisor; the agent process (claude / codex / opencode) runs inside the container, against the worker's worktree, with provider credentials injected per-worker.
 
-The sandbox image is **not** owned by dalang. Each repo declares its own image — ideally by reusing the repo's existing `.devcontainer/` — so the agent has access to the project's actual toolchain (Bun version, Playwright browsers, postgres-client, etc.). dalang ships a single self-contained `dalang-worker` shim binary that is bind-mounted into whatever image the repo provides.
+The sandbox image is **not** owned by dalang. Each repo declares its own image — ideally by reusing the repo's existing `.devcontainer/` — so the agent has access to the project's actual toolchain (Bun version, Playwright browsers, postgres-client, etc.). Each image bakes in a single self-contained `bayang` shim binary.
 
 Out of scope for v1: egress network policy (allowlists, locked-down DNS). The threat model assumes the agent is autonomous and needs internet; we accept that an exfiltration-capable tool call can reach the open internet.
 
@@ -48,7 +48,7 @@ A natural sandbox candidate is the Devcontainer spec (`.devcontainer/devcontaine
 One container per running worker. Lifecycle:
 
 1. **Worker start.** dalang creates the worktree (existing flow), then provisions a container from the repo's image, with the worktree bind-mounted at the devcontainer's `workspaceFolder`.
-2. **Shim launch.** dalang `docker exec`s `/opt/dalang/dalang-worker <provider> <args>` inside the container. The shim imports the appropriate SDK and runs the agent loop in-container.
+2. **Shim launch.** dalang `docker exec`s `/opt/dalang/bayang <provider> <args>` inside the container. The shim imports the appropriate SDK and runs the agent loop in-container.
 3. **Event stream.** The shim emits one JSON event per line on stdout. The host-side runner reads the stream and yields events to `agent-runner.ts`. Existing event-mapper modules (`event-mapper.ts`, `codex-event-mapper.ts`, `opencode-event-mapper.ts`) are unchanged because event shapes are unchanged.
 4. **Worker end.** On any exit (success, abort, crash), dalang stops and removes the container. The worktree persists on the host. Resume on the same issue starts a fresh container against the same worktree.
 
@@ -83,7 +83,7 @@ When the repo's devcontainer uses `dockerComposeFile` (e.g. meem-class with post
 - This is heavier than a shared compose stack but matches the per-worktree blast-radius rule for everything else in dalang.
 - `postCreateCommand` runs once on container create, before the shim is exec'd.
 
-### 4. The dalang-worker shim
+### 4. The bayang shim
 
 Single Bun-compiled binary, built with `bun build --compile`, shipped with dalang. Bundles:
 
@@ -95,7 +95,7 @@ Single Bun-compiled binary, built with `bun build --compile`, shipped with dalan
 CLI surface, called by dalang via `docker exec`:
 
 ```
-dalang-worker run \
+bayang run \
   --provider claude|codex|opencode \
   --cwd /workspace \
   --model <model-id> \
@@ -108,7 +108,7 @@ dalang-worker run \
 
 Output: newline-delimited JSON events on stdout. The event schema is the *same* schema the existing runners already produce for `agent-runner.ts`. Stderr is dalang's worker logs, captured into the existing logging pipeline.
 
-The shim is bind-mounted read-only at `/opt/dalang/dalang-worker` from a host directory dalang controls. The image never ships the shim; dalang and shim version-lock through the host install.
+The shim is baked into the image at `/opt/dalang/bayang`. `dalang sandbox doctor` verifies the binary exists and is executable before unattended runs.
 
 ### 5. Auth
 
@@ -153,7 +153,7 @@ The host's actual home directory is never touched by `dalang auth login`.
 The transport is `docker exec` with stdio piping. dalang spawns:
 
 ```
-docker exec -i <container> /opt/dalang/dalang-worker run --provider <p> ...
+docker exec -i <container> /opt/dalang/bayang run --provider <p> ...
 ```
 
 Reads NDJSON from stdout, writes nothing to stdin after launch (prompts and config are passed via files in `/run/dalang/`). Aborts propagate via `docker kill --signal SIGTERM <container>` followed by container teardown.
@@ -184,7 +184,7 @@ packages/dalang/src/
     claude.ts | codex.ts | opencode.ts
 
 packages/dalang/scripts/
-  build-worker.ts            (bun build --compile entry point)
+  build-bayang.ts            (bun build --compile entry point)
 ```
 
 The three existing runners (`sdk-runner.ts`, `codex-runner.ts`, `opencode-runner.ts`) are refactored into thin clients of `ContainerHost`: spawn shim, read NDJSON, yield events. The non-sandboxed code path remains as a fallback when `sandbox.enabled: false`.

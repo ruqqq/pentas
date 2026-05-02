@@ -31,18 +31,18 @@ test("sandboxed claude RunQuery executes a one-turn prompt end-to-end", async ()
   if (!dockerAvailable || !claudeAuthAvailable) return;
 
   const repoDir = await realpath(await mkdtemp(join(tmpdir(), "sandbox-e2e-")));
-  const shimBinary = resolve(import.meta.dir, "..", "..", "dist", "dalang-worker");
+  const shimBinary = resolve(import.meta.dir, "..", "..", "dist", "bayang");
   if (!existsSync(shimBinary)) {
-    console.warn(`shim binary missing at ${shimBinary}; skipping. Run \`bun run worker:build\`.`);
+    console.warn(`bayang binary missing at ${shimBinary}; skipping. Run \`bun run bayang:build\`.`);
     return;
   }
-  await copyFile(shimBinary, join(repoDir, "dalang-worker"));
+  await copyFile(shimBinary, join(repoDir, "bayang"));
   await writeFile(
     join(repoDir, "Dockerfile"),
     `FROM alpine:3.19
 RUN apk add --no-cache bash curl
-COPY dalang-worker /opt/dalang/dalang-worker
-RUN chmod 0755 /opt/dalang/dalang-worker
+COPY bayang /opt/dalang/bayang
+RUN chmod 0755 /opt/dalang/bayang
 WORKDIR /workspace
 `,
   );

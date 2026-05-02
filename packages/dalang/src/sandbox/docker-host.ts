@@ -197,11 +197,11 @@ class ComposeHandle implements ContainerHandle {
 
 /**
  * Extract the owning dalang process PID from a worker name. Worker names
- * have the form `dalang-worker-<pid>-<counter>`. Returns null if the name
+ * have the form `bayang-<pid>-<counter>`. Returns null if the name
  * doesn't parse.
  */
 function ownerPidOf(name: string): number | null {
-  const m = name.match(/^dalang-worker-(\d+)-\d+$/);
+  const m = name.match(/^bayang-(\d+)-\d+$/);
   if (!m || m[1] === undefined) return null;
   const pid = Number(m[1]);
   return Number.isInteger(pid) && pid > 0 ? pid : null;
@@ -224,7 +224,7 @@ function isHostPidAlive(pid: number): boolean {
 }
 
 /**
- * Tear down `dalang-worker-*` containers and compose projects whose owning
+ * Tear down `bayang-*` containers and compose projects whose owning
  * dalang process is no longer running. Safe to call when other dalang
  * instances are active on the same host — their live workers are skipped.
  * Idempotent. Does not error on hosts without Docker — the spawn calls
@@ -239,9 +239,9 @@ export async function sweepOrphanWorkers(): Promise<{
   const composeProjectsRemoved: string[] = [];
   const skippedLive: string[] = [];
 
-  // 1. Image-kind containers: anything named dalang-worker-* whose owner is gone.
+  // 1. Image-kind containers: anything named bayang-* whose owner is gone.
   const psProc = Bun.spawn(
-    ["docker", "ps", "-a", "--filter", "name=^dalang-worker-", "--format", "{{.Names}}"],
+    ["docker", "ps", "-a", "--filter", "name=^bayang-", "--format", "{{.Names}}"],
     { stdout: "pipe", stderr: "ignore" },
   );
   if ((await psProc.exited) === 0) {
@@ -260,9 +260,9 @@ export async function sweepOrphanWorkers(): Promise<{
     }
   }
 
-  // 2. Compose projects named dalang-worker-* whose owner is gone.
+  // 2. Compose projects named bayang-* whose owner is gone.
   const lsProc = Bun.spawn(
-    ["docker", "compose", "ls", "--all", "--filter", "name=dalang-worker-", "--format", "json"],
+    ["docker", "compose", "ls", "--all", "--filter", "name=bayang-", "--format", "json"],
     { stdout: "pipe", stderr: "ignore" },
   );
   if ((await lsProc.exited) === 0) {
@@ -271,7 +271,7 @@ export async function sweepOrphanWorkers(): Promise<{
       try {
         const entries = JSON.parse(raw) as Array<{ Name?: string; ConfigFiles?: string }>;
         for (const e of entries) {
-          if (typeof e.Name !== "string" || !e.Name.startsWith("dalang-worker-")) continue;
+          if (typeof e.Name !== "string" || !e.Name.startsWith("bayang-")) continue;
           const ownerPid = ownerPidOf(e.Name);
           if (ownerPid !== null && isHostPidAlive(ownerPid)) {
             skippedLive.push(e.Name);

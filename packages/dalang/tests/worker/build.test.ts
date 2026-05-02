@@ -2,15 +2,15 @@ import { test, expect } from "bun:test";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-test("worker:build produces a runnable single-file binary", async () => {
-  const bin = resolve(import.meta.dir, "..", "..", "dist", "dalang-worker");
+test("bayang:build produces a runnable single-file binary", async () => {
+  const bin = resolve(import.meta.dir, "..", "..", "dist", "bayang");
   if (!existsSync(bin)) return;
 
   const proc = Bun.spawn([bin], {
     stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",
-    env: { DALANG_WORKER_INVOCATION: "{}" } as Record<string, string>,
+    env: { BAYANG_INVOCATION: "{}" } as Record<string, string>,
   });
   proc.stdin.end();
   const stderrText = await new Response(proc.stderr).text();

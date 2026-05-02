@@ -23,8 +23,8 @@ const runQueryFactory = () =>
     yield { type: "result" as const, subtype: "success", usage: {} };
   };
 
-test("sandboxWorkerCommand defaults to the baked worker path inside the container", () => {
-  expect(sandboxWorkerCommand()).toEqual(["/opt/dalang/dalang-worker"]);
+test("sandboxWorkerCommand defaults to the baked bayang path inside the container", () => {
+  expect(sandboxWorkerCommand()).toEqual(["/opt/dalang/bayang"]);
 });
 
 test("loads workflow, validates, starts and stops cleanly", async () => {

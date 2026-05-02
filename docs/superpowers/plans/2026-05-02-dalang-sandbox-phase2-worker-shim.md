@@ -1,8 +1,8 @@
-# Sandboxed Workers Phase 2 — `dalang-worker` Shim
+# Sandboxed Workers Phase 2 — `bayang` Shim
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a `dalang-worker` shim — a small program that runs *inside* a worker container, drives one provider's SDK locally, and emits events as NDJSON on stdout. Plus a host-side `remote-runner.ts` that runs the shim through a `ContainerHost` and re-exposes the events as a normal `RunQuery` `AsyncIterable`. Phase 2 ships the shim runtime, the IPC protocol, the host-side wrapper, and tests against the in-process `FakeContainerHost` from Phase 1. It does **not** wire the shim into dalang's existing runner seam (Phase 4) and does **not** ship a compiled binary build — production compilation is the last task and is opt-in for now.
+**Goal:** Add a `bayang` shim — a small program that runs *inside* a worker container, drives one provider's SDK locally, and emits events as NDJSON on stdout. Plus a host-side `remote-runner.ts` that runs the shim through a `ContainerHost` and re-exposes the events as a normal `RunQuery` `AsyncIterable`. Phase 2 ships the shim runtime, the IPC protocol, the host-side wrapper, and tests against the in-process `FakeContainerHost` from Phase 1. It does **not** wire the shim into dalang's existing runner seam (Phase 4) and does **not** ship a compiled binary build — production compilation is the last task and is opt-in for now.
 
 **Architecture:** The shim is a Bun TypeScript entry at `packages/dalang/src/worker/main.ts`. It reads a JSON `WorkerInvocation` blob from stdin, dispatches to one of three provider modules (`worker/claude.ts`, `worker/codex.ts`, `worker/opencode.ts`) which import the same SDKs the existing in-process runners use (`@anthropic-ai/claude-agent-sdk`, `@openai/codex-sdk`, `@opencode-ai/sdk`), and writes one NDJSON line per provider event to stdout. SIGTERM on the process aborts the SDK call. Errors are emitted as `{"kind":"error",...}` events and the process exits non-zero. The host side gets a `remoteRunQuery(host: ContainerHandle, opts)` factory that returns the same `AsyncIterable<unknown>` shape as the existing `RunQuery`.
 
@@ -23,7 +23,7 @@ The shim exists to be exec'd inside a worker container in later phases. In Phase
 - `packages/dalang/src/worker/opencode.ts` — spawns its own `opencode` server, drives `@opencode-ai/sdk`
 - `packages/dalang/src/worker/index.ts` — barrel
 - `packages/dalang/src/sandbox/remote-runner.ts` — host-side wrapper: runs the shim via a `ContainerHandle.exec()`, parses NDJSON, exposes `AsyncIterable<unknown>`
-- `packages/dalang/scripts/build-worker.ts` — `bun build --compile` script (Task 8)
+- `packages/dalang/scripts/build-bayang.ts` — `bun build --compile` script (Task 8)
 - `packages/dalang/tests/worker/protocol.test.ts`
 - `packages/dalang/tests/worker/main.test.ts` — spawns the shim as a host subprocess, asserts NDJSON output (Claude path)
 - `packages/dalang/tests/worker/codex.test.ts` — spawns shim with codex provider; gated behind `CODEX_AVAILABLE`
@@ -33,7 +33,7 @@ The shim exists to be exec'd inside a worker container in later phases. In Phase
 
 **Modify:**
 
-- `packages/dalang/package.json` — add `worker:build` script that runs `bun scripts/build-worker.ts` (Task 8 only)
+- `packages/dalang/package.json` — add `bayang:build` script that runs `bun scripts/build-bayang.ts` (Task 8 only)
 - `packages/dalang/src/sandbox/index.ts` — re-export `remoteRunQuery`
 
 ---
@@ -1041,7 +1041,7 @@ import type { ContainerHandle } from "./types";
 
 export interface RemoteRunOptions {
   handle: ContainerHandle;
-  /** The command to exec inside the container, e.g. `["/opt/dalang/dalang-worker"]` or `["bun", "run", "src/worker/main.ts"]`. */
+  /** The command to exec inside the container, e.g. `["/opt/dalang/bayang"]` or `["bun", "run", "src/worker/main.ts"]`. */
   shimCmd: string[];
   /** Working directory inside the container for the shim. Optional. */
   cwd?: string;
@@ -1084,7 +1084,7 @@ export async function* remoteRunQuery(opts: RemoteRunOptions): AsyncGenerator<un
   const exec = await opts.handle.exec({
     cmd: opts.shimCmd,
     cwd: opts.cwd,
-    env: { ...(opts.env ?? {}), DALANG_WORKER_INVOCATION: invocationJson },
+    env: { ...(opts.env ?? {}), BAYANG_INVOCATION: invocationJson },
     abortSignal: opts.abortSignal,
   });
 
@@ -1130,11 +1130,11 @@ export async function* remoteRunQuery(opts: RemoteRunOptions): AsyncGenerator<un
 
 - [ ] **Step 4: Update `main.ts` and the echo-shim to read from env if stdin is empty**
 
-In `packages/dalang/src/worker/main.ts`, replace `readAllStdin` with a helper that prefers stdin, falls back to `DALANG_WORKER_INVOCATION`:
+In `packages/dalang/src/worker/main.ts`, replace `readAllStdin` with a helper that prefers stdin, falls back to `BAYANG_INVOCATION`:
 
 ```ts
 async function readInvocationRaw(): Promise<string> {
-  const env = process.env["DALANG_WORKER_INVOCATION"];
+  const env = process.env["BAYANG_INVOCATION"];
   if (typeof env === "string" && env.length > 0) return env;
   const decoder = new TextDecoder();
   let out = "";
@@ -1181,17 +1181,17 @@ git commit -m "feat(dalang): host-side remote-runner bridges ContainerHost to Ru
 
 ## Task 8: `bun build --compile` for the shim
 
-Produce a single-file binary at `packages/dalang/dist/dalang-worker` that bundles the SDKs. Phase 4 will use this binary; Phase 2 ships the build pipeline so we can iterate.
+Produce a single-file binary at `packages/dalang/dist/bayang` that bundles the SDKs. Phase 4 will use this binary; Phase 2 ships the build pipeline so we can iterate.
 
 **Files:**
 
-- Create: `packages/dalang/scripts/build-worker.ts`
-- Modify: `packages/dalang/package.json` — add `worker:build` script
+- Create: `packages/dalang/scripts/build-bayang.ts`
+- Modify: `packages/dalang/package.json` — add `bayang:build` script
 - Create: `packages/dalang/tests/worker/build.test.ts`
 
 - [ ] **Step 1: Create the build script**
 
-`packages/dalang/scripts/build-worker.ts`:
+`packages/dalang/scripts/build-bayang.ts`:
 
 ```ts
 import { resolve } from "node:path";
@@ -1200,7 +1200,7 @@ import { mkdir } from "node:fs/promises";
 const root = resolve(import.meta.dir, "..");
 const entry = resolve(root, "src/worker/main.ts");
 const outDir = resolve(root, "dist");
-const outFile = resolve(outDir, "dalang-worker");
+const outFile = resolve(outDir, "bayang");
 
 await mkdir(outDir, { recursive: true });
 
@@ -1219,7 +1219,7 @@ console.log(`built ${outFile}`);
 Inside `packages/dalang/package.json`, add to `"scripts"`:
 
 ```json
-"worker:build": "bun run scripts/build-worker.ts"
+"bayang:build": "bun run scripts/build-bayang.ts"
 ```
 
 (Keep alphabetical with existing entries.)
@@ -1233,17 +1233,17 @@ import { test, expect } from "bun:test";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-test("worker:build produces a runnable single-file binary", async () => {
+test("bayang:build produces a runnable single-file binary", async () => {
   // This test is opt-in: it requires the build to have been run by the developer/CI.
   // Skip if the binary is missing.
-  const bin = resolve(import.meta.dir, "..", "..", "dist", "dalang-worker");
+  const bin = resolve(import.meta.dir, "..", "..", "dist", "bayang");
   if (!existsSync(bin)) return;
 
   const proc = Bun.spawn([bin], {
     stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",
-    env: { DALANG_WORKER_INVOCATION: "{}" } as Record<string, string>,
+    env: { BAYANG_INVOCATION: "{}" } as Record<string, string>,
   });
   proc.stdin.end();
   const stderrText = await new Response(proc.stderr).text();
@@ -1259,8 +1259,8 @@ test("worker:build produces a runnable single-file binary", async () => {
 
 - [ ] **Step 4: Run the build, then the test**
 
-Run: `cd packages/dalang && bun run worker:build && cd .. && cd .. && bun test packages/dalang/tests/worker/build.test.ts`
-Expected: build prints `built .../dist/dalang-worker`; test PASSES.
+Run: `cd packages/dalang && bun run bayang:build && cd .. && cd .. && bun test packages/dalang/tests/worker/build.test.ts`
+Expected: build prints `built .../dist/bayang`; test PASSES.
 
 If `bun build --compile` fails because of a native module the SDKs require (codex's platform-specific binary lookup is the most likely culprit), capture the stderr and report as `BLOCKED`. Likely fixes:
 - Mark the codex platform packages as `--external` so the binary lookup happens at runtime against bind-mounted vendored binaries (Phase 4 layout decision).
@@ -1277,8 +1277,8 @@ echo 'dist/' >> packages/dalang/.gitignore
 - [ ] **Step 6: Commit**
 
 ```bash
-git add packages/dalang/scripts/build-worker.ts packages/dalang/package.json packages/dalang/tests/worker/build.test.ts packages/dalang/.gitignore
-git commit -m "feat(dalang): worker:build produces single-file dalang-worker binary"
+git add packages/dalang/scripts/build-bayang.ts packages/dalang/package.json packages/dalang/tests/worker/build.test.ts packages/dalang/.gitignore
+git commit -m "feat(dalang): bayang:build produces single-file bayang binary"
 ```
 
 ---
@@ -1309,15 +1309,15 @@ Expected: empty (Phase 2 doesn't use Docker, but the integration tests share fix
 
 ## Phase 2 Done Criteria
 
-- `dalang-worker` shim runs as a host subprocess, accepts a `WorkerInvocation` (stdin or `DALANG_WORKER_INVOCATION` env), dispatches by `provider`, and emits NDJSON `WorkerEvent`s.
+- `bayang` shim runs as a host subprocess, accepts a `WorkerInvocation` (stdin or `BAYANG_INVOCATION` env), dispatches by `provider`, and emits NDJSON `WorkerEvent`s.
 - Three providers (claude, codex, opencode) implemented in the shim, each smoke-tested against real auth when available, gated otherwise.
 - Host-side `remoteRunQuery` bridges a `ContainerHandle` exec to an `AsyncIterable` of provider events, validated through `FakeContainerHost`.
-- `bun run worker:build` produces a single-file binary at `packages/dalang/dist/dalang-worker`. Build may have caveats for codex's platform-binary lookup — those are recorded and addressed in Phase 4 if they didn't get resolved here.
+- `bun run bayang:build` produces a single-file binary at `packages/dalang/dist/bayang`. Build may have caveats for codex's platform-binary lookup — those are recorded and addressed in Phase 4 if they didn't get resolved here.
 - No changes to dalang's existing runner seam (`agent-runner.ts`, `sdk-runner.ts`, etc.). Phase 4 wires it up.
 
 ## Open Questions
 
-1. **Stdin support on `ContainerHandle.exec`.** Phase 2 uses `DALANG_WORKER_INVOCATION` env injection because Phase 1's exec API doesn't expose stdin. Phase 4 may add stdin support to `ContainerHandle.exec` so the invocation can be piped instead of going through env (cleaner for large prompts).
+1. **Stdin support on `ContainerHandle.exec`.** Phase 2 uses `BAYANG_INVOCATION` env injection because Phase 1's exec API doesn't expose stdin. Phase 4 may add stdin support to `ContainerHandle.exec` so the invocation can be piped instead of going through env (cleaner for large prompts).
 2. **opencode terminator events.** `runOpencode` ends the loop on `session.idle` / `session.error`. If those event names change in the SDK, the existing host runner's terminator logic should be the source of truth — keep them in sync.
 3. **Codex platform-binary bundling under `bun build --compile`.** May force `--external` on the `@openai/codex-{platform}` packages and ship them as siblings of the binary. Resolve in Phase 2 Task 8 if possible; otherwise defer to Phase 4.
 4. **Provider CLI distribution.** Phase 4 must decide where the `claude`, `codex`, `opencode` binaries come from inside the worker container — bind-mounted from a dalang-controlled directory, vs. installed in the repo's image. Phase 2 sidesteps this by running the shim on the host (FakeContainerHost) where the CLIs are normally installed.

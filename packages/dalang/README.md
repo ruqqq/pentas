@@ -163,7 +163,7 @@ of running the provider CLI directly on the host. Enable this with
 
 The sandbox is intentionally a worker boundary, not a security boundary for
 host secrets. dalang still mounts a worktree, projects provider credentials,
-passes selected env vars, and runs a worker shim inside the container. Treat it
+passes selected env vars, and runs `bayang` inside the container. Treat it
 as a reproducible project runtime for unattended agents, not as protection
 against malicious code.
 
@@ -174,17 +174,16 @@ For each picked-up item, dalang:
 1. Creates or reuses the issue worktree under `workspace.root`.
 2. Resolves the sandbox image from the workflow config.
 3. Starts a per-worker Docker container or compose project named
-   `dalang-worker-<pid>-<counter>`.
+   `bayang-<pid>-<counter>`.
 4. Mounts the worktree into the container.
-5. Executes the image-baked `dalang-worker` shim at `/opt/dalang/dalang-worker`.
+5. Executes the image-baked `bayang` shim at `/opt/dalang/bayang`.
 6. Projects the active provider credential into the container.
-7. Executes the shim with a JSON invocation in `DALANG_WORKER_INVOCATION`.
+7. Executes the shim with a JSON invocation in `BAYANG_INVOCATION`.
 8. Streams provider events back to the orchestrator.
 9. Tears the worker down and disposes projected credentials.
 
-The sandbox image must include an executable `dalang-worker` at
-`/opt/dalang/dalang-worker`. `dalang sandbox doctor` fails when that binary is
-missing or not executable.
+The sandbox image must include an executable `bayang` at `/opt/dalang/bayang`.
+`dalang sandbox doctor` fails when that binary is missing or not executable.
 
 ### Image Sources
 
@@ -235,11 +234,11 @@ For Codex workers, the image usually needs:
 - `gh` if the prompt or workflow expects GitHub CLI commands
 - project tooling such as `bun`, `node`, `wrangler`, `psql`, Playwright, etc.
 
-The image must bake in `dalang-worker`. For now, project devcontainers can build
-it from the public Pentas source during image build:
+The image must bake in `bayang`. For now, project devcontainers can build it
+from the public Pentas source during image build:
 
 ```dockerfile
-FROM oven/bun:1 AS dalang-worker-builder
+FROM oven/bun:1 AS bayang-builder
 ARG DALANG_REPO=https://github.com/ruqqq/pentas.git
 ARG DALANG_REF=main
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git \
@@ -247,11 +246,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 RUN git clone --depth=1 --branch "$DALANG_REF" "$DALANG_REPO" /tmp/pentas
 WORKDIR /tmp/pentas
 RUN bun install --frozen-lockfile
-RUN bun run build:dalang-worker
+RUN bun run build:bayang
 
 FROM your-project-image
-COPY --from=dalang-worker-builder /tmp/pentas/dist/dalang-worker /opt/dalang/dalang-worker
-RUN chmod 0755 /opt/dalang/dalang-worker
+COPY --from=bayang-builder /tmp/pentas/dist/bayang /opt/dalang/bayang
+RUN chmod 0755 /opt/dalang/bayang
 ```
 
 The shim is a Linux x86-64 Bun-compiled binary, so the image must be able to
@@ -359,7 +358,7 @@ dalang sandbox doctor WORKFLOW.md
 The doctor starts the configured sandbox image, projects credentials, and
 checks the runtime assumptions:
 
-- `dalang-worker` exists and is executable
+- `bayang` exists and is executable
 - provider CLI exists
 - required CLIs exist, by default `gh` and `git`
 - provider credentials are readable
@@ -373,7 +372,7 @@ config before enabling unattended runs.
 
 ### Orphan Cleanup
 
-On startup, dalang sweeps stale `dalang-worker-*` Docker containers and compose
+On startup, dalang sweeps stale `bayang-*` Docker containers and compose
 projects whose owning dalang process no longer exists. Live workers owned by
 other running dalang processes are skipped.
 
@@ -381,7 +380,7 @@ other running dalang processes are skipped.
 
 **`worker shim exited 126`**
 The worker command could not be executed. Rebuild the sandbox image and verify
-it contains an executable `/opt/dalang/dalang-worker`.
+it contains an executable `/opt/dalang/bayang`.
 
 **`Executable not found in $PATH: "gh"`**
 The container does not have GitHub CLI. Install `gh` in the devcontainer if the

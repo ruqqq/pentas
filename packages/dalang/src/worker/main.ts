@@ -14,7 +14,7 @@ export interface WorkerLoopOptions<I> {
 }
 
 async function readInvocationRaw(): Promise<string> {
-  const env = process.env["DALANG_WORKER_INVOCATION"];
+  const env = process.env["BAYANG_INVOCATION"];
   if (typeof env === "string" && env.length > 0) return env;
   const decoder = new TextDecoder();
   let out = "";

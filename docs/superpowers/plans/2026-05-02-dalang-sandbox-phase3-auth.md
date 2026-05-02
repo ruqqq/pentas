@@ -1066,4 +1066,4 @@ Expected: no errors.
 
 ## Next Phase
 
-- **Phase 4** — Runner refactor (`sdk-runner.ts` / `codex-runner.ts` / `opencode-runner.ts` become thin wrappers over `ContainerHost` + `dalang-worker` shim + `prepareWorkerCredentials`), `sandbox:` config block in `WORKFLOW.md`, error classifications in `RuntimeEvent`, end-to-end devcontainer fixture.
+- **Phase 4** — Runner refactor (`sdk-runner.ts` / `codex-runner.ts` / `opencode-runner.ts` become thin wrappers over `ContainerHost` + `bayang` shim + `prepareWorkerCredentials`), `sandbox:` config block in `WORKFLOW.md`, error classifications in `RuntimeEvent`, end-to-end devcontainer fixture.

@@ -1556,6 +1556,6 @@ git status
 
 ## Next Phases (separate plans)
 
-- **Phase 2:** dalang-worker shim binary (bun build --compile, NDJSON event protocol, in-shim claude/codex/opencode runners).
+- **Phase 2:** bayang shim binary (bun build --compile, NDJSON event protocol, in-shim claude/codex/opencode runners).
 - **Phase 3:** Credential store, per-worker auth file projection, `dalang auth login <provider>` subcommand.
 - **Phase 4:** Runner refactor (`sdk-runner.ts` / `codex-runner.ts` / `opencode-runner.ts`) to use `ContainerHost` + shim, sandbox config block in `WORKFLOW.md`, error classifications wired into `RuntimeEvent`s, end-to-end devcontainer fixture.

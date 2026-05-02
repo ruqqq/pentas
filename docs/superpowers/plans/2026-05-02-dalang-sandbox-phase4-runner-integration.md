@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Wire Phases 1–3 into dalang's runtime. Add a `sandbox:` config block to `WORKFLOW.md`. When `sandbox.enabled: true`, dalang's worker runner becomes a `sandboxedRunQuery` that resolves the repo's image, starts a per-worker container, projects credentials in, execs the `dalang-worker` shim, streams events out, and tears everything down on completion or abort. When `sandbox.enabled: false`, the existing in-process runners stay untouched. Add error classifications to `RuntimeEvent` and a real-Docker end-to-end devcontainer test as the Phase-4 acceptance gate.
+**Goal:** Wire Phases 1–3 into dalang's runtime. Add a `sandbox:` config block to `WORKFLOW.md`. When `sandbox.enabled: true`, dalang's worker runner becomes a `sandboxedRunQuery` that resolves the repo's image, starts a per-worker container, projects credentials in, execs the `bayang` shim, streams events out, and tears everything down on completion or abort. When `sandbox.enabled: false`, the existing in-process runners stay untouched. Add error classifications to `RuntimeEvent` and a real-Docker end-to-end devcontainer test as the Phase-4 acceptance gate.
 
-**Architecture:** A new `packages/dalang/src/sandbox/sandboxed-runner.ts` exposes a single `createSandboxedRunQuery(deps)` factory that returns a `RunQuery`. The factory takes a host-side `ContainerHost`, an `AuthStore`, the resolved sandbox config, and the path to a shim binary (defaulting to the compiled `<dalang-install>/dist/dalang-worker` from Phase 2). Each invocation:
+**Architecture:** A new `packages/dalang/src/sandbox/sandboxed-runner.ts` exposes a single `createSandboxedRunQuery(deps)` factory that returns a `RunQuery`. The factory takes a host-side `ContainerHost`, an `AuthStore`, and the resolved sandbox config. Each invocation runs the image-baked `/opt/dalang/bayang` shim:
 
 1. Resolves the image via `resolveImage(sandboxConfig.image, repoDir)`.
 2. Calls `prepareWorkerCredentials` to produce auth env + bind mounts.
@@ -507,9 +507,9 @@ export interface SandboxedRunnerDeps {
   /** Absolute path to the repo on the host. */
   repoDir: string;
   config: SandboxConfig;
-  /** Path to the compiled dalang-worker binary on the host (Phase 2 artifact). */
+  /** Path to the compiled bayang binary on the host (Phase 2 artifact). */
   shimBinaryHostPath?: string;
-  /** Override the exec command (testing). Default uses `/opt/dalang/dalang-worker`. */
+  /** Override the exec command (testing). Default uses `/opt/dalang/bayang`. */
   shimCmdOverride?: string[];
   /** Override the invocation payload (testing). Default builds from RunQueryOptions. */
   invocationOverride?: unknown;
@@ -519,7 +519,7 @@ export interface SandboxedRunnerDeps {
   workerIdFactory?: () => string;
 }
 
-const DEFAULT_SHIM_CONTAINER_PATH = "/opt/dalang/dalang-worker";
+const DEFAULT_SHIM_CONTAINER_PATH = "/opt/dalang/bayang";
 
 let workerCounter = 0;
 
@@ -577,7 +577,7 @@ export function createSandboxedRunQuery(deps: SandboxedRunnerDeps): RunQuery {
       [Symbol.asyncIterator]: async function* () {
         const provider = providerOf(opts);
         const workerId =
-          deps.workerIdFactory?.() ?? `dalang-worker-${process.pid}-${++workerCounter}`;
+          deps.workerIdFactory?.() ?? `bayang-${process.pid}-${++workerCounter}`;
 
         const image = await resolveImage(deps.config.image, deps.repoDir);
 
@@ -711,7 +711,7 @@ git commit -m "feat(dalang): bootstrap wires sandboxed runner when sandbox.enabl
 
 ## Task 6: End-to-end devcontainer integration test
 
-The acceptance gate: a real Docker container with a real devcontainer fixture, a real `dalang-worker` shim, real credentials projected through. This test only runs when `DOCKER_AVAILABLE` and at least one provider auth is available locally — otherwise it skips.
+The acceptance gate: a real Docker container with a real devcontainer fixture, a real `bayang` shim, real credentials projected through. This test only runs when `DOCKER_AVAILABLE` and at least one provider auth is available locally — otherwise it skips.
 
 **Files:**
 
@@ -780,10 +780,10 @@ WORKDIR /workspace
     "..",
     "..",
     "dist",
-    "dalang-worker",
+    "bayang",
   );
   if (!existsSync(shimBinary)) {
-    console.warn(`shim binary missing at ${shimBinary}; skipping. Run \`bun run worker:build\`.`);
+    console.warn(`shim binary missing at ${shimBinary}; skipping. Run \`bun run bayang:build\`.`);
     return;
   }
 
@@ -881,7 +881,7 @@ Run: `docker compose ls --filter "name=dalang-" --format json` — expected empt
 
 1. **Provider CLI distribution.** v1 expects `claude` / `codex` / `opencode` on PATH inside the user's image. Documented. A bind-mount escape hatch (`shimBinaryHostPath` mirrored for provider binaries) is plausible but not implemented in v1.
 2. **`postCreateCommand` execution.** Plan §11 (deferred): every worker runs the repo's `postCreateCommand` on container start, paying the cost each time. Caching is a follow-up perf pass.
-3. **Stdin support on `ContainerHandle.exec`.** Phase 2 routed the `WorkerInvocation` through `DALANG_WORKER_INVOCATION` env. Adding stdin to `ContainerHandle.exec` is a Phase 4.x cleanup if the env-var approach proves limiting.
+3. **Stdin support on `ContainerHandle.exec`.** Phase 2 routed the `WorkerInvocation` through `BAYANG_INVOCATION` env. Adding stdin to `ContainerHandle.exec` is a Phase 4.x cleanup if the env-var approach proves limiting.
 4. **Auth probe for sandbox mode.** Currently checks the `AuthStore` for the right provider credential. Doesn't validate the credential is *actually valid* (no API call). v1 acceptance: missing-credential is the common failure; bad-credential surfaces at first turn.
 5. **HTTP API surface.** No new fields exposed for sandbox state in v1. Worker container names and lifecycle events are visible through `RuntimeEvent`s but not the `/api/v1/state` snapshot. Adding `sandbox: { container_name, started_at, ... }` to running entries is a follow-up.
 
