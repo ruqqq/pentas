@@ -13,7 +13,8 @@
   "scripts": {
     "dev": "bun run src/index.ts",
     "test": "bun test",
-    "typecheck": "bunx --bun tsgo --noEmit"
+    "typecheck": "bunx --bun tsgo --noEmit",
+    "worker:build": "bun run scripts/build-worker.ts"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "latest",
