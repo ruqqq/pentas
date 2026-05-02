@@ -2,7 +2,12 @@ import { test, expect } from "bun:test";
 import { resolve } from "node:path";
 import { FakeContainerHost } from "../../src/sandbox/fake-host";
 import { remoteRunQuery } from "../../src/sandbox/remote-runner";
-import type { ResolvedImage } from "../../src/sandbox/types";
+import type {
+  ContainerHandle,
+  ExecOptions,
+  ExecResult,
+  ResolvedImage,
+} from "../../src/sandbox/types";
 
 const dummyImage: ResolvedImage = {
   kind: "image",
@@ -90,4 +95,43 @@ test("remoteRunQuery aborts the shim when the abortSignal fires", async () => {
   } finally {
     await handle.stop();
   }
+});
+
+test("remoteRunQuery starts draining stderr before processing stdout events", async () => {
+  let stderrStarted = false;
+  const handle: ContainerHandle = {
+    name: "concurrent-stderr",
+    async exec(_opts: ExecOptions): Promise<ExecResult> {
+      return {
+        stdout: (async function* () {
+          await Bun.sleep(10);
+          yield JSON.stringify({
+            kind: "error",
+            message: `stderr started: ${stderrStarted}`,
+          });
+        })(),
+        stderr: (async function* () {
+          stderrStarted = true;
+          yield "stderr detail";
+        })(),
+        done: Promise.resolve({ exitCode: 1, signal: null }),
+      };
+    },
+    async stop(): Promise<void> {},
+  };
+
+  const fn = async () => {
+    for await (const _ev of remoteRunQuery({
+      handle,
+      shimCmd: ["ignored"],
+      invocation: {},
+    })) {
+      // drain
+    }
+  };
+
+  await expect(fn()).rejects.toMatchObject({
+    message: "worker shim error: stderr started: true",
+    stderr: "stderr detail",
+  });
 });

@@ -4,7 +4,12 @@ import { SandboxImageConfigSchema, SandboxResourcesSchema } from "../sandbox/typ
 const ProviderPathsSchema = z
   .object({
     claude: z.object({ executablePath: z.string().min(1).default("claude") }).default({}),
-    codex: z.object({ executablePath: z.string().min(1).default("codex") }).default({}),
+    codex: z
+      .object({
+        executablePath: z.string().min(1).default("codex"),
+        env: z.record(z.string(), z.string()).optional(),
+      })
+      .default({}),
     opencode: z.object({ executablePath: z.string().min(1).default("opencode") }).default({}),
   })
   .default({});

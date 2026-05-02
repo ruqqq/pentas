@@ -36,8 +36,20 @@ test("enabled config can override resources and provider paths", () => {
   expect(parsed.providers.claude.executablePath).toBe("claude");
 });
 
+test("sandbox provider config can pass extra Codex environment", () => {
+  const parsed = SandboxConfigSchema.parse({
+    enabled: true,
+    providers: { codex: { env: { HOME: "/tmp", CODEX_DISABLE_PATH_UPDATE: "1" } } },
+  });
+
+  expect(parsed.providers.codex).toEqual({
+    executablePath: "codex",
+    env: { HOME: "/tmp", CODEX_DISABLE_PATH_UPDATE: "1" },
+  });
+});
+
 test("invalid resource cpus is rejected", () => {
-  expect(
-    SandboxConfigSchema.safeParse({ enabled: true, resources: { cpus: "" } }).success,
-  ).toBe(false);
+  expect(SandboxConfigSchema.safeParse({ enabled: true, resources: { cpus: "" } }).success).toBe(
+    false,
+  );
 });

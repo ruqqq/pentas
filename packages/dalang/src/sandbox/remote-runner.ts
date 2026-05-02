@@ -34,6 +34,14 @@ function isWorkerEvent(value: unknown): value is WorkerEvent {
   return k === "provider_event" || k === "error" || k === "finished";
 }
 
+async function collectStderrTail(stderr: AsyncIterable<string>): Promise<string> {
+  let stderrTail = "";
+  for await (const line of stderr) {
+    if (stderrTail.length < 4000) stderrTail += `${line}\n`;
+  }
+  return stderrTail.trim();
+}
+
 export async function* remoteRunQuery(opts: RemoteRunOptions): AsyncGenerator<unknown> {
   // ContainerHandle.exec doesn't support stdin in Phase 1's API. We pass the
   // invocation JSON via an env var: the shim reads it from env when stdin is
@@ -43,12 +51,13 @@ export async function* remoteRunQuery(opts: RemoteRunOptions): AsyncGenerator<un
   const exec = await opts.handle.exec({
     cmd: opts.shimCmd,
     cwd: opts.cwd,
-    env: { ...(opts.env ?? {}), DALANG_WORKER_INVOCATION: invocationJson },
+    env: { ...opts.env, DALANG_WORKER_INVOCATION: invocationJson },
     abortSignal: opts.abortSignal,
   });
 
   let sawFinished = false;
   let sawError: ErrorEvent | null = null;
+  const stderrTail = collectStderrTail(exec.stderr);
 
   for await (const line of exec.stdout) {
     if (line.length === 0) continue;
@@ -70,18 +79,11 @@ export async function* remoteRunQuery(opts: RemoteRunOptions): AsyncGenerator<un
     }
   }
 
-  // Drain stderr to surface useful debug info on failure.
-  let stderrTail = "";
-  for await (const line of exec.stderr) {
-    if (stderrTail.length < 4000) stderrTail += `${line}\n`;
-  }
-
-  const status = await exec.done;
+  const [status, stderr] = await Promise.all([exec.done, stderrTail]);
 
   if (sawError) {
     const err = new Error(`worker shim error: ${sawError.message}`);
-    (err as Error & { stderr?: string; exitCode?: number; cause?: unknown }).stderr =
-      stderrTail.trim();
+    (err as Error & { stderr?: string; exitCode?: number; cause?: unknown }).stderr = stderr;
     (err as Error & { stderr?: string; exitCode?: number }).exitCode = status.exitCode;
     if (sawError.detail !== undefined) {
       (err as Error & { cause?: unknown }).cause = sawError.detail;
@@ -90,7 +92,7 @@ export async function* remoteRunQuery(opts: RemoteRunOptions): AsyncGenerator<un
   }
   if (!sawFinished && status.exitCode !== 0) {
     const err = new Error(`worker shim exited ${status.exitCode}`);
-    (err as Error & { stderr?: string; exitCode?: number }).stderr = stderrTail.trim();
+    (err as Error & { stderr?: string; exitCode?: number }).stderr = stderr;
     (err as Error & { stderr?: string; exitCode?: number }).exitCode = status.exitCode;
     throw err;
   }

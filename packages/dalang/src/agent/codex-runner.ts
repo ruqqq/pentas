@@ -1,6 +1,7 @@
 // packages/dalang/src/agent/codex-runner.ts
 import { Codex } from "@openai/codex-sdk";
 import type { RunQuery, RunQueryOptions } from "./agent-runner";
+import { buildCodexChildEnv } from "./codex-env";
 
 export const codexRunQuery: RunQuery = (opts: RunQueryOptions) => {
   if (!opts.codex) {
@@ -9,7 +10,7 @@ export const codexRunQuery: RunQuery = (opts: RunQueryOptions) => {
 
   const codex = new Codex({
     codexPathOverride: opts.executablePath,
-    ...(opts.codex.env ? { env: opts.codex.env } : {}),
+    env: buildCodexChildEnv(opts.codex.env),
   });
 
   const threadOptions = {

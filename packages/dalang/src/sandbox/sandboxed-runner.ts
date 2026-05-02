@@ -57,7 +57,9 @@ function buildInvocation(
         sandboxMode: opts.codex.sandboxMode,
         approvalPolicy: opts.codex.approvalPolicy,
         networkAccessEnabled: opts.codex.networkAccessEnabled,
-        ...(opts.codex.env !== undefined ? { env: opts.codex.env } : {}),
+        ...(providerExecs.codex.env !== undefined || opts.codex.env !== undefined
+          ? { env: { ...opts.codex.env, ...providerExecs.codex.env } }
+          : {}),
       },
     };
   }

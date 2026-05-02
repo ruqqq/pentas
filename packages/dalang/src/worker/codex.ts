@@ -1,5 +1,6 @@
 import { Codex } from "@openai/codex-sdk";
 import { access } from "node:fs/promises";
+import { buildCodexChildEnv } from "../agent/codex-env";
 import type { WorkerInvocation } from "./protocol";
 
 export async function* runCodex(
@@ -22,7 +23,7 @@ export async function* runCodex(
   }
   const codex = new Codex({
     codexPathOverride: inv.executablePath,
-    ...(inv.codex.env ? { env: inv.codex.env } : {}),
+    env: buildCodexChildEnv(inv.codex.env),
   });
   const threadOptions = {
     workingDirectory: inv.cwd,
