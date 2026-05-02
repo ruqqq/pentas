@@ -121,3 +121,27 @@ test("DockerContainerHost builds dockerfile-source images on demand", async () =
     await handle.stop();
   }
 });
+
+test("DockerContainerHost starts a compose stack and execs into the named service", async () => {
+  if (!dockerAvailable) return;
+  const repoDir = resolve(import.meta.dir, "..", "fixtures", "devcontainer-compose-sample");
+  const resolved = await resolveImage({ source: "devcontainer", path: "." }, repoDir);
+  if (resolved.kind !== "compose") throw new Error("expected compose kind");
+
+  const host = new DockerContainerHost();
+  const handle = await host.start({
+    name: `dalang-compose-test-${Date.now()}`,
+    image: resolved,
+    bindMounts: [],
+    env: {},
+    resources: { cpus: "1", memory: "256m", pidsLimit: 256, tmpfsSize: "32m" },
+  });
+  try {
+    const result = await handle.exec({ cmd: ["sh", "-lc", "echo composed"] });
+    const lines: string[] = [];
+    for await (const l of result.stdout) lines.push(l);
+    expect(lines).toEqual(["composed"]);
+  } finally {
+    await handle.stop();
+  }
+});
