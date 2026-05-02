@@ -6,6 +6,13 @@ import { FilesystemAuthStore } from "../../src/auth/store";
 import { runSandboxDoctor } from "../../src/sandbox/doctor";
 import { FakeContainerHost } from "../../src/sandbox/fake-host";
 import type { SandboxConfig } from "../../src/config/sandbox-schema";
+import type {
+  ContainerHandle,
+  ContainerHost,
+  ContainerStartOptions,
+  ExecOptions,
+  ExecResult,
+} from "../../src/sandbox/types";
 
 const config: SandboxConfig = {
   enabled: true,
@@ -76,4 +83,47 @@ test("runSandboxDoctor reports a missing required CLI as a failed check", async 
       ok: false,
     }),
   );
+});
+
+class RecordingHost implements ContainerHost {
+  seenExecEnv: Record<string, string> | undefined;
+
+  async start(opts: ContainerStartOptions): Promise<ContainerHandle> {
+    const fake = await new FakeContainerHost().start(opts);
+    return {
+      name: fake.name,
+      exec: async (execOpts: ExecOptions): Promise<ExecResult> => {
+        if (execOpts.cmd.join(" ").includes("gh auth status")) {
+          this.seenExecEnv = execOpts.env;
+        }
+        return fake.exec(execOpts);
+      },
+      stop: () => fake.stop(),
+    };
+  }
+}
+
+test("runSandboxDoctor verifies gh auth with the resolved github token", async () => {
+  const workspace = await realpath(await mkdtemp(join(tmpdir(), "doctor-ws-")));
+  const sandboxesRoot = await realpath(await mkdtemp(join(tmpdir(), "doctor-sb-")));
+  const store = await storeWithClaudeAuth();
+  const host = new RecordingHost();
+
+  const result = await runSandboxDoctor({
+    host,
+    store,
+    sandboxesRoot,
+    repoDir: process.cwd(),
+    workspaceDir: workspace,
+    config,
+    provider: "claude",
+    requiredTools: ["sh"],
+    githubToken: "ghp_test",
+  });
+
+  expect(result.checks.map((c) => c.name)).toContain("gh auth status");
+  expect(host.seenExecEnv).toMatchObject({
+    GH_TOKEN: "ghp_test",
+    GITHUB_TOKEN: "ghp_test",
+  });
 });

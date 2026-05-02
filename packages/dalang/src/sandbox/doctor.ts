@@ -25,6 +25,7 @@ export interface SandboxDoctorOptions {
   config: SandboxConfig;
   provider: AuthProvider;
   requiredTools?: string[];
+  githubToken?: string;
 }
 
 const DALANG_COMPOSE_WORKSPACE = "/run/dalang/workspace";
@@ -83,6 +84,17 @@ async function execCheck(
   };
 }
 
+function mergeEnv(
+  base: Record<string, string>,
+  extra: Record<string, string | undefined>,
+): Record<string, string> {
+  const out = { ...base };
+  for (const [key, value] of Object.entries(extra)) {
+    if (value !== undefined) out[key] = value;
+  }
+  return out;
+}
+
 export async function runSandboxDoctor(opts: SandboxDoctorOptions): Promise<SandboxDoctorResult> {
   const image = await resolveImage(opts.config.image, opts.repoDir);
   const containerCwd = image.kind === "compose" ? DALANG_COMPOSE_WORKSPACE : image.workspaceFolder;
@@ -108,12 +120,16 @@ export async function runSandboxDoctor(opts: SandboxDoctorOptions): Promise<Sand
     });
 
     const checks: SandboxDoctorCheck[] = [];
+    const execEnv = mergeEnv(creds.env, {
+      GH_TOKEN: opts.githubToken,
+      GITHUB_TOKEN: opts.githubToken,
+    });
     const providerPath = providerExecutable(opts.config, opts.provider);
     checks.push(
       await execCheck(handle, {
         name: `provider cli: ${providerPath}`,
         script: toolProbeScript(providerPath),
-        env: creds.env,
+        env: execEnv,
       }),
     );
     for (const tool of opts.requiredTools ?? ["gh"]) {
@@ -121,7 +137,16 @@ export async function runSandboxDoctor(opts: SandboxDoctorOptions): Promise<Sand
         await execCheck(handle, {
           name: `required cli: ${tool}`,
           script: toolProbeScript(tool),
-          env: creds.env,
+          env: execEnv,
+        }),
+      );
+    }
+    if (opts.githubToken !== undefined) {
+      checks.push(
+        await execCheck(handle, {
+          name: "gh auth status",
+          script: "gh auth status",
+          env: execEnv,
         }),
       );
     }
@@ -129,7 +154,7 @@ export async function runSandboxDoctor(opts: SandboxDoctorOptions): Promise<Sand
       await execCheck(handle, {
         name: "provider credentials",
         script: credentialProbe(opts.provider),
-        env: creds.env,
+        env: execEnv,
       }),
     );
     checks.push(
@@ -138,7 +163,7 @@ export async function runSandboxDoctor(opts: SandboxDoctorOptions): Promise<Sand
         cwd: containerCwd,
         script:
           'test -d "$PWD" && test -w "$PWD" && touch .dalang-doctor-write-test && rm .dalang-doctor-write-test',
-        env: creds.env,
+        env: execEnv,
       }),
     );
     return { ok: checks.every((c) => c.ok), checks };

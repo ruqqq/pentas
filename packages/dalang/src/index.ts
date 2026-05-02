@@ -27,7 +27,7 @@ if (args.command === "lint") {
 if (args.command === "sandbox-doctor") {
   const { loadWorkflow } = await import("./config/workflow-loader");
   const { validateForDispatch } = await import("./config/validate");
-  const { expandPath } = await import("./config/env-resolver");
+  const { expandPath, resolveGithubToken } = await import("./config/env-resolver");
   const { FilesystemAuthStore, defaultStoreRoot } = await import("./auth/store");
   const { DockerContainerHost } = await import("./sandbox/docker-host");
   const { defaultSandboxesRoot, runSandboxDoctor } = await import("./sandbox/doctor");
@@ -46,6 +46,9 @@ if (args.command === "sandbox-doctor") {
       workspaceDir: process.cwd(),
       config: wf.config.sandbox,
       provider: wf.config.agent_provider,
+      ...(wf.config.control_plane.kind === "github-projects"
+        ? { githubToken: resolveGithubToken(wf.config.control_plane.token) ?? undefined }
+        : {}),
     });
     for (const check of result.checks) {
       const prefix = check.ok ? "OK" : "FAIL";
