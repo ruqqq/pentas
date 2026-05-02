@@ -4,7 +4,10 @@ import type { BindMount } from "../sandbox/types";
 import type { AuthStore } from "./store";
 
 export class AuthError extends Error {
-  constructor(public readonly code: "auth_missing" | "auth_invalid", message: string) {
+  constructor(
+    public readonly code: "auth_missing" | "auth_invalid",
+    message: string,
+  ) {
     super(message);
     this.name = "AuthError";
   }
@@ -119,11 +122,7 @@ async function prepareOpencodeCredentials(
   }
   // The container expects $XDG_DATA_HOME/opencode/auth.json. We bind-mount the
   // XDG_DATA_HOME root so opencode's path resolution works unchanged.
-  const xdgRoot = await ensureWorkerSandboxDir(
-    opts.sandboxesRoot,
-    opts.workerId,
-    "opencode-data",
-  );
+  const xdgRoot = await ensureWorkerSandboxDir(opts.sandboxesRoot, opts.workerId, "opencode-data");
   const opencodeDir = join(xdgRoot, "opencode");
   await mkdir(opencodeDir, { recursive: true });
   const authPath = join(opencodeDir, "auth.json");
@@ -168,10 +167,7 @@ export async function ensureWorkerSandboxDir(
 }
 
 /** Helper used by codex/opencode projections to remove per-worker tmpdirs. */
-export async function removeWorkerSandbox(
-  sandboxesRoot: string,
-  workerId: string,
-): Promise<void> {
+export async function removeWorkerSandbox(sandboxesRoot: string, workerId: string): Promise<void> {
   const dir = join(sandboxesRoot, workerId);
   await rm(dir, { recursive: true, force: true });
 }

@@ -114,10 +114,7 @@ test("opencode projection mounts opencode-data dir and sets XDG_DATA_HOME", asyn
   const mount = proj.bindMounts[0];
   expect(mount?.containerPath).toBe("/run/dalang/opencode-data");
   expect(mount?.readOnly).toBe(false);
-  const mounted = await readFile(
-    join(mount?.hostPath as string, "opencode", "auth.json"),
-    "utf8",
-  );
+  const mounted = await readFile(join(mount?.hostPath as string, "opencode", "auth.json"), "utf8");
   expect(mounted).toBe(initial);
 
   await proj.dispose();

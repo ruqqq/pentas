@@ -42,10 +42,7 @@ export async function resolveImage(
   if (config.source === "dockerfile") {
     const abs = resolve(repoDir, config.path);
     if (!(await fileExists(abs))) {
-      throw new SandboxError(
-        "sandbox_misconfigured",
-        `Dockerfile not found at ${abs}`,
-      );
+      throw new SandboxError("sandbox_misconfigured", `Dockerfile not found at ${abs}`);
     }
     return {
       kind: "image",
@@ -61,10 +58,7 @@ export async function resolveImage(
   const dcDir = resolve(repoDir, config.path);
   const dcJsonPath = join(dcDir, "devcontainer.json");
   if (!(await fileExists(dcJsonPath))) {
-    throw new SandboxError(
-      "sandbox_misconfigured",
-      `devcontainer.json not found at ${dcJsonPath}`,
-    );
+    throw new SandboxError("sandbox_misconfigured", `devcontainer.json not found at ${dcJsonPath}`);
   }
 
   const raw = await Bun.file(dcJsonPath).text();

@@ -65,7 +65,7 @@ test("devcontainer with dockerComposeFile resolves to compose kind", async () =>
 test("devcontainer with neither build nor image nor compose throws sandbox_misconfigured", async () => {
   const repoDir = resolve(import.meta.dir, "..", "fixtures");
   // Reuse the parent dir; there's no devcontainer.json there.
-  await expect(
-    resolveImage({ source: "devcontainer", path: "." }, repoDir),
-  ).rejects.toMatchObject({ code: "sandbox_misconfigured" });
+  await expect(resolveImage({ source: "devcontainer", path: "." }, repoDir)).rejects.toMatchObject({
+    code: "sandbox_misconfigured",
+  });
 });

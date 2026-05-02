@@ -117,10 +117,7 @@ async function ensureImageBuilt(image: ResolvedImage): Promise<void> {
   const code = await proc.exited;
   if (code !== 0) {
     const stderr = await readToEnd(proc.stderr);
-    throw new SandboxError(
-      "sandbox_image_unavailable",
-      `docker build failed: ${stderr.trim()}`,
-    );
+    throw new SandboxError("sandbox_image_unavailable", `docker build failed: ${stderr.trim()}`);
   }
 }
 
@@ -159,9 +156,14 @@ class ComposeHandle implements ContainerHandle {
     const proc = Bun.spawn(["docker", ...args], { stdout: "pipe", stderr: "pipe" });
     if (opts.abortSignal) {
       const onAbort = () => {
-        Bun.spawn(
-          ["docker", ...this.composeFlags(), "kill", "--signal", "SIGTERM", this.service],
-        ).exited.catch(() => {});
+        Bun.spawn([
+          "docker",
+          ...this.composeFlags(),
+          "kill",
+          "--signal",
+          "SIGTERM",
+          this.service,
+        ]).exited.catch(() => {});
       };
       if (opts.abortSignal.aborted) onAbort();
       else opts.abortSignal.addEventListener("abort", onAbort, { once: true });
@@ -332,10 +334,7 @@ export class DockerContainerHost implements ContainerHost {
     if (exit !== 0) {
       const stderr = await readToEnd(proc.stderr);
       if (/no such image|pull access denied|manifest unknown|unable to find image/i.test(stderr)) {
-        throw new SandboxError(
-          "sandbox_image_unavailable",
-          `docker run failed: ${stderr.trim()}`,
-        );
+        throw new SandboxError("sandbox_image_unavailable", `docker run failed: ${stderr.trim()}`);
       }
       throw new SandboxError("sandbox_start_failed", `docker run failed: ${stderr.trim()}`);
     }
@@ -369,10 +368,7 @@ export class DockerContainerHost implements ContainerHost {
     const code = await proc.exited;
     if (code !== 0) {
       const stderr = await readToEnd(proc.stderr);
-      throw new SandboxError(
-        "sandbox_start_failed",
-        `docker compose up failed: ${stderr.trim()}`,
-      );
+      throw new SandboxError("sandbox_start_failed", `docker compose up failed: ${stderr.trim()}`);
     }
     return new ComposeHandle(opts.name, composeFiles, image.service);
   }

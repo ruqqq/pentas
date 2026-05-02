@@ -48,13 +48,7 @@ WORKDIR /workspace
   await store.setClaudeToken(token);
 
   const sandboxesRoot = await realpath(await mkdtemp(join(tmpdir(), "sandbox-e2e-sb-")));
-  const shimBinary = resolve(
-    import.meta.dir,
-    "..",
-    "..",
-    "dist",
-    "dalang-worker",
-  );
+  const shimBinary = resolve(import.meta.dir, "..", "..", "dist", "dalang-worker");
   if (!existsSync(shimBinary)) {
     console.warn(`shim binary missing at ${shimBinary}; skipping. Run \`bun run worker:build\`.`);
     return;
