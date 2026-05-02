@@ -57,7 +57,8 @@ export class Bootstrap {
     await this.reloader.start();
     const wf = this.reloader.current();
     validateForDispatch(wf.config);
-    if (!this.opts.skipAuthProbe) {
+    const sandboxed = wf.config.sandbox?.enabled === true;
+    if (!this.opts.skipAuthProbe && !sandboxed) {
       if (wf.config.agent_provider === "codex") {
         const err = await probeCodexAuth(wf.config.codex!.executable_path);
         if (err) throw new ValidationError("codex_auth_inactive", err);
@@ -79,19 +80,61 @@ export class Bootstrap {
         if (err) throw new ValidationError("claude_auth_inactive", err);
       }
     }
+    if (!this.opts.skipAuthProbe && sandboxed) {
+      const { FilesystemAuthStore, defaultStoreRoot } = await import("../auth/store");
+      const store = new FilesystemAuthStore(defaultStoreRoot());
+      const provider = wf.config.agent_provider;
+      const credential =
+        provider === "claude"
+          ? await store.getClaudeToken()
+          : provider === "codex"
+            ? await store.getCodexAuthJson()
+            : await store.getOpencodeAuthJson();
+      if (credential === null) {
+        throw new ValidationError(
+          provider === "claude"
+            ? "claude_auth_inactive"
+            : provider === "codex"
+              ? "codex_auth_inactive"
+              : "opencode_auth_inactive",
+          `sandbox enabled but no ${provider} credential in dalang's store; run \`dalang auth set ${provider} ...\``,
+        );
+      }
+    }
     const controlPlane = createControlPlaneAdapter({
       config: wf.config,
       trackerEndpoint: this.opts.trackerEndpoint ?? null,
       trackerApiKey: this.opts.trackerApiKey,
     });
     await controlPlane.validateConnection?.();
-    const runQuery = this.opts.runQueryFactory
-      ? this.opts.runQueryFactory()
-      : wf.config.agent_provider === "codex"
-        ? codexRunQuery
-        : wf.config.agent_provider === "opencode"
-          ? opencodeRunQuery
-          : sdkRunQuery;
+    let runQuery: RunQuery;
+    if (this.opts.runQueryFactory) {
+      runQuery = this.opts.runQueryFactory();
+    } else if (sandboxed) {
+      const { DockerContainerHost } = await import("../sandbox/docker-host");
+      const { FilesystemAuthStore, defaultStoreRoot } = await import("../auth/store");
+      const { createSandboxedRunQuery } = await import("../sandbox/sandboxed-runner");
+      const { resolve } = await import("node:path");
+      runQuery = createSandboxedRunQuery({
+        host: new DockerContainerHost(),
+        store: new FilesystemAuthStore(defaultStoreRoot()),
+        sandboxesRoot: resolve(wf.config.workspace.root, ".dalang", "sandboxes"),
+        repoDir: process.cwd(),
+        config: wf.config.sandbox!,
+        ...(process.env["DALANG_SHIM_PATH"]
+          ? { shimBinaryHostPath: process.env["DALANG_SHIM_PATH"] }
+          : {}),
+        onLifecycleEvent: (e) =>
+          this.log.warn({ kind: e.kind, message: e.message }, "sandbox lifecycle"),
+      });
+    } else {
+      runQuery =
+        wf.config.agent_provider === "codex"
+          ? codexRunQuery
+          : wf.config.agent_provider === "opencode"
+            ? opencodeRunQuery
+            : sdkRunQuery;
+    }
     this.orch = new Orchestrator({
       controlPlane,
       config: wf.config,
