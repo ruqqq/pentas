@@ -24,6 +24,40 @@ if (args.command === "lint") {
   process.exit(1);
 }
 
+if (args.command === "sandbox-doctor") {
+  const { loadWorkflow } = await import("./config/workflow-loader");
+  const { validateForDispatch } = await import("./config/validate");
+  const { expandPath } = await import("./config/env-resolver");
+  const { FilesystemAuthStore, defaultStoreRoot } = await import("./auth/store");
+  const { DockerContainerHost } = await import("./sandbox/docker-host");
+  const { defaultSandboxesRoot, runSandboxDoctor } = await import("./sandbox/doctor");
+  try {
+    const wf = await loadWorkflow(args.workflowPath);
+    validateForDispatch(wf.config);
+    if (wf.config.sandbox?.enabled !== true) {
+      throw new Error("sandbox doctor requires sandbox.enabled: true");
+    }
+    const workspaceRoot = expandPath(wf.config.workspace.root);
+    const result = await runSandboxDoctor({
+      host: new DockerContainerHost(),
+      store: new FilesystemAuthStore(defaultStoreRoot()),
+      sandboxesRoot: defaultSandboxesRoot(workspaceRoot),
+      repoDir: process.cwd(),
+      workspaceDir: process.cwd(),
+      config: wf.config.sandbox,
+      provider: wf.config.agent_provider,
+    });
+    for (const check of result.checks) {
+      const prefix = check.ok ? "OK" : "FAIL";
+      console.log(`${prefix}: ${check.name}${check.detail ? ` — ${check.detail}` : ""}`);
+    }
+    process.exit(result.ok ? 0 : 1);
+  } catch (err) {
+    console.error(`FAIL: ${(err as Error).message}`);
+    process.exit(1);
+  }
+}
+
 if (args.command === "auth") {
   const { FilesystemAuthStore, defaultStoreRoot } = await import("./auth/store");
   const { runAuthCli } = await import("./auth/cli");
