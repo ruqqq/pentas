@@ -110,6 +110,8 @@ export interface RetryEntry {
   due_at_ms: number;
   timer_handle: ReturnType<typeof setTimeout> | null;
   error: string | null;
+  workflow_state: string | null;
+  resume_session_id: string | null;
 }
 
 export interface RunningEntry {

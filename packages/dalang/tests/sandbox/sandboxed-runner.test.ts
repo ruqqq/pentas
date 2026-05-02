@@ -103,3 +103,47 @@ test("sandboxed RunQuery includes sandbox Codex env in the worker invocation", a
     },
   });
 });
+
+test("sandboxed RunQuery does not forward resumeSessionId into disposable workers", async () => {
+  const credDir = await realpath(await mkdtemp(join(tmpdir(), "sbr-cred-")));
+  const sandboxesRoot = await realpath(await mkdtemp(join(tmpdir(), "sbr-sb-")));
+  const store = new FilesystemAuthStore(credDir);
+  await store.setCodexAuthJson('{"access_token":"test"}');
+
+  const runQuery = createSandboxedRunQuery({
+    host: new FakeContainerHost(),
+    store,
+    sandboxesRoot,
+    repoDir: process.cwd(),
+    config: {
+      enabled: true,
+      image: { source: "image", tag: "fake" },
+      resources: { cpus: "1", memory: "256m", pidsLimit: 256, tmpfsSize: "32m" },
+      providers: {
+        claude: { executablePath: "claude" },
+        codex: { executablePath: "codex" },
+        opencode: { executablePath: "opencode" },
+      },
+    },
+    shimCmdOverride: [process.execPath, "run", dumpInvocationShim],
+  });
+
+  const events: unknown[] = [];
+  for await (const ev of runQuery({
+    prompt: "hi",
+    cwd: process.cwd(),
+    model: "gpt-5.5",
+    executablePath: "codex",
+    resumeSessionId: "thread-from-previous-worker",
+    codex: {
+      sandboxMode: "workspace-write",
+      approvalPolicy: "never",
+      networkAccessEnabled: true,
+    },
+  })) {
+    events.push(ev);
+  }
+
+  expect(events).toHaveLength(1);
+  expect(events[0]).not.toHaveProperty("resumeSessionId");
+});

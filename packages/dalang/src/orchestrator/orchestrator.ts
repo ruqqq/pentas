@@ -1,7 +1,7 @@
 // packages/dalang/src/orchestrator/orchestrator.ts
 import { resolve } from "node:path";
 import type { ControlPlaneAdapter } from "../control-plane/adapter";
-import type { NormalizedIssue, OrchestratorState, RunningEntry } from "../types";
+import type { NormalizedIssue, OrchestratorState, RetryEntry, RunningEntry } from "../types";
 import type { WorkflowFrontMatter } from "../config/schema";
 import { createInitialState, addRunning, removeRunning, accumulateTokens } from "./state";
 import { sortForDispatch, isEligible } from "./eligibility";
@@ -204,7 +204,11 @@ export class Orchestrator {
     }
   }
 
-  private dispatch(issue: NormalizedIssue, attempt: number | null): void {
+  private dispatch(
+    issue: NormalizedIssue,
+    attempt: number | null,
+    resumeSessionId?: string,
+  ): void {
     const controller = new AbortController();
     const entry: RunningEntry = {
       issue,
@@ -227,7 +231,7 @@ export class Orchestrator {
       },
       "task picked up",
     );
-    const work = this.runWorker(issue, attempt, controller).catch((err) => {
+    const work = this.runWorker(issue, attempt, controller, resumeSessionId).catch((err) => {
       this.log.error({ issue_id: issue.id, err: (err as Error).message }, "worker crashed");
     });
     this.inflight.push(work);
@@ -237,6 +241,7 @@ export class Orchestrator {
     issue: NormalizedIssue,
     attempt: number | null,
     controller: AbortController,
+    resumeSessionId?: string,
   ): Promise<void> {
     const cwd = this.workspaces.pathFor(issue.identifier);
     const ws = await this.workspaces.ensureWorkspace(issue.identifier);
@@ -387,6 +392,7 @@ export class Orchestrator {
         entry.session.last_message = e.message ?? null;
       },
       abortSignal: controller.signal,
+      ...(resumeSessionId !== undefined ? { resumeSessionId } : {}),
     });
 
     accumulateTokens(this.state, result.tokens);
@@ -414,7 +420,9 @@ export class Orchestrator {
         attempt: 1,
         delayMs: CONTINUATION_RETRY_MS,
         error: null,
-        onFire: (retryAttempt) => this.handleRetryFire(issue.id, issue.identifier, retryAttempt),
+        workflowState: null,
+        resumeSessionId: null,
+        onFire: (retry) => this.handleRetryFire(retry),
       });
     } else {
       const nextAttempt = (attempt ?? 0) + 1;
@@ -435,16 +443,16 @@ export class Orchestrator {
         attempt: nextAttempt,
         delayMs: delay,
         error: result.reason ?? "worker_failed",
-        onFire: (retryAttempt) => this.handleRetryFire(issue.id, issue.identifier, retryAttempt),
+        workflowState: issue.state,
+        resumeSessionId: result.thread_id,
+        onFire: (retry) => this.handleRetryFire(retry),
       });
     }
   }
 
-  private async handleRetryFire(
-    issueId: string,
-    identifier: string,
-    firedAttempt: number,
-  ): Promise<void> {
+  private async handleRetryFire(retry: RetryEntry): Promise<void> {
+    const issueId = retry.issue_id;
+    const identifier = retry.identifier;
     let candidates: NormalizedIssue[] = [];
     try {
       candidates = await this.controlPlane.fetchDispatchableWork({
@@ -452,14 +460,16 @@ export class Orchestrator {
         ownership: this.cfg.control_plane.ownership,
       });
     } catch {
-      const next = firedAttempt + 1;
+      const next = retry.attempt + 1;
       scheduleRetry(this.state, {
         issue_id: issueId,
         identifier,
         attempt: next,
         delayMs: computeBackoffMs(next, this.cfg.agent.max_retry_backoff_ms),
         error: "retry poll failed",
-        onFire: (retryAttempt) => this.handleRetryFire(issueId, identifier, retryAttempt),
+        workflowState: retry.workflow_state,
+        resumeSessionId: retry.resume_session_id,
+        onFire: (nextRetry) => this.handleRetryFire(nextRetry),
       });
       return;
     }
@@ -482,18 +492,24 @@ export class Orchestrator {
         byState: this.cfg.agent.max_concurrent_agents_by_state,
       })
     ) {
-      const next = firedAttempt + 1;
+      const next = retry.attempt + 1;
       scheduleRetry(this.state, {
         issue_id: issueId,
         identifier: issue.identifier,
         attempt: next,
         delayMs: computeBackoffMs(next, this.cfg.agent.max_retry_backoff_ms),
         error: "no available orchestrator slots",
-        onFire: (retryAttempt) => this.handleRetryFire(issueId, issue.identifier, retryAttempt),
+        workflowState: retry.workflow_state,
+        resumeSessionId: retry.resume_session_id,
+        onFire: (nextRetry) => this.handleRetryFire(nextRetry),
       });
       return;
     }
-    this.dispatch(issue, firedAttempt);
+    const resumeSessionId =
+      retry.workflow_state !== null && issue.state === retry.workflow_state
+        ? (retry.resume_session_id ?? undefined)
+        : undefined;
+    this.dispatch(issue, retry.attempt, resumeSessionId);
   }
 
   private buildAgentConfig(): AgentConfig {

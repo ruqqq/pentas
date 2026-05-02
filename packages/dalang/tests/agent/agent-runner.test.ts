@@ -108,3 +108,34 @@ test("multi-turn loop continues when issue stays active and turn budget allows",
   expect(turn).toBe(2);
   expect(result.tokens.total_tokens).toBe(4);
 });
+
+test("multi-turn continuation starts a fresh provider session instead of resuming", async () => {
+  const observedResumeSessionIds: Array<string | undefined> = [];
+  let turn = 0;
+
+  const result = await runAttempt({
+    ...baseDeps([]),
+    config: {
+      ...baseDeps([]).config,
+      provider: "claude" as const,
+      permissionMode: "auto" as const,
+      maxTurns: 2,
+    },
+    issue,
+    attempt: null,
+    onEvent: () => {},
+    runQuery: async function* (opts) {
+      observedResumeSessionIds.push(opts.resumeSessionId);
+      turn += 1;
+      yield { type: "system", subtype: "init", session_id: `s-${turn}` };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
+    },
+  });
+
+  expect(result.success).toBe(true);
+  expect(observedResumeSessionIds).toEqual([undefined, undefined]);
+});

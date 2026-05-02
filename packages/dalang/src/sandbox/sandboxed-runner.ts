@@ -35,6 +35,9 @@ function buildInvocation(
   containerCwd: string,
   git: SandboxConfig["git"],
 ): unknown {
+  // Resume ids are local provider state. Sandboxed workers are disposable in
+  // the current lifecycle, so forwarding them would ask a fresh worker to
+  // resume state it cannot have.
   if (opts.claude) {
     return {
       provider: "claude",
@@ -42,7 +45,6 @@ function buildInvocation(
       cwd: containerCwd,
       model: opts.model,
       executablePath: providerExecs.claude.executablePath,
-      ...(opts.resumeSessionId !== undefined ? { resumeSessionId: opts.resumeSessionId } : {}),
       claude: { permissionMode: opts.claude.permissionMode },
     };
   }
@@ -53,7 +55,6 @@ function buildInvocation(
       cwd: containerCwd,
       model: opts.model,
       executablePath: providerExecs.codex.executablePath,
-      ...(opts.resumeSessionId !== undefined ? { resumeSessionId: opts.resumeSessionId } : {}),
       codex: {
         sandboxMode: opts.codex.sandboxMode,
         approvalPolicy: opts.codex.approvalPolicy,
@@ -72,7 +73,6 @@ function buildInvocation(
       cwd: containerCwd,
       model: opts.model,
       executablePath: providerExecs.opencode.executablePath,
-      ...(opts.resumeSessionId !== undefined ? { resumeSessionId: opts.resumeSessionId } : {}),
     };
   }
   throw new Error("createSandboxedRunQuery: invocation has no provider bag");

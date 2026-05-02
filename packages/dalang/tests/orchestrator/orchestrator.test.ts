@@ -205,6 +205,61 @@ test("continuation retry dispatches a fresh agent when issue moved to another ac
   expect(dispatched).toBe(2);
 });
 
+test("failed retry resumes only while the issue remains in the same active state", async () => {
+  const root = await tmpRoot();
+  const tracker = new FakeControlPlane();
+  tracker.candidates = [issue("i1", "In Dev")];
+  tracker.byIds["i1"] = issue("i1", "In Dev");
+
+  const cfg = applyDefaults({
+    tracker: {
+      endpoint: "http://localhost:1",
+      active_states: ["In Dev", "Ready for Review"],
+      terminal_states: ["Done"],
+    },
+    workspace: { root },
+    agent: { max_concurrent_agents: 1, max_turns: 1, max_retry_backoff_ms: 10 },
+    polling: { interval_ms: 1000 },
+  });
+
+  const observedResumeSessionIds: Array<string | undefined> = [];
+  let dispatched = 0;
+  const orch = new Orchestrator({
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
+    runQuery: async function* (opts) {
+      observedResumeSessionIds.push(opts.resumeSessionId);
+      dispatched += 1;
+      if (dispatched === 1) {
+        yield { type: "system", subtype: "init", session_id: "failed-thread" };
+        yield { type: "result", subtype: "error" };
+        return;
+      }
+      yield { type: "system", subtype: "init", session_id: `s-${dispatched}` };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
+    },
+  });
+
+  await orch.tick();
+  await orch.drainPendingForTest();
+
+  await new Promise((r) => setTimeout(r, 30));
+  await orch.drainPendingForTest();
+
+  tracker.candidates = [issue("i1", "Ready for Review")];
+  tracker.byIds["i1"] = issue("i1", "Ready for Review");
+
+  await new Promise((r) => setTimeout(r, 1300));
+  await orch.drainPendingForTest();
+
+  expect(observedResumeSessionIds).toEqual([undefined, "failed-thread", undefined]);
+});
+
 test("tick respects max_concurrent_agents and queues the rest", async () => {
   const root = await tmpRoot();
   const tracker = new FakeControlPlane();

@@ -90,6 +90,7 @@ export interface RunAttemptDeps {
   runQuery: RunQuery;
   onEvent: (e: RuntimeEvent) => void;
   abortSignal?: AbortSignal;
+  resumeSessionId?: string;
 }
 
 export interface RunAttemptResult {
@@ -131,7 +132,7 @@ export async function runAttempt(deps: RunAttemptDeps): Promise<RunAttemptResult
       runQuery: deps.runQuery,
       onEvent: deps.onEvent,
       abortSignal: deps.abortSignal,
-      resumeSessionId: threadId ?? undefined,
+      resumeSessionId: turnCount === 1 ? deps.resumeSessionId : undefined,
     });
 
     if (turn.thread_id) threadId = turn.thread_id;
