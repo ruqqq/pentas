@@ -66,6 +66,28 @@ test("codex projection mounts the per-worker dir and sets CODEX_HOME", async () 
   await proj.dispose();
 });
 
+test("codex projection disables GitHub connector plugin in sandbox config", async () => {
+  const store = await newStore();
+  await store.setCodexAuthJson('{"access_token":"v1"}');
+  const sandboxesRoot = await realpath(await mkdtemp(join(tmpdir(), "sandboxes-")));
+
+  const proj = await prepareWorkerCredentials({
+    store,
+    provider: "codex",
+    workerId: "w-codex-config",
+    sandboxesRoot,
+  });
+
+  const config = await readFile(
+    join(proj.bindMounts[0]?.hostPath as string, "config.toml"),
+    "utf8",
+  );
+  expect(config).toContain('[plugins."github@openai-curated"]');
+  expect(config).toContain("enabled = false");
+
+  await proj.dispose();
+});
+
 test("codex projection writes back a refreshed auth.json on dispose", async () => {
   const store = await newStore();
   await store.setCodexAuthJson('{"access_token":"v1"}');

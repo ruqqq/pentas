@@ -77,7 +77,20 @@ async function prepareCodexCredentials(
   }
   const dir = await ensureWorkerSandboxDir(opts.sandboxesRoot, opts.workerId, "codex");
   const authPath = join(dir, "auth.json");
+  const configPath = join(dir, "config.toml");
   await writeFile(authPath, initial, { mode: 0o600 });
+  await writeFile(
+    configPath,
+    [
+      '[plugins."github@openai-curated"]',
+      "enabled = false",
+      "",
+      '[plugins."superpowers@openai-curated"]',
+      "enabled = true",
+      "",
+    ].join("\n"),
+    { mode: 0o600 },
+  );
   // The container's UID may not match the host's UID; loosen permissions on
   // the projected dir + file so any UID inside the container can read/write.
   // Risk: any local user on the host can read these files while a worker
@@ -85,6 +98,7 @@ async function prepareCodexCredentials(
   // container's UID to the host's instead (compose overlay `user:` field).
   await chmod(dir, 0o777);
   await chmod(authPath, 0o666);
+  await chmod(configPath, 0o666);
 
   return {
     env: { CODEX_HOME: "/run/dalang/codex" },

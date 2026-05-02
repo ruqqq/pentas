@@ -1,5 +1,6 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { access } from "node:fs/promises";
+import { buildClaudeQueryOptions } from "../agent/claude-options";
 import type { WorkerInvocation } from "./protocol";
 
 function abortSignalToController(signal: AbortSignal): AbortController {
@@ -24,17 +25,19 @@ export async function* runClaude(
       );
     }
   }
-  const iterable = query({
-    prompt: inv.prompt,
-    options: {
-      cwd: inv.cwd,
-      model: inv.model,
-      permissionMode: inv.claude.permissionMode,
-      pathToClaudeCodeExecutable: inv.executablePath,
-      resume: inv.resumeSessionId,
-      abortController: abortSignalToController(abortSignal),
-    },
-  }) as AsyncIterable<unknown>;
+  const iterable = query(
+    buildClaudeQueryOptions(
+      {
+        prompt: inv.prompt,
+        cwd: inv.cwd,
+        model: inv.model,
+        executablePath: inv.executablePath,
+        claude: inv.claude,
+        ...(inv.resumeSessionId !== undefined ? { resumeSessionId: inv.resumeSessionId } : {}),
+      },
+      abortSignalToController(abortSignal),
+    ),
+  ) as AsyncIterable<unknown>;
   for await (const ev of iterable) {
     yield ev;
   }
