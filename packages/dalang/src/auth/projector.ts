@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { BindMount } from "../sandbox/types";
 import type { AuthStore } from "./store";
@@ -75,6 +75,13 @@ async function prepareCodexCredentials(
   const dir = await ensureWorkerSandboxDir(opts.sandboxesRoot, opts.workerId, "codex");
   const authPath = join(dir, "auth.json");
   await writeFile(authPath, initial, { mode: 0o600 });
+  // The container's UID may not match the host's UID; loosen permissions on
+  // the projected dir + file so any UID inside the container can read/write.
+  // Risk: any local user on the host can read these files while a worker
+  // runs. Acceptable for single-user dalang; a follow-up should map the
+  // container's UID to the host's instead (compose overlay `user:` field).
+  await chmod(dir, 0o777);
+  await chmod(authPath, 0o666);
 
   return {
     env: { CODEX_HOME: "/run/dalang/codex" },
@@ -121,6 +128,10 @@ async function prepareOpencodeCredentials(
   await mkdir(opencodeDir, { recursive: true });
   const authPath = join(opencodeDir, "auth.json");
   await writeFile(authPath, initial, { mode: 0o600 });
+  // See codex projection for rationale on the loosened permissions.
+  await chmod(xdgRoot, 0o777);
+  await chmod(opencodeDir, 0o777);
+  await chmod(authPath, 0o666);
 
   return {
     env: { XDG_DATA_HOME: "/run/dalang/opencode-data" },
