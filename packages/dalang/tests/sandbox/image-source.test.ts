@@ -35,3 +35,37 @@ test('source: "dockerfile" with missing file throws sandbox_misconfigured', asyn
     resolveImage({ source: "dockerfile", path: "missing.Dockerfile" }, repoDir),
   ).rejects.toMatchObject({ code: "sandbox_misconfigured" });
 });
+
+import { resolve } from "node:path";
+
+test("devcontainer with build.dockerfile resolves to image kind with workspaceFolder + remoteUser + postCreateCommand", async () => {
+  const repoDir = resolve(import.meta.dir, "..", "fixtures", "devcontainer-sample");
+  const resolved = await resolveImage({ source: "devcontainer", path: "." }, repoDir);
+  expect(resolved.kind).toBe("image");
+  if (resolved.kind === "image") {
+    expect(resolved.tag.startsWith("dalang-build:")).toBe(true);
+    expect(resolved.workspaceFolder).toBe("/workspace");
+    expect(resolved.remoteUser).toBe("root");
+    expect(resolved.postCreateCommand).toBe("echo ready");
+  }
+});
+
+test("devcontainer with dockerComposeFile resolves to compose kind", async () => {
+  const repoDir = resolve(import.meta.dir, "..", "fixtures", "devcontainer-compose-sample");
+  const resolved = await resolveImage({ source: "devcontainer", path: "." }, repoDir);
+  expect(resolved.kind).toBe("compose");
+  if (resolved.kind === "compose") {
+    expect(resolved.composeFile.endsWith("docker-compose.yml")).toBe(true);
+    expect(resolved.service).toBe("app");
+    expect(resolved.workspaceFolder).toBe("/workspace");
+    expect(resolved.postCreateCommand).toBe("echo ready");
+  }
+});
+
+test("devcontainer with neither build nor image nor compose throws sandbox_misconfigured", async () => {
+  const repoDir = resolve(import.meta.dir, "..", "fixtures");
+  // Reuse the parent dir; there's no devcontainer.json there.
+  await expect(
+    resolveImage({ source: "devcontainer", path: "." }, repoDir),
+  ).rejects.toMatchObject({ code: "sandbox_misconfigured" });
+});

@@ -1,0 +1,7 @@
+{
+  "name": "compose-sample",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspace",
+  "postCreateCommand": "echo ready"
+}

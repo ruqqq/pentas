@@ -1,0 +1,7 @@
+{
+  "name": "sample",
+  "build": { "dockerfile": "Dockerfile" },
+  "workspaceFolder": "/workspace",
+  "remoteUser": "root",
+  "postCreateCommand": "echo ready"
+}
