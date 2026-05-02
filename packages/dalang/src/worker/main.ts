@@ -1,6 +1,7 @@
 import { WorkerInvocationSchema, serializeEvent, type WorkerEvent, type WorkerInvocation } from "./protocol";
 import { runClaude } from "./claude";
 import { runCodex } from "./codex";
+import { runOpencode } from "./opencode";
 
 export interface WorkerLoopOptions<I> {
   parseInvocation: (raw: string) => I;
@@ -63,7 +64,7 @@ function dispatch(inv: WorkerInvocation, signal: AbortSignal): AsyncGenerator<un
     case "codex":
       return runCodex(inv, signal);
     case "opencode":
-      throw new Error("opencode provider not yet implemented (Task 5)");
+      return runOpencode(inv, signal);
   }
 }
 
