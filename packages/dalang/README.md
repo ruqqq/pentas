@@ -152,3 +152,21 @@ The `opencode:` block's `model` field has no default. Add it in `provider/model`
 
 **I'm using GPT-5.5 with an API key and getting an auth error.**
 GPT-5.5 requires ChatGPT subscription auth (`codex login`). It is not available via `OPENAI_API_KEY`.
+
+---
+
+## Sandbox (Phase 1 — foundation)
+
+`packages/dalang/src/sandbox/` provides container primitives used by later
+phases of the sandboxed-workers feature. The `ContainerHost` interface has
+two implementations: `DockerContainerHost` (real Docker; requires the
+`docker` CLI) and `FakeContainerHost` (in-process, host subprocesses, for
+unit tests).
+
+`resolveImage()` resolves a `SandboxImageConfig` to a concrete `ResolvedImage`
+by reading `.devcontainer/devcontainer.json`, building a Dockerfile, or
+passing through a tagged image. Per-worker docker-compose stacks are
+supported via the `compose` resolved-image kind.
+
+This module is not yet wired into the agent runner. The runner integration
+lands in Phase 4 of the sandboxed-workers plan.
