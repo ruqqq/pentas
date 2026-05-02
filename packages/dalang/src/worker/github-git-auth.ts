@@ -9,9 +9,13 @@ export interface CommandRunner {
 const SAFE_GIT_SETUP_CWD = "/tmp";
 
 export const runCommand: CommandRunner = async (cmd, env, opts) => {
-  const proc = Bun.spawn(cmd, { stdout: "ignore", stderr: "pipe", env, cwd: opts?.cwd });
-  const [exitCode, stderr] = await Promise.all([proc.exited, new Response(proc.stderr).text()]);
-  return { exitCode, stderr };
+  try {
+    const proc = Bun.spawn(cmd, { stdout: "ignore", stderr: "pipe", env, cwd: opts?.cwd });
+    const [exitCode, stderr] = await Promise.all([proc.exited, new Response(proc.stderr).text()]);
+    return { exitCode, stderr };
+  } catch (err) {
+    return { exitCode: 127, stderr: err instanceof Error ? err.message : String(err) };
+  }
 };
 
 export interface GitIdentity {
@@ -46,8 +50,12 @@ export async function setupGithubGitAuth(
   const token = env.GH_TOKEN ?? env.GITHUB_TOKEN;
   if (!token) return;
 
+  const credentialHelper =
+    "!f() { echo username=x-access-token; echo password=${GH_TOKEN:-$GITHUB_TOKEN}; }; f";
+
   const commands = [
-    ["gh", "auth", "setup-git"],
+    ["git", "config", "--global", "credential.https://github.com.username", "x-access-token"],
+    ["git", "config", "--global", "credential.https://github.com.helper", credentialHelper],
     ["git", "config", "--global", "--add", "url.https://github.com/.insteadOf", "git@github.com:"],
     [
       "git",

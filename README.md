@@ -224,6 +224,12 @@ codex:
 
 `approval_policy: never` is the headless setting. Interactive approval prompts would deadlock an unattended dalang worker. Use `sandbox_mode: danger-full-access` for workflows where the agent must stage, commit, or push; Codex `workspace-write` can edit files, but its sandbox mounts `.git` read-only. `network_access_enabled` defaults to `true` for Codex so GitHub handoff commands can comment, push, and update Project fields.
 
+#### Sandboxed workers
+
+dalang can run provider sessions inside per-task Docker containers by setting `sandbox.enabled: true`. This is the recommended mode for project-specific devcontainers and long-running Codex work because the agent gets the target repository's tools, services, and dependencies without inheriting the host environment wholesale.
+
+See `packages/dalang/README.md` for the full sandbox model, including devcontainer compose support, credential projection, `GH_TOKEN`/Cloudflare token passing, git identity setup, the worker shim, and `dalang sandbox doctor`.
+
 #### Workflow prompt and agent skills
 
 Repo-local generic agents skills live under `.agents/skills/`. The `init-workflow-md` skill there scaffolds dalang-compatible `WORKFLOW.md` files with current control-plane, provider, and PR-checks settings.

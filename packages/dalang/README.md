@@ -155,25 +155,121 @@ GPT-5.5 requires ChatGPT subscription auth (`codex login`). It is not available 
 
 ---
 
-## Sandbox (Phase 1 — foundation)
+## Sandboxed Workers
 
-`packages/dalang/src/sandbox/` provides container primitives used by later
-phases of the sandboxed-workers feature. The `ContainerHost` interface has
-two implementations: `DockerContainerHost` (real Docker; requires the
-`docker` CLI) and `FakeContainerHost` (in-process, host subprocesses, for
-unit tests).
+dalang can run each provider session inside an isolated Docker worker instead
+of running the provider CLI directly on the host. Enable this with
+`sandbox.enabled: true` in `WORKFLOW.md`.
 
-`resolveImage()` resolves a `SandboxImageConfig` to a concrete `ResolvedImage`
-by reading `.devcontainer/devcontainer.json`, building a Dockerfile, or
-passing through a tagged image. Per-worker docker-compose stacks are
-supported via the `compose` resolved-image kind.
+The sandbox is intentionally a worker boundary, not a security boundary for
+host secrets. dalang still mounts a worktree, projects provider credentials,
+passes selected env vars, and runs a worker shim inside the container. Treat it
+as a reproducible project runtime for unattended agents, not as protection
+against malicious code.
 
-This module is not yet wired into the agent runner. The runner integration
-lands in Phase 4 of the sandboxed-workers plan.
+### Runtime Model
 
----
+For each picked-up item, dalang:
 
-## Auth credential store (Phase 3)
+1. Creates or reuses the issue worktree under `workspace.root`.
+2. Resolves the sandbox image from the workflow config.
+3. Starts a per-worker Docker container or compose project named
+   `dalang-worker-<pid>-<counter>`.
+4. Mounts the worktree into the container.
+5. Mounts the compiled `dalang-worker` shim at `/opt/dalang/dalang-worker`.
+6. Projects the active provider credential into the container.
+7. Executes the shim with a JSON invocation in `DALANG_WORKER_INVOCATION`.
+8. Streams provider events back to the orchestrator.
+9. Tears the worker down and disposes projected credentials.
+
+The host `dalang` binary auto-locates `dalang-worker` next to itself. If it
+cannot find an executable shim, startup fails before dispatch. Running
+`bun run build:install` installs both binaries into `~/.local/bin`.
+
+### Image Sources
+
+`sandbox.image` supports three sources:
+
+```yaml
+sandbox:
+  enabled: true
+  image:
+    source: devcontainer
+    path: .devcontainer
+```
+
+`source: devcontainer` reads `.devcontainer/devcontainer.json`. If
+`dockerComposeFile` is present, dalang starts a per-worker compose project and
+uses the configured `service`; otherwise it builds/uses the Dockerfile. In
+compose mode, the user's compose file may already mount `/workspace`, so dalang
+mounts the issue worktree at `/run/dalang/workspace` and runs the agent there.
+
+```yaml
+sandbox:
+  image:
+    source: dockerfile
+    path: Dockerfile
+```
+
+`source: dockerfile` builds a dalang-tagged image from the given Dockerfile and
+mounts the worktree at the image workspace folder.
+
+```yaml
+sandbox:
+  image:
+    source: image
+    tag: node:22-bookworm
+```
+
+`source: image` uses an existing image tag.
+
+### Container Requirements
+
+The container must include the active provider CLI and the tools your workflow
+expects the agent to use.
+
+For Codex workers, the image usually needs:
+
+- `codex`
+- `git`
+- `gh` if the prompt or workflow expects GitHub CLI commands
+- project tooling such as `bun`, `node`, `wrangler`, `psql`, Playwright, etc.
+
+The worker shim is mounted from the host, so the image does not need to bake in
+`dalang-worker`. The shim is a Linux x86-64 Bun-compiled binary, so the image
+must be able to execute Linux ELF binaries with glibc-compatible runtime
+support.
+
+### Provider Paths And Env
+
+Provider executable paths are configured under `sandbox.providers`. These are
+container paths, not host paths.
+
+```yaml
+sandbox:
+  providers:
+    codex:
+      executablePath: /usr/bin/codex
+      env:
+        HOME: /tmp
+        GH_TOKEN: "${GH_TOKEN}"
+        CLOUDFLARE_API_TOKEN: "${CLOUDFLARE_API_TOKEN}"
+```
+
+`env` values are passed only to the provider child process inside the worker.
+They do not automatically inherit from the host. Use exact env references like
+`"${GH_TOKEN}"` or `"$GH_TOKEN"` in front matter and start dalang from a shell
+where those variables are set.
+
+Common values:
+
+- `HOME: /tmp` keeps CLIs from trying to write to a mounted or read-only home.
+- `GH_TOKEN` / `GITHUB_TOKEN` lets GitHub CLI and git HTTPS auth work.
+- `CLOUDFLARE_API_TOKEN` is the Wrangler API token env var.
+- Provider-specific tokens such as `OPENAI_API_KEY` can be passed the same way
+  when the provider mode needs them.
+
+### Provider Credentials
 
 dalang stores per-user provider credentials at `~/.config/dalang/credentials/`
 (override with `DALANG_CONFIG_HOME`). It does *not* read or write your host
@@ -198,8 +294,112 @@ dalang auth set opencode --from ~/.local/share/opencode/auth.json
 
 Run `dalang auth status` to see which providers are configured.
 
-These credentials are projected into worker containers in Phase 4. Phase 3
-only ships the store and the projection primitives.
+When sandboxing is enabled, dalang validates that the active provider has a
+stored credential before dispatch and projects only that provider's credential
+into the worker. GitHub and Cloudflare tokens are separate from provider auth;
+pass them through `sandbox.providers.<provider>.env`.
+
+### Git Identity And GitHub Pushes
+
+Local commits inside the worker need git identity:
+
+```yaml
+sandbox:
+  git:
+    userName: "${GH_USER_NAME}"
+    userEmail: "${GH_USER_EMAIL}"
+```
+
+At worker startup dalang runs:
+
+- `git config --global user.name ...`
+- `git config --global user.email ...`
+
+These commands run from `/tmp`, not from the worktree, so a container-visible
+worktree `.git` path cannot break global config setup.
+
+If `GH_TOKEN` or `GITHUB_TOKEN` is present, dalang also configures git for
+GitHub HTTPS pushes:
+
+- sets `credential.https://github.com.username` to `x-access-token`
+- sets a git credential helper that reads `GH_TOKEN` or `GITHUB_TOKEN`
+- rewrites `git@github.com:` and `ssh://git@github.com/` remotes to
+  `https://github.com/`
+
+This means the container does not need an SSH key to push branches. It does
+need a token with repository write permission. `gh` is still recommended in the
+image because many workflow prompts and PR handoff skills call it directly, but
+git push auth itself no longer depends on `gh auth setup-git`.
+
+### Doctor
+
+Use the doctor before dispatching real work:
+
+```bash
+dalang sandbox doctor WORKFLOW.md
+```
+
+The doctor starts the configured sandbox image, projects credentials, and
+checks the runtime assumptions:
+
+- provider CLI exists
+- required CLIs exist, by default `gh` and `git`
+- provider credentials are readable
+- workspace is writable
+- the mounted workspace is a usable git repository
+- git commit identity is configured
+- when a GitHub token is available, GitHub auth and remote access work
+
+Doctor failures are meant to be fixed in the project devcontainer or workflow
+config before enabling unattended runs.
+
+### Orphan Cleanup
+
+On startup, dalang sweeps stale `dalang-worker-*` Docker containers and compose
+projects whose owning dalang process no longer exists. Live workers owned by
+other running dalang processes are skipped.
+
+### Common Sandbox Failures
+
+**`worker shim exited 126`**
+The worker command could not be executed. Rebuild/install dalang so the host
+binary can mount an executable shim:
+
+```bash
+bun run build:install
+```
+
+If using a custom path, set:
+
+```bash
+export DALANG_SHIM_PATH=/absolute/path/to/dalang-worker
+```
+
+**`Executable not found in $PATH: "gh"`**
+The container does not have GitHub CLI. Install `gh` in the devcontainer if the
+workflow or agent prompt expects it. Git push auth can work with only `git` and
+`GH_TOKEN`, but PR handoff commands often need `gh`.
+
+**`git identity setup failed: fatal: not a git repository`**
+This usually means an older worker binary was running git setup from the
+mounted worktree and the container could not resolve the host worktree's
+`.git` path. Rebuild/install dalang so git setup runs from `/tmp`.
+
+**`front matter invalid ... sandbox.git.userEmail Invalid email`**
+The workflow likely uses `${GH_USER_EMAIL}` but dalang is old enough not to
+expand sandbox env refs before validation, or the host env var is unset. Update
+dalang and export the variable before startup.
+
+**Provider writes to a read-only home or fails to update PATH**
+Set the provider env home to a writable container path:
+
+```yaml
+sandbox:
+  providers:
+    codex:
+      env:
+        HOME: /tmp
+```
 
 ### Security trade-off: projected credential dir permissions
 

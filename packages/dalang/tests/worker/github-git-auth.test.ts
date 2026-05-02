@@ -47,7 +47,7 @@ test("setupGithubGitAuth skips when no github token is present", async () => {
   expect(calls).toEqual([]);
 });
 
-test("setupGithubGitAuth configures gh and rewrites ssh github remotes to https", async () => {
+test("setupGithubGitAuth configures git credential auth and rewrites ssh github remotes to https", async () => {
   const calls: string[][] = [];
   const cwds: Array<string | undefined> = [];
   const env = { GH_TOKEN: "token" };
@@ -61,7 +61,14 @@ test("setupGithubGitAuth configures gh and rewrites ssh github remotes to https"
   await setupGithubGitAuth(env, run);
 
   expect(calls).toEqual([
-    ["gh", "auth", "setup-git"],
+    ["git", "config", "--global", "credential.https://github.com.username", "x-access-token"],
+    [
+      "git",
+      "config",
+      "--global",
+      "credential.https://github.com.helper",
+      "!f() { echo username=x-access-token; echo password=${GH_TOKEN:-$GITHUB_TOKEN}; }; f",
+    ],
     ["git", "config", "--global", "--add", "url.https://github.com/.insteadOf", "git@github.com:"],
     [
       "git",
@@ -72,13 +79,13 @@ test("setupGithubGitAuth configures gh and rewrites ssh github remotes to https"
       "ssh://git@github.com/",
     ],
   ]);
-  expect(cwds).toEqual(["/tmp", "/tmp", "/tmp"]);
+  expect(cwds).toEqual(["/tmp", "/tmp", "/tmp", "/tmp"]);
 });
 
 test("setupGithubGitAuth throws when setup command fails", async () => {
   const run: CommandRunner = async () => ({ exitCode: 1, stderr: "gh missing" });
 
   await expect(setupGithubGitAuth({ GITHUB_TOKEN: "token" }, run)).rejects.toThrow(
-    /github git auth setup failed: gh auth setup-git: gh missing/,
+    /github git auth setup failed: git config --global credential\.https:\/\/github\.com\.username x-access-token: gh missing/,
   );
 });
