@@ -169,7 +169,14 @@ export type RuntimeEventKind =
   | "notification"
   | "other_message"
   | "malformed"
-  | "pr_checks_observed";
+  | "pr_checks_observed"
+  | "sandbox_unavailable"
+  | "sandbox_image_unavailable"
+  | "sandbox_start_failed"
+  | "sandbox_exec_disconnected"
+  | "sandbox_oom"
+  | "sandbox_auth_refresh_conflict"
+  | "sandbox_misconfigured";
 
 export interface RuntimeEvent {
   event: RuntimeEventKind;
