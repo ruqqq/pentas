@@ -24,6 +24,18 @@ if (args.command === "lint") {
   process.exit(1);
 }
 
+if (args.command === "auth") {
+  const { FilesystemAuthStore, defaultStoreRoot } = await import("./auth/store");
+  const { runAuthCli } = await import("./auth/cli");
+  const store = new FilesystemAuthStore(defaultStoreRoot());
+  const exitCode = await runAuthCli({
+    store,
+    argv: args.authArgv ?? [],
+    log: (line) => console.log(line),
+  });
+  process.exit(exitCode);
+}
+
 const boot = new Bootstrap({ workflowPath: args.workflowPath, port: args.port });
 
 const shutdown = async () => {

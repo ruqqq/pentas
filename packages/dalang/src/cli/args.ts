@@ -1,13 +1,16 @@
 // packages/dalang/src/cli/args.ts
 export interface ParsedArgs {
-  command: "serve" | "lint";
+  command: "serve" | "lint" | "auth";
   workflowPath: string;
   port: number | null;
   help: boolean;
+  /** Populated only when command === "auth"; contains the args after `auth`. */
+  authArgv?: string[];
 }
 
 export const DALANG_HELP = `Usage: dalang [WORKFLOW.md] [--port <port>]
        dalang lint [WORKFLOW.md]
+       dalang auth <set|clear|status> [args]
 
 Options:
   --port <port>  Override the HTTP server port from WORKFLOW.md.
@@ -15,6 +18,16 @@ Options:
 `;
 
 export function parseArgs(argv: string[]): ParsedArgs {
+  if (argv[0] === "auth") {
+    return {
+      command: "auth",
+      workflowPath: "",
+      port: null,
+      help: false,
+      authArgv: argv.slice(1),
+    };
+  }
+
   if (argv.some((a) => a === "--help" || a === "-h")) {
     return { command: "serve", workflowPath: "./WORKFLOW.md", port: null, help: true };
   }
