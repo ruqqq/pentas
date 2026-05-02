@@ -214,15 +214,38 @@ The shim itself is unit-tested by exercising its CLI in-process (it's just a Bun
 
 End-to-end tests use a real `meem-class`-style devcontainer fixture in `packages/dalang/tests/fixtures/devcontainer-sample/`, gated behind `DOCKER_AVAILABLE`.
 
+### 10. Resource limits
+
+Each worker container runs with sensible defaults to prevent a runaway agent from destabilizing the host:
+
+- `cpus: "2"`
+- `memory: "4g"`
+- `pids-limit: 1024`
+- `--tmpfs /tmp:size=2g`
+
+Overridable per-repo via `sandbox.resources`:
+
+```yaml
+sandbox:
+  resources:
+    cpus: "4"
+    memory: "8g"
+```
+
+These are floors against accidents (fork bombs, memory leaks), not a security boundary. The agent inside still has full network and full access to its mounted worktree.
+
+### 11. Dependency-install cost (`postCreateCommand`)
+
+v1 accepts the cost: every worker pays the project's `postCreateCommand` (e.g. `bun install`) on container start. For projects with warm lockfiles this is typically <30s and tolerable. Caching strategies (shared cache bind-mount, "ready image" snapshot via `docker commit`) are explicitly deferred to a follow-up perf pass once real workload data exists.
+
 ## Open Questions
 
-These are deferred to follow-up brainstorming before plan-writing:
+These are deferred to plan-writing or follow-up:
 
-1. **`postCreateCommand` semantics under per-worker compose.** `bun install` on every worker start is slow when a project has many issues. Cache strategy (mount a shared `node_modules` volume? snapshot a "ready" image after first `postCreateCommand`?) needs design.
-2. **Shim ↔ SDK version coupling.** The shim bundles all three SDKs; bumping any one means rebuilding the shim binary. Acceptable for v1; revisit if it becomes painful.
-3. **`docker` vs container runtime abstraction.** v1 targets Docker only. Podman compatibility is plausible but unverified.
-4. **Where the credential store lives on the host.** Path is `<dalang-config>/credentials/` but exact layout (per-provider subdirs vs flat) needs nailing down at plan time.
-5. **Resource limits.** No CPU/memory limits in v1 by default. Reasonable defaults (or a config block) to be decided.
+1. **Shim ↔ SDK version coupling.** The shim bundles all three SDKs; bumping any one means rebuilding the shim binary. Acceptable for v1; revisit if it becomes painful.
+2. **`docker` vs container runtime abstraction.** v1 targets Docker only. Podman compatibility is plausible but unverified.
+3. **Credential store layout on disk.** Path is `<dalang-config>/credentials/`; exact per-provider layout to be decided at plan time.
+4. **Dependency-install caching.** See §11. Deferred follow-up perf pass.
 
 ## Risks
 
