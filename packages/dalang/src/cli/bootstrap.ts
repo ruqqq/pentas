@@ -115,7 +115,8 @@ export class Bootstrap {
       const { FilesystemAuthStore, defaultStoreRoot } = await import("../auth/store");
       const { createSandboxedRunQuery } = await import("../sandbox/sandboxed-runner");
       const { resolve } = await import("node:path");
-      const sandboxesRoot = resolve(wf.config.workspace.root, ".dalang", "sandboxes");
+      const { expandPath } = await import("../config/env-resolver");
+      const sandboxesRoot = resolve(expandPath(wf.config.workspace.root), ".dalang", "sandboxes");
       const shimPath = process.env["DALANG_SHIM_PATH"];
       this.log.info(
         {

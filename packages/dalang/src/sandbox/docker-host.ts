@@ -285,15 +285,18 @@ async function writeComposeOverlay(
   const overlayPath = `${overlayDir}/overlay.compose.yml`;
   await Bun.spawn(["mkdir", "-p", overlayDir], { stdout: "ignore", stderr: "ignore" }).exited;
 
-  // Build YAML by hand. Quoting host paths to be safe.
-  const volumes = opts.bindMounts.map(
-    (m) => `      - ${escapeYaml(m.hostPath)}:${escapeYaml(m.containerPath)}:${m.readOnly ? "ro" : "rw"}`,
-  );
+  // Volumes use compose's short syntax: "host:container:mode". Always double-quote
+  // the whole triple so `:` inside paths or modifiers can't be misparsed as YAML
+  // mapping separators. Embedded `"` and `\` get escaped.
+  const volumes = opts.bindMounts.map((m) => {
+    const triple = `${m.hostPath}:${m.containerPath}:${m.readOnly ? "ro" : "rw"}`;
+    return `      - ${yamlDouble(triple)}`;
+  });
   const envEntries = Object.entries(opts.env).map(
-    ([k, v]) => `      ${escapeYaml(k)}: ${escapeYaml(v)}`,
+    ([k, v]) => `      ${yamlScalarKey(k)}: ${yamlDouble(v)}`,
   );
 
-  let body = `services:\n  ${image.service}:\n`;
+  let body = `services:\n  ${yamlScalarKey(image.service)}:\n`;
   if (volumes.length > 0) {
     body += `    volumes:\n${volumes.join("\n")}\n`;
   }
@@ -304,8 +307,10 @@ async function writeComposeOverlay(
   return overlayPath;
 }
 
-function escapeYaml(s: string): string {
-  // Quote anything that's not a plain identifier/path. Conservative double-quoted form.
-  if (/^[A-Za-z0-9_./-]+$/.test(s)) return s;
+function yamlDouble(s: string): string {
   return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
+function yamlScalarKey(s: string): string {
+  return /^[A-Za-z_][A-Za-z0-9_-]*$/.test(s) ? s : yamlDouble(s);
 }
