@@ -200,3 +200,22 @@ Run `dalang auth status` to see which providers are configured.
 
 These credentials are projected into worker containers in Phase 4. Phase 3
 only ships the store and the projection primitives.
+
+### Security trade-off: projected credential dir permissions
+
+When dalang projects codex/opencode credentials into a worker container,
+the per-worker tmpdir on the host is `chmod 0o777` and the `auth.json`
+inside it is `0o666`. This is so the container's process — which may
+run as a different UID than the host user (e.g. `ubuntu` UID 1000 inside
+the container vs. whatever your host user is) — can read and write the
+projected files, including the in-process auth refresh that codex
+performs.
+
+The trade-off: while a worker is running, any local user on the host
+machine can read the worker's projected credentials. dalang is designed
+for single-user use on a personal machine, where this is acceptable. On
+a multi-tenant host, this is not safe.
+
+A more robust fix is to align the container's UID with the host user's
+UID via a compose overlay `user:` field; that is a future improvement
+and is not implemented in v1.
