@@ -1,4 +1,4 @@
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { BindMount } from "../sandbox/types";
 import type { AuthStore } from "./store";
@@ -37,10 +37,7 @@ export async function prepareWorkerCredentials(
     case "claude":
       return prepareClaudeCredentials(opts);
     case "codex":
-      throw new AuthError(
-        "auth_missing",
-        "codex credential projection not yet implemented (Task 3)",
-      );
+      return prepareCodexCredentials(opts);
     case "opencode":
       throw new AuthError(
         "auth_missing",
@@ -64,6 +61,44 @@ async function prepareClaudeCredentials(
     bindMounts: [],
     dispose: async () => {
       // Nothing to clean up for env-only providers.
+    },
+  };
+}
+
+async function prepareCodexCredentials(
+  opts: PrepareCredentialsOptions,
+): Promise<PreparedCredentials> {
+  const initial = await opts.store.getCodexAuthJson();
+  if (initial === null) {
+    throw new AuthError(
+      "auth_missing",
+      "no codex credentials in store; run `dalang auth set codex --from <auth.json>` first",
+    );
+  }
+  const dir = await ensureWorkerSandboxDir(opts.sandboxesRoot, opts.workerId, "codex");
+  const authPath = join(dir, "auth.json");
+  await writeFile(authPath, initial, { mode: 0o600 });
+
+  return {
+    env: { CODEX_HOME: "/run/dalang/codex" },
+    bindMounts: [
+      {
+        hostPath: dir,
+        containerPath: "/run/dalang/codex",
+        readOnly: false,
+      },
+    ],
+    dispose: async () => {
+      try {
+        const final = await readFile(authPath, "utf8");
+        if (final !== initial) {
+          await opts.store.setCodexAuthJson(final);
+        }
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+        // If the shim deleted auth.json, leave the store as-is.
+      }
+      await removeWorkerSandbox(opts.sandboxesRoot, opts.workerId);
     },
   };
 }
