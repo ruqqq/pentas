@@ -14,8 +14,6 @@ export interface SandboxedRunnerDeps {
   /** Absolute path to the repo on the host. */
   repoDir: string;
   config: SandboxConfig;
-  /** Path to the compiled dalang-worker binary on the host (Phase 2 artifact). */
-  shimBinaryHostPath?: string;
   /** Override the exec command (testing). Default uses `/opt/dalang/dalang-worker`. */
   shimCmdOverride?: string[];
   /** Override the invocation payload (testing). Default builds from RunQueryOptions. */
@@ -111,15 +109,6 @@ export function createSandboxedRunQuery(deps: SandboxedRunnerDeps): RunQuery {
           containerPath: containerWorkspaceRoot,
           readOnly: false,
         };
-        const shimMount: BindMount[] = deps.shimBinaryHostPath
-          ? [
-              {
-                hostPath: deps.shimBinaryHostPath,
-                containerPath: DEFAULT_SHIM_CONTAINER_PATH,
-                readOnly: true,
-              },
-            ]
-          : [];
 
         const shimCmd = deps.shimCmdOverride ?? [DEFAULT_SHIM_CONTAINER_PATH];
         const invocation =
@@ -132,7 +121,7 @@ export function createSandboxedRunQuery(deps: SandboxedRunnerDeps): RunQuery {
           sandboxesRoot: deps.sandboxesRoot,
           workerId,
           image,
-          bindMounts: [worktreeMount, ...shimMount],
+          bindMounts: [worktreeMount],
           resources: deps.config.resources,
           shim: { cmd: shimCmd, cwd: containerCwd },
           invocation,

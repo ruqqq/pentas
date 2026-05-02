@@ -1,9 +1,9 @@
 // packages/dalang/tests/cli/bootstrap.test.ts
 import { test, expect } from "bun:test";
-import { chmod, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Bootstrap, resolveWorkerShimHostPath } from "../../src/cli/bootstrap";
+import { Bootstrap, sandboxWorkerCommand } from "../../src/cli/bootstrap";
 
 const VALID = `---
 tracker:
@@ -23,33 +23,8 @@ const runQueryFactory = () =>
     yield { type: "result" as const, subtype: "success", usage: {} };
   };
 
-test("resolveWorkerShimHostPath uses explicit DALANG_SHIM_PATH", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "dalang-shim-explicit-"));
-  const shim = join(dir, "worker");
-  await writeFile(shim, "#!/bin/sh\n", "utf8");
-  await chmod(shim, 0o755);
-
-  expect(
-    resolveWorkerShimHostPath({
-      env: { DALANG_SHIM_PATH: shim },
-      argv: [join(dir, "dalang")],
-      execPath: "/missing/bun",
-    }),
-  ).toBe(shim);
-});
-
-test("resolveWorkerShimHostPath finds dalang-worker next to dalang executable", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "dalang-shim-sibling-"));
-  const dalang = join(dir, "dalang");
-  const shim = join(dir, "dalang-worker");
-  await writeFile(dalang, "#!/bin/sh\n", "utf8");
-  await writeFile(shim, "#!/bin/sh\n", "utf8");
-  await chmod(dalang, 0o755);
-  await chmod(shim, 0o755);
-
-  expect(resolveWorkerShimHostPath({ env: {}, argv: [dalang], execPath: "/missing/bun" })).toBe(
-    shim,
-  );
+test("sandboxWorkerCommand defaults to the baked worker path inside the container", () => {
+  expect(sandboxWorkerCommand()).toEqual(["/opt/dalang/dalang-worker"]);
 });
 
 test("loads workflow, validates, starts and stops cleanly", async () => {

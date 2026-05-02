@@ -30,6 +30,7 @@ export interface SandboxDoctorOptions {
 }
 
 const DALANG_COMPOSE_WORKSPACE = "/run/dalang/workspace";
+const DEFAULT_WORKER_SHIM_PATH = "/opt/dalang/dalang-worker";
 
 function providerExecutable(config: SandboxConfig, provider: AuthProvider): string {
   switch (provider) {
@@ -136,6 +137,13 @@ export async function runSandboxDoctor(opts: SandboxDoctorOptions): Promise<Sand
         return { exitCode: check.ok ? 0 : 1, stderr: check.detail };
       });
     }
+    checks.push(
+      await execCheck(handle, {
+        name: `worker shim: ${DEFAULT_WORKER_SHIM_PATH}`,
+        script: `test -x ${shellQuote(DEFAULT_WORKER_SHIM_PATH)}`,
+        env: execEnv,
+      }),
+    );
     const providerPath = providerExecutable(opts.config, opts.provider);
     checks.push(
       await execCheck(handle, {

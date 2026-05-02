@@ -176,15 +176,15 @@ For each picked-up item, dalang:
 3. Starts a per-worker Docker container or compose project named
    `dalang-worker-<pid>-<counter>`.
 4. Mounts the worktree into the container.
-5. Mounts the compiled `dalang-worker` shim at `/opt/dalang/dalang-worker`.
+5. Executes the image-baked `dalang-worker` shim at `/opt/dalang/dalang-worker`.
 6. Projects the active provider credential into the container.
 7. Executes the shim with a JSON invocation in `DALANG_WORKER_INVOCATION`.
 8. Streams provider events back to the orchestrator.
 9. Tears the worker down and disposes projected credentials.
 
-The host `dalang` binary auto-locates `dalang-worker` next to itself. If it
-cannot find an executable shim, startup fails before dispatch. Running
-`bun run build:install` installs both binaries into `~/.local/bin`.
+The sandbox image must include an executable `dalang-worker` at
+`/opt/dalang/dalang-worker`. `dalang sandbox doctor` fails when that binary is
+missing or not executable.
 
 ### Image Sources
 
@@ -235,10 +235,27 @@ For Codex workers, the image usually needs:
 - `gh` if the prompt or workflow expects GitHub CLI commands
 - project tooling such as `bun`, `node`, `wrangler`, `psql`, Playwright, etc.
 
-The worker shim is mounted from the host, so the image does not need to bake in
-`dalang-worker`. The shim is a Linux x86-64 Bun-compiled binary, so the image
-must be able to execute Linux ELF binaries with glibc-compatible runtime
-support.
+The image must bake in `dalang-worker`. For now, project devcontainers can build
+it from the public Pentas source during image build:
+
+```dockerfile
+FROM oven/bun:1 AS dalang-worker-builder
+ARG DALANG_REPO=https://github.com/ruqqq/pentas.git
+ARG DALANG_REF=main
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git \
+  && rm -rf /var/lib/apt/lists/*
+RUN git clone --depth=1 --branch "$DALANG_REF" "$DALANG_REPO" /tmp/pentas
+WORKDIR /tmp/pentas
+RUN bun install --frozen-lockfile
+RUN bun run build:dalang-worker
+
+FROM your-project-image
+COPY --from=dalang-worker-builder /tmp/pentas/dist/dalang-worker /opt/dalang/dalang-worker
+RUN chmod 0755 /opt/dalang/dalang-worker
+```
+
+The shim is a Linux x86-64 Bun-compiled binary, so the image must be able to
+execute Linux ELF binaries with glibc-compatible runtime support.
 
 ### Provider Paths And Env
 
@@ -342,6 +359,7 @@ dalang sandbox doctor WORKFLOW.md
 The doctor starts the configured sandbox image, projects credentials, and
 checks the runtime assumptions:
 
+- `dalang-worker` exists and is executable
 - provider CLI exists
 - required CLIs exist, by default `gh` and `git`
 - provider credentials are readable
@@ -362,18 +380,8 @@ other running dalang processes are skipped.
 ### Common Sandbox Failures
 
 **`worker shim exited 126`**
-The worker command could not be executed. Rebuild/install dalang so the host
-binary can mount an executable shim:
-
-```bash
-bun run build:install
-```
-
-If using a custom path, set:
-
-```bash
-export DALANG_SHIM_PATH=/absolute/path/to/dalang-worker
-```
+The worker command could not be executed. Rebuild the sandbox image and verify
+it contains an executable `/opt/dalang/dalang-worker`.
 
 **`Executable not found in $PATH: "gh"`**
 The container does not have GitHub CLI. Install `gh` in the devcontainer if the

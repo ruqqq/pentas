@@ -32,6 +32,27 @@ async function storeWithClaudeAuth(): Promise<FilesystemAuthStore> {
   return store;
 }
 
+class WorkerReadyHost extends FakeContainerHost {
+  override async start(opts: ContainerStartOptions): Promise<ContainerHandle> {
+    const fake = await super.start(opts);
+    return {
+      name: fake.name,
+      exec: async (execOpts: ExecOptions): Promise<ExecResult> => {
+        const script = execOpts.cmd.join(" ");
+        if (script.includes("/opt/dalang/dalang-worker")) {
+          return {
+            stdout: (async function* () {})(),
+            stderr: (async function* () {})(),
+            done: Promise.resolve({ exitCode: 0, signal: null }),
+          };
+        }
+        return fake.exec(execOpts);
+      },
+      stop: () => fake.stop(),
+    };
+  }
+}
+
 test("runSandboxDoctor reports ok checks for provider CLI, gh, credentials, and workspace", async () => {
   const workspace = await realpath(await mkdtemp(join(tmpdir(), "doctor-ws-")));
   await Bun.spawn(["git", "init"], { cwd: workspace, stdout: "ignore", stderr: "ignore" }).exited;
@@ -39,7 +60,7 @@ test("runSandboxDoctor reports ok checks for provider CLI, gh, credentials, and 
   const store = await storeWithClaudeAuth();
 
   const result = await runSandboxDoctor({
-    host: new FakeContainerHost(),
+    host: new WorkerReadyHost(),
     store,
     sandboxesRoot,
     repoDir: process.cwd(),
@@ -55,6 +76,7 @@ test("runSandboxDoctor reports ok checks for provider CLI, gh, credentials, and 
 
   expect(result.ok).toBe(true);
   expect(result.checks.map((c) => [c.name, c.ok])).toEqual([
+    ["worker shim: /opt/dalang/dalang-worker", true],
     ["provider cli: sh", true],
     ["required cli: sh", true],
     ["provider credentials", true],

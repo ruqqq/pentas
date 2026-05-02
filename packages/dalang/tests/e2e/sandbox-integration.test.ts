@@ -1,5 +1,5 @@
 import { test, expect, beforeAll, setDefaultTimeout } from "bun:test";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { realpath } from "node:fs/promises";
@@ -31,10 +31,18 @@ test("sandboxed claude RunQuery executes a one-turn prompt end-to-end", async ()
   if (!dockerAvailable || !claudeAuthAvailable) return;
 
   const repoDir = await realpath(await mkdtemp(join(tmpdir(), "sandbox-e2e-")));
+  const shimBinary = resolve(import.meta.dir, "..", "..", "dist", "dalang-worker");
+  if (!existsSync(shimBinary)) {
+    console.warn(`shim binary missing at ${shimBinary}; skipping. Run \`bun run worker:build\`.`);
+    return;
+  }
+  await copyFile(shimBinary, join(repoDir, "dalang-worker"));
   await writeFile(
     join(repoDir, "Dockerfile"),
     `FROM alpine:3.19
 RUN apk add --no-cache bash curl
+COPY dalang-worker /opt/dalang/dalang-worker
+RUN chmod 0755 /opt/dalang/dalang-worker
 WORKDIR /workspace
 `,
   );
@@ -48,11 +56,6 @@ WORKDIR /workspace
   await store.setClaudeToken(token);
 
   const sandboxesRoot = await realpath(await mkdtemp(join(tmpdir(), "sandbox-e2e-sb-")));
-  const shimBinary = resolve(import.meta.dir, "..", "..", "dist", "dalang-worker");
-  if (!existsSync(shimBinary)) {
-    console.warn(`shim binary missing at ${shimBinary}; skipping. Run \`bun run worker:build\`.`);
-    return;
-  }
 
   const runQuery = createSandboxedRunQuery({
     host: new DockerContainerHost(),
@@ -69,7 +72,6 @@ WORKDIR /workspace
         opencode: { executablePath: "opencode" },
       },
     },
-    shimBinaryHostPath: shimBinary,
   });
 
   const events: unknown[] = [];

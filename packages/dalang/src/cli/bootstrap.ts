@@ -1,6 +1,4 @@
 // packages/dalang/src/cli/bootstrap.ts
-import { statSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
 import { WorkflowReloader } from "../config/reload";
 import {
   validateForDispatch,
@@ -19,6 +17,12 @@ import { startServer, type ServerHandle } from "../http/server";
 import { createLogger, type Logger } from "../logging/logger";
 import type { RunQuery } from "../agent/agent-runner";
 
+export const DEFAULT_SANDBOX_WORKER_PATH = "/opt/dalang/dalang-worker";
+
+export function sandboxWorkerCommand(): string[] {
+  return [DEFAULT_SANDBOX_WORKER_PATH];
+}
+
 export interface BootstrapOptions {
   workflowPath: string;
   port: number | null;
@@ -29,43 +33,6 @@ export interface BootstrapOptions {
   trackerEndpoint?: string;
   /** If set, overrides workflow's Papan control-plane api_key. */
   trackerApiKey?: string | null;
-}
-
-export function resolveWorkerShimHostPath(opts?: {
-  env?: Record<string, string | undefined>;
-  argv?: string[];
-  execPath?: string;
-}): string | null {
-  const env = opts?.env ?? process.env;
-  const explicit = env["DALANG_SHIM_PATH"];
-  if (explicit !== undefined && explicit.trim().length > 0) {
-    const path = resolve(explicit);
-    return isExecutableFile(path) ? path : null;
-  }
-
-  const candidates = new Set<string>();
-  for (const path of [
-    opts?.argv?.[0] ?? Bun.argv[0],
-    opts?.argv?.[1] ?? Bun.argv[1],
-    opts?.execPath ?? process.execPath,
-  ]) {
-    if (path === undefined || path.length === 0) continue;
-    candidates.add(join(dirname(resolve(path)), "dalang-worker"));
-  }
-
-  for (const candidate of candidates) {
-    if (isExecutableFile(candidate)) return candidate;
-  }
-  return null;
-}
-
-function isExecutableFile(path: string): boolean {
-  try {
-    const st = statSync(path);
-    return st.isFile() && (st.mode & 0o111) !== 0;
-  } catch {
-    return false;
-  }
 }
 
 export class Bootstrap {
@@ -174,21 +141,12 @@ export class Bootstrap {
           "swept dalang-worker artifacts (other live dalang workers skipped)",
         );
       }
-      const shimPath = resolveWorkerShimHostPath();
-      if (shimPath === null) {
-        const explicit = process.env["DALANG_SHIM_PATH"];
-        throw new Error(
-          explicit !== undefined && explicit.trim().length > 0
-            ? `sandbox enabled but DALANG_SHIM_PATH is not an executable file: ${resolve(explicit)}`
-            : "sandbox enabled but dalang-worker shim was not found next to the dalang executable; run `bun run build:install` or set DALANG_SHIM_PATH=/path/to/dalang-worker",
-        );
-      }
       this.log.info(
         {
           provider: wf.config.agent_provider,
           imageSource: wf.config.sandbox!.image.source,
           sandboxesRoot,
-          shimBinaryHostPath: shimPath,
+          workerCommand: sandboxWorkerCommand(),
         },
         "sandboxed runner selected",
       );
@@ -198,7 +156,7 @@ export class Bootstrap {
         sandboxesRoot,
         repoDir: process.cwd(),
         config: wf.config.sandbox!,
-        shimBinaryHostPath: shimPath,
+        shimCmdOverride: sandboxWorkerCommand(),
         onLifecycleEvent: (e) => {
           // Lifecycle events with structured detail go to info; failure kinds escalate to warn.
           const failureKinds = new Set([
