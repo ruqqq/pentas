@@ -204,11 +204,7 @@ export class Orchestrator {
     }
   }
 
-  private dispatch(
-    issue: NormalizedIssue,
-    attempt: number | null,
-    resumeSessionId?: string,
-  ): void {
+  private dispatch(issue: NormalizedIssue, attempt: number | null, resumeSessionId?: string): void {
     const controller = new AbortController();
     const entry: RunningEntry = {
       issue,
@@ -253,6 +249,7 @@ export class Orchestrator {
           title: issue.title,
         });
       await this.worktrees.ensureWorktree(cwd, branch);
+      await this.assertGitWorkspace(cwd);
     }
     const env = {
       WORKSPACE_PATH: cwd,
@@ -420,7 +417,7 @@ export class Orchestrator {
         attempt: 1,
         delayMs: CONTINUATION_RETRY_MS,
         error: null,
-        workflowState: null,
+        workflowState: issue.state,
         resumeSessionId: null,
         onFire: (retry) => this.handleRetryFire(retry),
       });
@@ -484,6 +481,24 @@ export class Orchestrator {
       releaseClaim(this.state, issueId);
       return;
     }
+
+    const isSuccessfulContinuation = retry.error === null && retry.resume_session_id === null;
+    if (isSuccessfulContinuation && retry.workflow_state !== null) {
+      if (issue.state.toLowerCase() === retry.workflow_state.toLowerCase()) {
+        releaseClaim(this.state, issueId);
+        this.log.warn(
+          {
+            issue_id: issueId,
+            identifier: issue.identifier,
+            state: issue.state,
+          },
+          "task completed but tracker state is unchanged; stopping continuation retry",
+        );
+        return;
+      }
+      this.state.completed.delete(issueId);
+    }
+
     releaseClaim(this.state, issueId);
     if (
       !isEligible(issue, this.state, {
@@ -557,6 +572,18 @@ export class Orchestrator {
       stallTimeoutMs: this.cfg.claude.stall_timeout_ms,
       permissionMode: this.cfg.claude.permission_mode,
     };
+  }
+
+  private async assertGitWorkspace(cwd: string): Promise<void> {
+    const proc = Bun.spawn(["git", "status", "--short"], {
+      cwd,
+      stdout: "ignore",
+      stderr: "pipe",
+    });
+    const exitCode = await proc.exited;
+    if (exitCode === 0) return;
+    const stderr = await new Response(proc.stderr).text();
+    throw new Error(`workspace is not a usable git checkout at ${cwd}: ${stderr.trim()}`);
   }
 
   private buildCodexEnv(): Record<string, string> | undefined {

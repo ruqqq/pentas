@@ -37,6 +37,7 @@ export function isEligible(
   if (!issue.id || !issue.identifier || !issue.title || !issue.state) return false;
   if (!inSet(rules.active, issue.state)) return false;
   if (inSet(rules.terminal, issue.state)) return false;
+  if (state.completed.has(issue.id)) return false;
   if (state.running.has(issue.id) || state.claimed.has(issue.id)) return false;
   if (availableSlots(state) <= 0) return false;
   if (issue.state.toLowerCase() === "todo") {

@@ -1,6 +1,7 @@
 import type { RunQuery, RunQueryOptions } from "../agent/agent-runner";
 import type { AuthStore } from "../auth/store";
 import type { SandboxConfig } from "../config/sandbox-schema";
+import { basename, dirname, posix } from "node:path";
 import { resolveImage } from "./image-source";
 import { runWorkerSession, type WorkerSessionLifecycleEvent } from "./worker-lifecycle";
 import type { ContainerHost, BindMount } from "./types";
@@ -102,11 +103,12 @@ export function createSandboxedRunQuery(deps: SandboxedRunnerDeps): RunQuery {
         // same path yields undefined behavior, so dalang uses a controlled path
         // (/run/dalang/workspace) and points the agent's cwd there. Image-mode keeps
         // the worktree at image.workspaceFolder so the user's expectation holds.
-        const containerCwd =
+        const containerWorkspaceRoot =
           image.kind === "compose" ? DALANG_COMPOSE_WORKSPACE : image.workspaceFolder;
+        const containerCwd = posix.join(containerWorkspaceRoot, basename(opts.cwd));
         const worktreeMount: BindMount = {
-          hostPath: opts.cwd,
-          containerPath: containerCwd,
+          hostPath: dirname(opts.cwd),
+          containerPath: containerWorkspaceRoot,
           readOnly: false,
         };
         const shimMount: BindMount[] = deps.shimBinaryHostPath
