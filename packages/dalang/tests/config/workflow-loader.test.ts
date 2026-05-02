@@ -82,6 +82,45 @@ Body for {{ issue.identifier }}.`,
   }
 });
 
+test("expands env references in sandbox front matter before validation", async () => {
+  const dir = await tempWorkflowDir();
+  const path = join(dir, "WORKFLOW.md");
+  process.env.GH_USER_NAME = "Dalang Bot";
+  process.env.GH_USER_EMAIL = "dalang@example.com";
+  process.env.GH_TOKEN_FOR_LOADER_TEST = "github-token";
+  try {
+    await writeFile(
+      path,
+      `---
+agent_provider: codex
+sandbox:
+  enabled: true
+  git:
+    userName: "\${GH_USER_NAME}"
+    userEmail: "\${GH_USER_EMAIL}"
+  providers:
+    codex:
+      env:
+        GH_TOKEN: "\${GH_TOKEN_FOR_LOADER_TEST}"
+---
+Body for {{ issue.identifier }}.`,
+      "utf8",
+    );
+
+    const wf = await loadWorkflow(path);
+
+    expect(wf.config.sandbox?.git).toEqual({
+      userName: "Dalang Bot",
+      userEmail: "dalang@example.com",
+    });
+    expect(wf.config.sandbox?.providers.codex.env?.GH_TOKEN).toBe("github-token");
+  } finally {
+    delete process.env.GH_USER_NAME;
+    delete process.env.GH_USER_EMAIL;
+    delete process.env.GH_TOKEN_FOR_LOADER_TEST;
+  }
+});
+
 test("rejects file with no front matter (front matter required for typed config)", async () => {
   await expect(loadWorkflow(fix("workflow-no-frontmatter.md"))).rejects.toThrow(WorkflowError);
 });

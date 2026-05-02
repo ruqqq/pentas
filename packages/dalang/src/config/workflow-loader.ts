@@ -29,6 +29,7 @@ export interface LoadedWorkflow {
 
 const IMPORT_LINE = /^\s*@(?<path>\S+)\s*$/;
 const MAX_IMPORT_DEPTH = 10;
+const EXACT_ENV_REF = /^\$(?:([A-Za-z_][A-Za-z0-9_]*)|\{([A-Za-z_][A-Za-z0-9_]*)\})$/;
 
 export async function loadWorkflow(path: string): Promise<LoadedWorkflow> {
   let raw: string;
@@ -79,7 +80,7 @@ export async function loadWorkflow(path: string): Promise<LoadedWorkflow> {
     throw new WorkflowError("workflow_front_matter_not_a_map", "front matter must decode to a map");
   }
 
-  const merged = applyDefaults(parsed);
+  const merged = applyDefaults(expandFrontMatterEnv(parsed));
   const validation = WorkflowFrontMatterSchema.safeParse(merged);
   if (!validation.success) {
     throw new WorkflowError(
@@ -108,6 +109,23 @@ export async function loadWorkflow(path: string): Promise<LoadedWorkflow> {
     mtimeMs: expanded.maxMtimeMs,
     importedPaths: expanded.importedPaths,
   };
+}
+
+function expandFrontMatterEnv(value: unknown): unknown {
+  if (typeof value === "string") {
+    const match = value.match(EXACT_ENV_REF);
+    if (match === null) return value;
+    const name = match[1] ?? match[2]!;
+    const envValue = process.env[name];
+    return envValue === undefined ? value : envValue;
+  }
+  if (Array.isArray(value)) return value.map((item) => expandFrontMatterEnv(item));
+  if (value === null || typeof value !== "object") return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, nested] of Object.entries(value)) {
+    out[key] = expandFrontMatterEnv(nested);
+  }
+  return out;
 }
 
 interface ImportContext {
