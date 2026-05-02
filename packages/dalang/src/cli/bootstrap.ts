@@ -111,12 +111,31 @@ export class Bootstrap {
     if (this.opts.runQueryFactory) {
       runQuery = this.opts.runQueryFactory();
     } else if (sandboxed) {
-      const { DockerContainerHost } = await import("../sandbox/docker-host");
+      const { DockerContainerHost, sweepOrphanWorkers } = await import("../sandbox/docker-host");
       const { FilesystemAuthStore, defaultStoreRoot } = await import("../auth/store");
       const { createSandboxedRunQuery } = await import("../sandbox/sandboxed-runner");
       const { resolve } = await import("node:path");
       const { expandPath } = await import("../config/env-resolver");
       const sandboxesRoot = resolve(expandPath(wf.config.workspace.root), ".dalang", "sandboxes");
+
+      // Best-effort cleanup of dalang-worker artifacts whose owning dalang
+      // process is no longer running. Safe to run even if other dalang
+      // instances are active — those instances' live workers are skipped.
+      const swept = await sweepOrphanWorkers();
+      if (
+        swept.containersRemoved.length > 0 ||
+        swept.composeProjectsRemoved.length > 0 ||
+        swept.skippedLive.length > 0
+      ) {
+        this.log.info(
+          {
+            containersRemoved: swept.containersRemoved,
+            composeProjectsRemoved: swept.composeProjectsRemoved,
+            skippedLive: swept.skippedLive,
+          },
+          "swept dalang-worker artifacts (other live dalang workers skipped)",
+        );
+      }
       const shimPath = process.env["DALANG_SHIM_PATH"];
       this.log.info(
         {

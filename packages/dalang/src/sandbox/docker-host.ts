@@ -193,6 +193,107 @@ class ComposeHandle implements ContainerHandle {
   }
 }
 
+/**
+ * Extract the owning dalang process PID from a worker name. Worker names
+ * have the form `dalang-worker-<pid>-<counter>`. Returns null if the name
+ * doesn't parse.
+ */
+function ownerPidOf(name: string): number | null {
+  const m = name.match(/^dalang-worker-(\d+)-\d+$/);
+  if (!m || m[1] === undefined) return null;
+  const pid = Number(m[1]);
+  return Number.isInteger(pid) && pid > 0 ? pid : null;
+}
+
+/**
+ * Returns true if a process with the given PID is alive on this host. Uses
+ * /proc when available (Linux), falls back to `kill -0` semantics via
+ * `process.kill(pid, 0)` (which doesn't actually send a signal — just probes).
+ */
+function isHostPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    // ESRCH: no such process. EPERM: process exists but we can't signal it
+    // (still alive, just owned by another user).
+    return (err as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+/**
+ * Tear down `dalang-worker-*` containers and compose projects whose owning
+ * dalang process is no longer running. Safe to call when other dalang
+ * instances are active on the same host — their live workers are skipped.
+ * Idempotent. Does not error on hosts without Docker — the spawn calls
+ * fail silently.
+ */
+export async function sweepOrphanWorkers(): Promise<{
+  containersRemoved: string[];
+  composeProjectsRemoved: string[];
+  skippedLive: string[];
+}> {
+  const containersRemoved: string[] = [];
+  const composeProjectsRemoved: string[] = [];
+  const skippedLive: string[] = [];
+
+  // 1. Image-kind containers: anything named dalang-worker-* whose owner is gone.
+  const psProc = Bun.spawn(
+    ["docker", "ps", "-a", "--filter", "name=^dalang-worker-", "--format", "{{.Names}}"],
+    { stdout: "pipe", stderr: "ignore" },
+  );
+  if ((await psProc.exited) === 0) {
+    const names = (await new Response(psProc.stdout).text()).trim().split("\n").filter(Boolean);
+    for (const name of names) {
+      const ownerPid = ownerPidOf(name);
+      if (ownerPid !== null && isHostPidAlive(ownerPid)) {
+        skippedLive.push(name);
+        continue;
+      }
+      const rm = Bun.spawn(["docker", "rm", "--force", name], {
+        stdout: "ignore",
+        stderr: "ignore",
+      });
+      if ((await rm.exited) === 0) containersRemoved.push(name);
+    }
+  }
+
+  // 2. Compose projects named dalang-worker-* whose owner is gone.
+  const lsProc = Bun.spawn(
+    ["docker", "compose", "ls", "--all", "--filter", "name=dalang-worker-", "--format", "json"],
+    { stdout: "pipe", stderr: "ignore" },
+  );
+  if ((await lsProc.exited) === 0) {
+    const raw = (await new Response(lsProc.stdout).text()).trim();
+    if (raw.length > 0) {
+      try {
+        const entries = JSON.parse(raw) as Array<{ Name?: string; ConfigFiles?: string }>;
+        for (const e of entries) {
+          if (typeof e.Name !== "string" || !e.Name.startsWith("dalang-worker-")) continue;
+          const ownerPid = ownerPidOf(e.Name);
+          if (ownerPid !== null && isHostPidAlive(ownerPid)) {
+            skippedLive.push(e.Name);
+            continue;
+          }
+          const args = ["compose", "--project-name", e.Name];
+          if (typeof e.ConfigFiles === "string" && e.ConfigFiles.length > 0) {
+            for (const f of e.ConfigFiles.split(",")) {
+              args.push("--file", f);
+            }
+          }
+          args.push("down", "--volumes", "--remove-orphans");
+          const proc = Bun.spawn(["docker", ...args], { stdout: "ignore", stderr: "ignore" });
+          if ((await proc.exited) === 0) composeProjectsRemoved.push(e.Name);
+        }
+      } catch {
+        // Older docker compose CLIs may not emit valid JSON; skip the parse.
+      }
+    }
+  }
+
+  return { containersRemoved, composeProjectsRemoved, skippedLive };
+}
+
 export class DockerContainerHost implements ContainerHost {
   async start(opts: ContainerStartOptions): Promise<ContainerHandle> {
     if (opts.image.kind === "compose") {
