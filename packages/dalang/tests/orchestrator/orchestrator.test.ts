@@ -96,6 +96,7 @@ test("tick dispatches eligible issue and runs an attempt to completion", async (
     promptTemplate: "Body for {{ issue.identifier }}",
     runQuery: async function* () {
       yield { type: "system", subtype: "init", session_id: "sess-1" };
+      tracker.byIds["i1"] = issue("i1", "Done");
       yield {
         type: "result",
         subtype: "success",
@@ -178,7 +179,12 @@ test("github-projects codex env injects only GitHub tokens", async () => {
 
 test("workspace is removed when issue disappears between completion and continuation retry", async () => {
   const root = await tmpRoot();
-  const tracker = new FakeControlPlane();
+  class RefreshFailingTracker extends FakeControlPlane {
+    override async refreshWork(_ids: string[]): Promise<NormalizedIssue[]> {
+      throw new Error("refresh unavailable");
+    }
+  }
+  const tracker = new RefreshFailingTracker();
   tracker.candidates = [issue("i1")];
   tracker.byIds["i1"] = issue("i1");
 
@@ -223,7 +229,12 @@ test("workspace is removed when issue disappears between completion and continua
 
 test("continuation retry dispatches a fresh agent when issue moved to another active state", async () => {
   const root = await tmpRoot();
-  const tracker = new FakeControlPlane();
+  class RefreshFailingTracker extends FakeControlPlane {
+    override async refreshWork(_ids: string[]): Promise<NormalizedIssue[]> {
+      throw new Error("refresh unavailable");
+    }
+  }
+  const tracker = new RefreshFailingTracker();
   tracker.candidates = [issue("i1", "In Dev")];
   tracker.byIds["i1"] = issue("i1", "In Dev");
 
@@ -271,7 +282,12 @@ test("continuation retry dispatches a fresh agent when issue moved to another ac
 
 test("successful continuation retry does not redispatch when issue remains in the same active state", async () => {
   const root = await tmpRoot();
-  const tracker = new FakeControlPlane();
+  class RefreshFailingTracker extends FakeControlPlane {
+    override async refreshWork(_ids: string[]): Promise<NormalizedIssue[]> {
+      throw new Error("refresh unavailable");
+    }
+  }
+  const tracker = new RefreshFailingTracker();
   tracker.candidates = [issue("i1", "In Dev")];
   tracker.byIds["i1"] = issue("i1", "In Dev");
 
@@ -314,6 +330,63 @@ test("successful continuation retry does not redispatch when issue remains in th
   expect(orch.state.retry_attempts.has("i1")).toBe(false);
   expect(orch.state.claimed.has("i1")).toBe(false);
   expect(orch.state.completed.has("i1")).toBe(true);
+});
+
+test("successful session blocks the ticket when tracker state is unchanged", async () => {
+  const root = await tmpRoot();
+  class BlockingTracker extends FakeControlPlane {
+    comments: { id: string; body: string; author?: "user" | "agent" }[] = [];
+    states: Record<string, string> = { i1: "In Dev" };
+    override async refreshWork(ids: string[]): Promise<NormalizedIssue[]> {
+      return ids.map((id) => issue(id, this.states[id] ?? "In Dev"));
+    }
+    override async addComment(id: string, body: string, author?: "user" | "agent"): Promise<void> {
+      this.comments.push({ id, body, author });
+    }
+    override async updateState(id: string, state: string): Promise<void> {
+      this.states[id] = state;
+    }
+  }
+  const tracker = new BlockingTracker();
+  tracker.candidates = [issue("i1", "In Dev")];
+  tracker.byIds["i1"] = issue("i1", "In Dev");
+
+  const cfg = applyDefaults({
+    tracker: {
+      endpoint: "http://localhost:1",
+      active_states: ["In Dev", "Ready for Review"],
+      terminal_states: ["Done"],
+    },
+    workspace: { root },
+    agent: { max_concurrent_agents: 1, max_turns: 1 },
+    polling: { interval_ms: 1000 },
+  });
+
+  const orch = new Orchestrator({
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
+    runQuery: async function* () {
+      yield { type: "system", subtype: "init", session_id: "s-1" };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
+    },
+  });
+
+  await orch.tick();
+  await orch.drainPendingForTest();
+
+  expect(tracker.states.i1).toBe("Blocked");
+  expect(tracker.comments).toHaveLength(1);
+  expect(tracker.comments[0]).toMatchObject({ id: "i1", author: "agent" });
+  expect(tracker.comments[0]!.body).toContain("[AGENT MESSAGE]");
+  expect(tracker.comments[0]!.body).toContain("needs human attention");
+  expect(tracker.comments[0]!.body).toContain("In Dev");
+  expect(orch.state.retry_attempts.has("i1")).toBe(false);
+  expect(orch.state.claimed.has("i1")).toBe(false);
 });
 
 test("failed retry resumes only while the issue remains in the same active state", async () => {

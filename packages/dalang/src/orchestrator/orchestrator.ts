@@ -16,6 +16,8 @@ import { expandPath, resolveGithubToken, resolveTrackerApiKey } from "../config/
 import { ValidationError } from "../config/validate";
 import { createLogger, type Logger } from "../logging/logger";
 
+const BLOCKED_STATE = "Blocked";
+
 export interface OrchestratorOptions {
   controlPlane: ControlPlaneAdapter;
   config: WorkflowFrontMatter;
@@ -401,6 +403,9 @@ export class Orchestrator {
     removeRunning(this.state, issue.id);
 
     if (result.success) {
+      if (await this.blockUnchangedSuccessfulIssue(issue)) {
+        return;
+      }
       this.state.completed.add(issue.id);
       this.log.info(
         {
@@ -445,6 +450,51 @@ export class Orchestrator {
         onFire: (retry) => this.handleRetryFire(retry),
       });
     }
+  }
+
+  private async blockUnchangedSuccessfulIssue(issue: NormalizedIssue): Promise<boolean> {
+    let refreshed: NormalizedIssue | null = null;
+    try {
+      refreshed = (await this.controlPlane.refreshWork([issue.id]))[0] ?? null;
+    } catch (err) {
+      this.log.warn(
+        { issue_id: issue.id, identifier: issue.identifier, err: (err as Error).message },
+        "post-session state refresh failed; falling back to continuation retry",
+      );
+      return false;
+    }
+    if (refreshed === null) return false;
+    if (refreshed.state.toLowerCase() !== issue.state.toLowerCase()) return false;
+
+    const body = [
+      "[AGENT MESSAGE]",
+      "",
+      `Dalang completed a provider session for ${issue.identifier}, but the ticket is still in \`${refreshed.state}\`, the same state it had when the session started.`,
+      "",
+      `Treating this as a failed handoff. This ticket has been moved to \`${BLOCKED_STATE}\` and needs human attention before dalang should pick it up again.`,
+    ].join("\n");
+
+    try {
+      await this.controlPlane.addComment(issue.id, body, "agent");
+      await this.controlPlane.updateState(issue.id, BLOCKED_STATE);
+    } catch (err) {
+      this.log.warn(
+        { issue_id: issue.id, identifier: issue.identifier, err: (err as Error).message },
+        "failed to block unchanged completed task; falling back to continuation retry",
+      );
+      return false;
+    }
+    releaseClaim(this.state, issue.id);
+    this.log.warn(
+      {
+        issue_id: issue.id,
+        identifier: issue.identifier,
+        state: refreshed.state,
+        blocked_state: BLOCKED_STATE,
+      },
+      "task completed but tracker state is unchanged; blocked for human attention",
+    );
+    return true;
   }
 
   private async handleRetryFire(retry: RetryEntry): Promise<void> {
