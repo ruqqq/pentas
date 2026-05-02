@@ -115,17 +115,38 @@ export class Bootstrap {
       const { FilesystemAuthStore, defaultStoreRoot } = await import("../auth/store");
       const { createSandboxedRunQuery } = await import("../sandbox/sandboxed-runner");
       const { resolve } = await import("node:path");
+      const sandboxesRoot = resolve(wf.config.workspace.root, ".dalang", "sandboxes");
+      const shimPath = process.env["DALANG_SHIM_PATH"];
+      this.log.info(
+        {
+          provider: wf.config.agent_provider,
+          imageSource: wf.config.sandbox!.image.source,
+          sandboxesRoot,
+          shimBinaryHostPath: shimPath ?? "(none — shim must be on PATH inside the image)",
+        },
+        "sandboxed runner selected",
+      );
       runQuery = createSandboxedRunQuery({
         host: new DockerContainerHost(),
         store: new FilesystemAuthStore(defaultStoreRoot()),
-        sandboxesRoot: resolve(wf.config.workspace.root, ".dalang", "sandboxes"),
+        sandboxesRoot,
         repoDir: process.cwd(),
         config: wf.config.sandbox!,
-        ...(process.env["DALANG_SHIM_PATH"]
-          ? { shimBinaryHostPath: process.env["DALANG_SHIM_PATH"] }
-          : {}),
-        onLifecycleEvent: (e) =>
-          this.log.warn({ kind: e.kind, message: e.message }, "sandbox lifecycle"),
+        ...(shimPath ? { shimBinaryHostPath: shimPath } : {}),
+        onLifecycleEvent: (e) => {
+          // Lifecycle events with structured detail go to info; failure kinds escalate to warn.
+          const failureKinds = new Set([
+            "sandbox_unavailable",
+            "sandbox_image_unavailable",
+            "sandbox_start_failed",
+            "sandbox_exec_disconnected",
+            "sandbox_oom",
+            "sandbox_auth_refresh_conflict",
+            "sandbox_misconfigured",
+          ]);
+          const log = failureKinds.has(e.kind) ? this.log.warn.bind(this.log) : this.log.info.bind(this.log);
+          log({ kind: e.kind, message: e.message, detail: e.detail }, "sandbox lifecycle");
+        },
       });
     } else {
       runQuery =

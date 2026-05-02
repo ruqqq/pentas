@@ -137,12 +137,20 @@ function imageRunArgs(image: ResolvedImage): { tag: string } {
 class ComposeHandle implements ContainerHandle {
   constructor(
     public readonly name: string,
-    private readonly composeFile: string,
+    private readonly composeFiles: string[],
     private readonly service: string,
   ) {}
 
+  private composeFlags(): string[] {
+    const out: string[] = ["compose", "--project-name", this.name];
+    for (const f of this.composeFiles) {
+      out.push("--file", f);
+    }
+    return out;
+  }
+
   async exec(opts: ExecOptions): Promise<ExecResult> {
-    const args = ["compose", "--project-name", this.name, "--file", this.composeFile, "exec"];
+    const args = [...this.composeFlags(), "exec"];
     if (opts.cwd) args.push("--workdir", opts.cwd);
     for (const [k, v] of Object.entries(opts.env ?? {})) {
       args.push("--env", `${k}=${v}`);
@@ -151,18 +159,9 @@ class ComposeHandle implements ContainerHandle {
     const proc = Bun.spawn(["docker", ...args], { stdout: "pipe", stderr: "pipe" });
     if (opts.abortSignal) {
       const onAbort = () => {
-        Bun.spawn([
-          "docker",
-          "compose",
-          "--project-name",
-          this.name,
-          "--file",
-          this.composeFile,
-          "kill",
-          "--signal",
-          "SIGTERM",
-          this.service,
-        ]).exited.catch(() => {});
+        Bun.spawn(
+          ["docker", ...this.composeFlags(), "kill", "--signal", "SIGTERM", this.service],
+        ).exited.catch(() => {});
       };
       if (opts.abortSignal.aborted) onAbort();
       else opts.abortSignal.addEventListener("abort", onAbort, { once: true });
@@ -183,20 +182,14 @@ class ComposeHandle implements ContainerHandle {
 
   async stop(): Promise<void> {
     const proc = Bun.spawn(
-      [
-        "docker",
-        "compose",
-        "--project-name",
-        this.name,
-        "--file",
-        this.composeFile,
-        "down",
-        "--volumes",
-        "--remove-orphans",
-      ],
+      ["docker", ...this.composeFlags(), "down", "--volumes", "--remove-orphans"],
       { stdout: "ignore", stderr: "ignore" },
     );
     await proc.exited;
+    // Best-effort: remove any overlay file we wrote (composeFiles[1+] are dalang-controlled).
+    for (const f of this.composeFiles.slice(1)) {
+      await Bun.spawn(["rm", "-f", f], { stdout: "ignore", stderr: "ignore" }).exited;
+    }
   }
 }
 
@@ -256,20 +249,22 @@ export class DockerContainerHost implements ContainerHost {
     // TODO(v1, §10): Compose mode does not yet apply opts.resources (cpus/memory/etc.) — those flags
     // belong on the compose file's `deploy.resources` block, not on the parent process. Tracked as a
     // known limitation in the design spec.
-    const proc = Bun.spawn(
-      [
-        "docker",
-        "compose",
-        "--project-name",
-        opts.name,
-        "--file",
-        image.composeFile,
-        "up",
-        "--detach",
-        "--wait",
-      ],
-      { stdout: "ignore", stderr: "pipe" },
-    );
+
+    const composeFiles = [image.composeFile];
+
+    // If we have additional bind mounts or env, write an overlay compose file
+    // that compose will deep-merge with the user's compose file.
+    if (opts.bindMounts.length > 0 || Object.keys(opts.env).length > 0) {
+      const overlayPath = await writeComposeOverlay(image, opts);
+      composeFiles.push(overlayPath);
+    }
+
+    const upArgs = ["compose", "--project-name", opts.name];
+    for (const f of composeFiles) {
+      upArgs.push("--file", f);
+    }
+    upArgs.push("up", "--detach", "--wait");
+    const proc = Bun.spawn(["docker", ...upArgs], { stdout: "ignore", stderr: "pipe" });
     const code = await proc.exited;
     if (code !== 0) {
       const stderr = await readToEnd(proc.stderr);
@@ -278,6 +273,39 @@ export class DockerContainerHost implements ContainerHost {
         `docker compose up failed: ${stderr.trim()}`,
       );
     }
-    return new ComposeHandle(opts.name, image.composeFile, image.service);
+    return new ComposeHandle(opts.name, composeFiles, image.service);
   }
+}
+
+async function writeComposeOverlay(
+  image: Extract<ResolvedImage, { kind: "compose" }>,
+  opts: ContainerStartOptions,
+): Promise<string> {
+  const overlayDir = `${process.env["TMPDIR"] ?? "/tmp"}/dalang-overlay-${opts.name}`;
+  const overlayPath = `${overlayDir}/overlay.compose.yml`;
+  await Bun.spawn(["mkdir", "-p", overlayDir], { stdout: "ignore", stderr: "ignore" }).exited;
+
+  // Build YAML by hand. Quoting host paths to be safe.
+  const volumes = opts.bindMounts.map(
+    (m) => `      - ${escapeYaml(m.hostPath)}:${escapeYaml(m.containerPath)}:${m.readOnly ? "ro" : "rw"}`,
+  );
+  const envEntries = Object.entries(opts.env).map(
+    ([k, v]) => `      ${escapeYaml(k)}: ${escapeYaml(v)}`,
+  );
+
+  let body = `services:\n  ${image.service}:\n`;
+  if (volumes.length > 0) {
+    body += `    volumes:\n${volumes.join("\n")}\n`;
+  }
+  if (envEntries.length > 0) {
+    body += `    environment:\n${envEntries.join("\n")}\n`;
+  }
+  await Bun.write(overlayPath, body);
+  return overlayPath;
+}
+
+function escapeYaml(s: string): string {
+  // Quote anything that's not a plain identifier/path. Conservative double-quoted form.
+  if (/^[A-Za-z0-9_./-]+$/.test(s)) return s;
+  return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }

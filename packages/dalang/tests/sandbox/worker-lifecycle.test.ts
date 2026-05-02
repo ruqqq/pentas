@@ -8,14 +8,14 @@ import { runWorkerSession } from "../../src/sandbox/worker-lifecycle";
 
 const fixtureShim = resolve(import.meta.dir, "..", "fixtures", "worker", "echo-shim.ts");
 
-test("runWorkerSession yields provider events and emits no lifecycle errors on a clean run", async () => {
+test("runWorkerSession yields provider events and emits start+end lifecycle on a clean run", async () => {
   const credDir = await realpath(await mkdtemp(join(tmpdir(), "lifecycle-cred-")));
   const sandboxesRoot = await realpath(await mkdtemp(join(tmpdir(), "lifecycle-sb-")));
   const store = new FilesystemAuthStore(credDir);
   await store.setClaudeToken("sk-ant-oat01-xyz");
 
   const host = new FakeContainerHost();
-  const lifecycleEvents: unknown[] = [];
+  const lifecycleEvents: { kind: string }[] = [];
 
   const events: unknown[] = [];
   for await (const ev of runWorkerSession({
@@ -29,13 +29,15 @@ test("runWorkerSession yields provider events and emits no lifecycle errors on a
     shim: { cmd: [process.execPath, "run", fixtureShim] },
     invocation: { items: [{ a: 1 }, { b: 2 }] },
     provider: "claude",
-    onLifecycleEvent: (e) => lifecycleEvents.push(e),
+    onLifecycleEvent: (e) => lifecycleEvents.push(e as { kind: string }),
   })) {
     events.push(ev);
   }
 
   expect(events).toEqual([{ a: 1 }, { b: 2 }]);
-  expect(lifecycleEvents).toEqual([]);
+  // Informational start + end markers, no failure events.
+  const kinds = lifecycleEvents.map((e) => e.kind);
+  expect(kinds).toEqual(["sandbox_session_started", "sandbox_session_ended"]);
 });
 
 test("runWorkerSession emits sandbox_misconfigured when claude auth missing", async () => {

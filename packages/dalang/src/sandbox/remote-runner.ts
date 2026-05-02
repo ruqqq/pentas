@@ -79,9 +79,19 @@ export async function* remoteRunQuery(opts: RemoteRunOptions): AsyncGenerator<un
   const status = await exec.done;
 
   if (sawError) {
-    throw new Error(`worker shim error: ${sawError.message}\nstderr: ${stderrTail.trim()}`);
+    const err = new Error(`worker shim error: ${sawError.message}`);
+    (err as Error & { stderr?: string; exitCode?: number; cause?: unknown }).stderr =
+      stderrTail.trim();
+    (err as Error & { stderr?: string; exitCode?: number }).exitCode = status.exitCode;
+    if (sawError.detail !== undefined) {
+      (err as Error & { cause?: unknown }).cause = sawError.detail;
+    }
+    throw err;
   }
   if (!sawFinished && status.exitCode !== 0) {
-    throw new Error(`worker shim exited ${status.exitCode}\nstderr: ${stderrTail.trim()}`);
+    const err = new Error(`worker shim exited ${status.exitCode}`);
+    (err as Error & { stderr?: string; exitCode?: number }).stderr = stderrTail.trim();
+    (err as Error & { stderr?: string; exitCode?: number }).exitCode = status.exitCode;
+    throw err;
   }
 }

@@ -18,7 +18,9 @@ export interface WorkerSessionLifecycleEvent {
     | "sandbox_exec_disconnected"
     | "sandbox_oom"
     | "sandbox_auth_refresh_conflict"
-    | "sandbox_misconfigured";
+    | "sandbox_misconfigured"
+    | "sandbox_session_started"
+    | "sandbox_session_ended";
   message: string;
   detail?: unknown;
 }
@@ -43,6 +45,22 @@ function emit(opts: WorkerSessionOptions, ev: WorkerSessionLifecycleEvent): void
 }
 
 export async function* runWorkerSession(opts: WorkerSessionOptions): AsyncGenerator<unknown> {
+  emit(opts, {
+    kind: "sandbox_session_started",
+    message: `preparing worker ${opts.workerId} (provider=${opts.provider}, image=${opts.image.kind})`,
+    detail: {
+      workerId: opts.workerId,
+      provider: opts.provider,
+      imageKind: opts.image.kind,
+      ...(opts.image.kind === "image"
+        ? { imageTag: opts.image.tag }
+        : {
+            composeFile: opts.image.composeFile,
+            composeService: opts.image.service,
+          }),
+    },
+  });
+
   // 1. Project credentials.
   let creds;
   try {
@@ -91,9 +109,19 @@ export async function* runWorkerSession(opts: WorkerSessionOptions): AsyncGenera
     });
   } catch (err) {
     if (err instanceof SandboxError) {
-      emit(opts, { kind: err.code, message: err.message });
-    } else if ((err as Error).message?.includes("worker shim error")) {
-      emit(opts, { kind: "sandbox_exec_disconnected", message: (err as Error).message });
+      emit(opts, { kind: err.code, message: err.message, detail: err });
+    } else {
+      // Any unhandled error from the shim path counts as a disconnected exec.
+      // Pull stderr/exitCode out of the structured Error remoteRunQuery throws.
+      const e = err as Error & { stderr?: string; exitCode?: number };
+      emit(opts, {
+        kind: "sandbox_exec_disconnected",
+        message: e.message,
+        detail: {
+          exitCode: e.exitCode,
+          stderr: e.stderr,
+        },
+      });
     }
     throw err;
   } finally {
@@ -111,5 +139,9 @@ export async function* runWorkerSession(opts: WorkerSessionOptions): AsyncGenera
         message: `credential dispose failed: ${String(err)}`,
       });
     }
+    emit(opts, {
+      kind: "sandbox_session_ended",
+      message: `worker ${opts.workerId} session ended`,
+    });
   }
 }

@@ -29,12 +29,16 @@ const DEFAULT_SHIM_CONTAINER_PATH = "/opt/dalang/dalang-worker";
 
 let workerCounter = 0;
 
-function buildInvocation(opts: RunQueryOptions, providerExecs: SandboxConfig["providers"]): unknown {
+function buildInvocation(
+  opts: RunQueryOptions,
+  providerExecs: SandboxConfig["providers"],
+  containerCwd: string,
+): unknown {
   if (opts.claude) {
     return {
       provider: "claude",
       prompt: opts.prompt,
-      cwd: opts.cwd,
+      cwd: containerCwd,
       model: opts.model,
       executablePath: providerExecs.claude.executablePath,
       ...(opts.resumeSessionId !== undefined ? { resumeSessionId: opts.resumeSessionId } : {}),
@@ -45,7 +49,7 @@ function buildInvocation(opts: RunQueryOptions, providerExecs: SandboxConfig["pr
     return {
       provider: "codex",
       prompt: opts.prompt,
-      cwd: opts.cwd,
+      cwd: containerCwd,
       model: opts.model,
       executablePath: providerExecs.codex.executablePath,
       ...(opts.resumeSessionId !== undefined ? { resumeSessionId: opts.resumeSessionId } : {}),
@@ -61,7 +65,7 @@ function buildInvocation(opts: RunQueryOptions, providerExecs: SandboxConfig["pr
     return {
       provider: "opencode",
       prompt: opts.prompt,
-      cwd: opts.cwd,
+      cwd: containerCwd,
       model: opts.model,
       executablePath: providerExecs.opencode.executablePath,
       ...(opts.resumeSessionId !== undefined ? { resumeSessionId: opts.resumeSessionId } : {}),
@@ -69,6 +73,8 @@ function buildInvocation(opts: RunQueryOptions, providerExecs: SandboxConfig["pr
   }
   throw new Error("createSandboxedRunQuery: invocation has no provider bag");
 }
+
+const DALANG_COMPOSE_WORKSPACE = "/run/dalang/workspace";
 
 function providerOf(opts: RunQueryOptions): "claude" | "codex" | "opencode" {
   if (opts.claude) return "claude";
@@ -87,10 +93,16 @@ export function createSandboxedRunQuery(deps: SandboxedRunnerDeps): RunQuery {
 
         const image = await resolveImage(deps.config.image, deps.repoDir);
 
-        // Bind-mount the worktree at the image's workspaceFolder.
+        // For compose-mode images the user's compose file already mounts something at
+        // image.workspaceFolder (typically /workspace). Adding a second mount at the
+        // same path yields undefined behavior, so dalang uses a controlled path
+        // (/run/dalang/workspace) and points the agent's cwd there. Image-mode keeps
+        // the worktree at image.workspaceFolder so the user's expectation holds.
+        const containerCwd =
+          image.kind === "compose" ? DALANG_COMPOSE_WORKSPACE : image.workspaceFolder;
         const worktreeMount: BindMount = {
           hostPath: opts.cwd,
-          containerPath: image.workspaceFolder,
+          containerPath: containerCwd,
           readOnly: false,
         };
         const shimMount: BindMount[] = deps.shimBinaryHostPath
@@ -104,7 +116,8 @@ export function createSandboxedRunQuery(deps: SandboxedRunnerDeps): RunQuery {
           : [];
 
         const shimCmd = deps.shimCmdOverride ?? [DEFAULT_SHIM_CONTAINER_PATH];
-        const invocation = deps.invocationOverride ?? buildInvocation(opts, deps.config.providers);
+        const invocation =
+          deps.invocationOverride ?? buildInvocation(opts, deps.config.providers, containerCwd);
 
         yield* runWorkerSession({
           host: deps.host,
@@ -114,7 +127,7 @@ export function createSandboxedRunQuery(deps: SandboxedRunnerDeps): RunQuery {
           image,
           bindMounts: [worktreeMount, ...shimMount],
           resources: deps.config.resources,
-          shim: { cmd: shimCmd, cwd: image.workspaceFolder },
+          shim: { cmd: shimCmd, cwd: containerCwd },
           invocation,
           provider,
           ...(deps.onLifecycleEvent ? { onLifecycleEvent: deps.onLifecycleEvent } : {}),
