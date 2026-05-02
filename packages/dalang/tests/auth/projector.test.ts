@@ -95,3 +95,56 @@ test("codex projection throws auth_missing when no auth.json is stored", async (
     prepareWorkerCredentials({ store, provider: "codex", workerId: "w", sandboxesRoot }),
   ).rejects.toMatchObject({ code: "auth_missing" });
 });
+
+test("opencode projection mounts opencode-data dir and sets XDG_DATA_HOME", async () => {
+  const store = await newStore();
+  const initial = '{"providers":{"anthropic":{"key":"sk-ant-..."}}}';
+  await store.setOpencodeAuthJson(initial);
+  const sandboxesRoot = await realpath(await mkdtemp(join(tmpdir(), "sandboxes-")));
+
+  const proj = await prepareWorkerCredentials({
+    store,
+    provider: "opencode",
+    workerId: "w-oc",
+    sandboxesRoot,
+  });
+
+  expect(proj.env).toEqual({ XDG_DATA_HOME: "/run/dalang/opencode-data" });
+  expect(proj.bindMounts).toHaveLength(1);
+  const mount = proj.bindMounts[0];
+  expect(mount?.containerPath).toBe("/run/dalang/opencode-data");
+  expect(mount?.readOnly).toBe(false);
+  const mounted = await readFile(
+    join(mount?.hostPath as string, "opencode", "auth.json"),
+    "utf8",
+  );
+  expect(mounted).toBe(initial);
+
+  await proj.dispose();
+});
+
+test("opencode projection writes back a refreshed auth.json on dispose", async () => {
+  const store = await newStore();
+  await store.setOpencodeAuthJson("{}");
+  const sandboxesRoot = await realpath(await mkdtemp(join(tmpdir(), "sandboxes-")));
+  const proj = await prepareWorkerCredentials({
+    store,
+    provider: "opencode",
+    workerId: "w-oc-rotate",
+    sandboxesRoot,
+  });
+  await writeFile(
+    join(proj.bindMounts[0]?.hostPath as string, "opencode", "auth.json"),
+    '{"providers":{"x":{"k":"v"}}}',
+  );
+  await proj.dispose();
+  expect(await store.getOpencodeAuthJson()).toBe('{"providers":{"x":{"k":"v"}}}');
+});
+
+test("opencode projection throws auth_missing when no auth.json is stored", async () => {
+  const store = await newStore();
+  const sandboxesRoot = await realpath(await mkdtemp(join(tmpdir(), "sandboxes-")));
+  await expect(
+    prepareWorkerCredentials({ store, provider: "opencode", workerId: "w", sandboxesRoot }),
+  ).rejects.toMatchObject({ code: "auth_missing" });
+});

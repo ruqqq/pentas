@@ -39,10 +39,7 @@ export async function prepareWorkerCredentials(
     case "codex":
       return prepareCodexCredentials(opts);
     case "opencode":
-      throw new AuthError(
-        "auth_missing",
-        "opencode credential projection not yet implemented (Task 4)",
-      );
+      return prepareOpencodeCredentials(opts);
   }
 }
 
@@ -97,6 +94,51 @@ async function prepareCodexCredentials(
       } catch (err) {
         if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
         // If the shim deleted auth.json, leave the store as-is.
+      }
+      await removeWorkerSandbox(opts.sandboxesRoot, opts.workerId);
+    },
+  };
+}
+
+async function prepareOpencodeCredentials(
+  opts: PrepareCredentialsOptions,
+): Promise<PreparedCredentials> {
+  const initial = await opts.store.getOpencodeAuthJson();
+  if (initial === null) {
+    throw new AuthError(
+      "auth_missing",
+      "no opencode credentials in store; run `dalang auth set opencode --from <auth.json>` first",
+    );
+  }
+  // The container expects $XDG_DATA_HOME/opencode/auth.json. We bind-mount the
+  // XDG_DATA_HOME root so opencode's path resolution works unchanged.
+  const xdgRoot = await ensureWorkerSandboxDir(
+    opts.sandboxesRoot,
+    opts.workerId,
+    "opencode-data",
+  );
+  const opencodeDir = join(xdgRoot, "opencode");
+  await mkdir(opencodeDir, { recursive: true });
+  const authPath = join(opencodeDir, "auth.json");
+  await writeFile(authPath, initial, { mode: 0o600 });
+
+  return {
+    env: { XDG_DATA_HOME: "/run/dalang/opencode-data" },
+    bindMounts: [
+      {
+        hostPath: xdgRoot,
+        containerPath: "/run/dalang/opencode-data",
+        readOnly: false,
+      },
+    ],
+    dispose: async () => {
+      try {
+        const final = await readFile(authPath, "utf8");
+        if (final !== initial) {
+          await opts.store.setOpencodeAuthJson(final);
+        }
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
       }
       await removeWorkerSandbox(opts.sandboxesRoot, opts.workerId);
     },
