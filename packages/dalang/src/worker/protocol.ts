@@ -24,6 +24,12 @@ const CodexInvocationSchema = z.object({
     approvalPolicy: z.enum(["untrusted", "on-failure", "on-request", "never"]),
     networkAccessEnabled: z.boolean(),
     env: z.record(z.string(), z.string()).optional(),
+    git: z
+      .object({
+        userName: z.string().min(1),
+        userEmail: z.string().email(),
+      })
+      .optional(),
   }),
 });
 

@@ -48,6 +48,18 @@ test("sandbox provider config can pass extra Codex environment", () => {
   });
 });
 
+test("sandbox config can set git commit identity", () => {
+  const parsed = SandboxConfigSchema.parse({
+    enabled: true,
+    git: { userName: "Dalang Bot", userEmail: "dalang@example.com" },
+  });
+
+  expect(parsed.git).toEqual({
+    userName: "Dalang Bot",
+    userEmail: "dalang@example.com",
+  });
+});
+
 test("invalid resource cpus is rejected", () => {
   expect(SandboxConfigSchema.safeParse({ enabled: true, resources: { cpus: "" } }).success).toBe(
     false,

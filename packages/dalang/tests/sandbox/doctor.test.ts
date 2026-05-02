@@ -34,6 +34,7 @@ async function storeWithClaudeAuth(): Promise<FilesystemAuthStore> {
 
 test("runSandboxDoctor reports ok checks for provider CLI, gh, credentials, and workspace", async () => {
   const workspace = await realpath(await mkdtemp(join(tmpdir(), "doctor-ws-")));
+  await Bun.spawn(["git", "init"], { cwd: workspace, stdout: "ignore", stderr: "ignore" }).exited;
   const sandboxesRoot = await realpath(await mkdtemp(join(tmpdir(), "doctor-sb-")));
   const store = await storeWithClaudeAuth();
 
@@ -45,6 +46,7 @@ test("runSandboxDoctor reports ok checks for provider CLI, gh, credentials, and 
     workspaceDir: workspace,
     config: {
       ...config,
+      git: { userName: "Dalang Bot", userEmail: "dalang@example.com" },
       providers: config.providers,
     },
     provider: "claude",
@@ -57,6 +59,8 @@ test("runSandboxDoctor reports ok checks for provider CLI, gh, credentials, and 
     ["required cli: sh", true],
     ["provider credentials", true],
     ["workspace writable", true],
+    ["git repository usable", true],
+    ["git commit identity", true],
   ]);
 });
 
@@ -93,8 +97,20 @@ class RecordingHost implements ContainerHost {
     return {
       name: fake.name,
       exec: async (execOpts: ExecOptions): Promise<ExecResult> => {
-        if (execOpts.cmd.join(" ").includes("gh auth status")) {
+        const script = execOpts.cmd.join(" ");
+        if (script.includes("gh auth status")) {
           this.seenExecEnv = execOpts.env;
+        }
+        if (
+          script.includes("gh auth status") ||
+          script.includes("gh auth setup-git") ||
+          script.includes("git ls-remote")
+        ) {
+          return {
+            stdout: (async function* () {})(),
+            stderr: (async function* () {})(),
+            done: Promise.resolve({ exitCode: 0, signal: null }),
+          };
         }
         return fake.exec(execOpts);
       },

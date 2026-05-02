@@ -14,11 +14,17 @@ const ProviderPathsSchema = z
   })
   .default({});
 
+const SandboxGitConfigSchema = z.object({
+  userName: z.string().min(1),
+  userEmail: z.string().email(),
+});
+
 export const SandboxConfigSchema = z.object({
   enabled: z.boolean(),
   image: SandboxImageConfigSchema.default({ source: "devcontainer", path: ".devcontainer" }),
   resources: SandboxResourcesSchema,
   providers: ProviderPathsSchema,
+  git: SandboxGitConfigSchema.optional(),
 });
 
 export type SandboxConfig = z.infer<typeof SandboxConfigSchema>;

@@ -33,6 +33,7 @@ function buildInvocation(
   opts: RunQueryOptions,
   providerExecs: SandboxConfig["providers"],
   containerCwd: string,
+  git: SandboxConfig["git"],
 ): unknown {
   if (opts.claude) {
     return {
@@ -60,6 +61,7 @@ function buildInvocation(
         ...(providerExecs.codex.env !== undefined || opts.codex.env !== undefined
           ? { env: { ...opts.codex.env, ...providerExecs.codex.env } }
           : {}),
+        ...(git !== undefined ? { git } : {}),
       },
     };
   }
@@ -119,7 +121,8 @@ export function createSandboxedRunQuery(deps: SandboxedRunnerDeps): RunQuery {
 
         const shimCmd = deps.shimCmdOverride ?? [DEFAULT_SHIM_CONTAINER_PATH];
         const invocation =
-          deps.invocationOverride ?? buildInvocation(opts, deps.config.providers, containerCwd);
+          deps.invocationOverride ??
+          buildInvocation(opts, deps.config.providers, containerCwd, deps.config.git);
 
         yield* runWorkerSession({
           host: deps.host,

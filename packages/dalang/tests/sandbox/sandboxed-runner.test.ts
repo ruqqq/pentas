@@ -68,6 +68,7 @@ test("sandboxed RunQuery includes sandbox Codex env in the worker invocation", a
       enabled: true,
       image: { source: "image", tag: "fake" },
       resources: { cpus: "1", memory: "256m", pidsLimit: 256, tmpfsSize: "32m" },
+      git: { userName: "Dalang Bot", userEmail: "dalang@example.com" },
       providers: {
         claude: { executablePath: "claude" },
         codex: { executablePath: "codex", env: { HOME: "/tmp" } },
@@ -96,6 +97,9 @@ test("sandboxed RunQuery includes sandbox Codex env in the worker invocation", a
   expect(events).toHaveLength(1);
   expect(events[0]).toMatchObject({
     provider: "codex",
-    codex: { env: { GITHUB_TOKEN: "token", HOME: "/tmp" } },
+    codex: {
+      env: { GITHUB_TOKEN: "token", HOME: "/tmp" },
+      git: { userName: "Dalang Bot", userEmail: "dalang@example.com" },
+    },
   });
 });

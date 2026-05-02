@@ -39,9 +39,13 @@ test("WorkerInvocationSchema accepts a Codex invocation", () => {
       sandboxMode: "workspace-write",
       approvalPolicy: "never",
       networkAccessEnabled: true,
+      git: { userName: "Dalang Bot", userEmail: "dalang@example.com" },
     },
   });
   expect(parsed.provider).toBe("codex");
+  if (parsed.provider === "codex") {
+    expect(parsed.codex.git?.userEmail).toBe("dalang@example.com");
+  }
 });
 
 test("WorkerInvocationSchema accepts an Opencode invocation", () => {

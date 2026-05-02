@@ -1,6 +1,7 @@
 import { Codex } from "@openai/codex-sdk";
 import { access } from "node:fs/promises";
 import { buildCodexChildEnv } from "../agent/codex-env";
+import { setupGitIdentity, setupGithubGitAuth } from "./github-git-auth";
 import type { WorkerInvocation } from "./protocol";
 
 export async function* runCodex(
@@ -21,9 +22,13 @@ export async function* runCodex(
       );
     }
   }
+  const env = buildCodexChildEnv(inv.codex.env);
+  await setupGitIdentity(inv.codex.git, env);
+  await setupGithubGitAuth(env);
+
   const codex = new Codex({
     codexPathOverride: inv.executablePath,
-    env: buildCodexChildEnv(inv.codex.env),
+    env,
   });
   const threadOptions = {
     workingDirectory: inv.cwd,

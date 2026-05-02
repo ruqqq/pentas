@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import { prepareWorkerCredentials, type AuthProvider } from "../auth/projector";
 import type { AuthStore } from "../auth/store";
 import type { SandboxConfig } from "../config/sandbox-schema";
+import { setupGitIdentity } from "../worker/github-git-auth";
 import { resolveImage } from "./image-source";
 import type { BindMount, ContainerHost, ContainerHandle } from "./types";
 
@@ -121,9 +122,20 @@ export async function runSandboxDoctor(opts: SandboxDoctorOptions): Promise<Sand
 
     const checks: SandboxDoctorCheck[] = [];
     const execEnv = mergeEnv(creds.env, {
+      HOME: "/tmp",
       GH_TOKEN: opts.githubToken,
       GITHUB_TOKEN: opts.githubToken,
     });
+    if (opts.config.git !== undefined) {
+      await setupGitIdentity(opts.config.git, execEnv, async (cmd, env) => {
+        const check = await execCheck(handle!, {
+          name: `git identity setup: ${cmd.slice(0, 4).join(" ")}`,
+          script: cmd.map(shellQuote).join(" "),
+          env,
+        });
+        return { exitCode: check.ok ? 0 : 1, stderr: check.detail };
+      });
+    }
     const providerPath = providerExecutable(opts.config, opts.provider);
     checks.push(
       await execCheck(handle, {
@@ -132,7 +144,7 @@ export async function runSandboxDoctor(opts: SandboxDoctorOptions): Promise<Sand
         env: execEnv,
       }),
     );
-    for (const tool of opts.requiredTools ?? ["gh"]) {
+    for (const tool of opts.requiredTools ?? ["gh", "git"]) {
       checks.push(
         await execCheck(handle, {
           name: `required cli: ${tool}`,
@@ -146,6 +158,14 @@ export async function runSandboxDoctor(opts: SandboxDoctorOptions): Promise<Sand
         await execCheck(handle, {
           name: "gh auth status",
           script: "gh auth status",
+          env: execEnv,
+        }),
+      );
+      checks.push(
+        await execCheck(handle, {
+          name: "gh auth setup-git",
+          script:
+            "gh auth setup-git && git config --global --add url.https://github.com/.insteadOf git@github.com: && git config --global --add url.https://github.com/.insteadOf ssh://git@github.com/",
           env: execEnv,
         }),
       );
@@ -166,6 +186,33 @@ export async function runSandboxDoctor(opts: SandboxDoctorOptions): Promise<Sand
         env: execEnv,
       }),
     );
+    checks.push(
+      await execCheck(handle, {
+        name: "git repository usable",
+        cwd: containerCwd,
+        script: "git status --short >/dev/null",
+        env: execEnv,
+      }),
+    );
+    checks.push(
+      await execCheck(handle, {
+        name: "git commit identity",
+        cwd: containerCwd,
+        script: "git config user.name >/dev/null && git config user.email >/dev/null",
+        env: execEnv,
+      }),
+    );
+    if (opts.githubToken !== undefined) {
+      checks.push(
+        await execCheck(handle, {
+          name: "git remote auth",
+          cwd: containerCwd,
+          script:
+            "git remote get-url origin >/dev/null && git ls-remote --exit-code origin HEAD >/dev/null",
+          env: execEnv,
+        }),
+      );
+    }
     return { ok: checks.every((c) => c.ok), checks };
   } finally {
     if (handle !== null) await handle.stop().catch(() => {});
