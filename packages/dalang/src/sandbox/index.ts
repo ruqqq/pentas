@@ -17,3 +17,5 @@ export type {
 export { resolveImage } from "./image-source";
 export { DockerContainerHost } from "./docker-host";
 export { FakeContainerHost } from "./fake-host";
+export { remoteRunQuery } from "./remote-runner";
+export type { RemoteRunOptions } from "./remote-runner";

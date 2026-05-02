@@ -8,7 +8,9 @@ export interface WorkerLoopOptions<I> {
   runProvider: (invocation: I, signal: AbortSignal) => AsyncGenerator<unknown>;
 }
 
-async function readAllStdin(): Promise<string> {
+async function readInvocationRaw(): Promise<string> {
+  const env = process.env["DALANG_WORKER_INVOCATION"];
+  if (typeof env === "string" && env.length > 0) return env;
   const decoder = new TextDecoder();
   let out = "";
   const reader = Bun.stdin.stream().getReader();
@@ -32,7 +34,7 @@ export async function runWorkerLoop<I>(opts: WorkerLoopOptions<I>): Promise<neve
 
   let exitCode = 0;
   try {
-    const raw = await readAllStdin();
+    const raw = await readInvocationRaw();
     let invocation: I;
     try {
       invocation = opts.parseInvocation(raw);
