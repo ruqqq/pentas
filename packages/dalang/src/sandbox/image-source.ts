@@ -50,6 +50,7 @@ export async function resolveImage(
     return {
       kind: "image",
       tag: `dalang-build:${shortHash(abs)}`,
+      build: { dockerfile: abs, contextDir: repoDir },
       workspaceFolder: DEFAULT_WORKSPACE_FOLDER,
       remoteUser: null,
       postCreateCommand: null,
@@ -109,6 +110,7 @@ export async function resolveImage(
     return {
       kind: "image",
       tag: `dalang-build:${shortHash(dfAbs)}`,
+      build: { dockerfile: dfAbs, contextDir: dcDir },
       workspaceFolder,
       remoteUser,
       postCreateCommand,

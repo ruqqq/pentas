@@ -101,6 +101,29 @@ class DockerHandle implements ContainerHandle {
   }
 }
 
+async function ensureImageBuilt(image: ResolvedImage): Promise<void> {
+  if (image.kind !== "image" || image.build === undefined) return;
+  const inspect = Bun.spawn(["docker", "image", "inspect", image.tag], {
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+  if ((await inspect.exited) === 0) return;
+
+  const { dockerfile, contextDir } = image.build;
+  const proc = Bun.spawn(
+    ["docker", "build", "--tag", image.tag, "--file", dockerfile, contextDir],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  const code = await proc.exited;
+  if (code !== 0) {
+    const stderr = await readToEnd(proc.stderr);
+    throw new SandboxError(
+      "sandbox_image_unavailable",
+      `docker build failed: ${stderr.trim()}`,
+    );
+  }
+}
+
 function imageRunArgs(image: ResolvedImage): { tag: string } {
   if (image.kind !== "image") {
     throw new SandboxError(
@@ -113,6 +136,7 @@ function imageRunArgs(image: ResolvedImage): { tag: string } {
 
 export class DockerContainerHost implements ContainerHost {
   async start(opts: ContainerStartOptions): Promise<ContainerHandle> {
+    await ensureImageBuilt(opts.image);
     const { tag } = imageRunArgs(opts.image);
 
     const args: string[] = [

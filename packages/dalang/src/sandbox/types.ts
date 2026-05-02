@@ -32,6 +32,8 @@ export type ResolvedImage =
   | {
       kind: "image";
       tag: string;
+      /** If set, the image must be built from this Dockerfile before run. */
+      build?: { dockerfile: string; contextDir: string };
       workspaceFolder: string;
       remoteUser: string | null;
       postCreateCommand: string | null;

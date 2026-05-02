@@ -1,10 +1,11 @@
 import { test, expect, beforeAll, setDefaultTimeout } from "bun:test";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { realpath } from "node:fs/promises";
 import { DockerContainerHost } from "../../src/sandbox/docker-host";
 import type { ResolvedImage } from "../../src/sandbox/types";
+import { resolveImage } from "../../src/sandbox/image-source";
 
 // Docker operations (run/exec/stop) can take several seconds each.
 setDefaultTimeout(60_000);
@@ -94,4 +95,29 @@ test("DockerContainerHost.start throws sandbox_image_unavailable for an unknown 
       resources: { cpus: "1", memory: "256m", pidsLimit: 256, tmpfsSize: "32m" },
     }),
   ).rejects.toMatchObject({ code: "sandbox_image_unavailable" });
+});
+
+test("DockerContainerHost builds dockerfile-source images on demand", async () => {
+  if (!dockerAvailable) return;
+  const repoDir = resolve(import.meta.dir, "..", "fixtures", "devcontainer-sample");
+  const resolved = await resolveImage({ source: "devcontainer", path: "." }, repoDir);
+  if (resolved.kind !== "image") throw new Error("expected image kind");
+
+  const host = new DockerContainerHost();
+  const handle = await host.start({
+    name: `dalang-test-${Date.now()}`,
+    image: resolved,
+    bindMounts: [],
+    env: {},
+    resources: { cpus: "1", memory: "256m", pidsLimit: 256, tmpfsSize: "32m" },
+  });
+  try {
+    const result = await handle.exec({ cmd: ["sh", "-lc", "echo built"] });
+    const lines: string[] = [];
+    for await (const l of result.stdout) lines.push(l);
+    expect(lines).toEqual(["built"]);
+    expect((await result.done).exitCode).toBe(0);
+  } finally {
+    await handle.stop();
+  }
 });
