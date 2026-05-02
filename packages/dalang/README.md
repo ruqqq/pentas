@@ -170,3 +170,33 @@ supported via the `compose` resolved-image kind.
 
 This module is not yet wired into the agent runner. The runner integration
 lands in Phase 4 of the sandboxed-workers plan.
+
+---
+
+## Auth credential store (Phase 3)
+
+dalang stores per-user provider credentials at `~/.config/dalang/credentials/`
+(override with `DALANG_CONFIG_HOME`). It does *not* read or write your host
+CLI's credential dirs (`~/.claude`, `~/.codex`, `~/.local/share/opencode`).
+
+To populate the store, run your provider CLI's login flow once, then point
+dalang at the result:
+
+```bash
+# Claude (long-lived token)
+claude setup-token  # produces a token starting with "sk-ant-oat01-..."
+dalang auth set claude --token "sk-ant-oat01-..."
+
+# Codex (subscription)
+codex login
+dalang auth set codex --from ~/.codex/auth.json
+
+# opencode
+opencode auth login <provider>
+dalang auth set opencode --from ~/.local/share/opencode/auth.json
+```
+
+Run `dalang auth status` to see which providers are configured.
+
+These credentials are projected into worker containers in Phase 4. Phase 3
+only ships the store and the projection primitives.
