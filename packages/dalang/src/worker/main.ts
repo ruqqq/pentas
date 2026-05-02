@@ -1,4 +1,5 @@
-import { serializeEvent, type WorkerEvent } from "./protocol";
+import { WorkerInvocationSchema, serializeEvent, type WorkerEvent, type WorkerInvocation } from "./protocol";
+import { runClaude } from "./claude";
 
 export interface WorkerLoopOptions<I> {
   parseInvocation: (raw: string) => I;
@@ -52,4 +53,23 @@ export async function runWorkerLoop<I>(opts: WorkerLoopOptions<I>): Promise<neve
     process.off("SIGINT", onSignal);
   }
   process.exit(exitCode);
+}
+
+function dispatch(inv: WorkerInvocation, signal: AbortSignal): AsyncGenerator<unknown> {
+  switch (inv.provider) {
+    case "claude":
+      return runClaude(inv, signal);
+    case "codex":
+      throw new Error("codex provider not yet implemented (Task 4)");
+    case "opencode":
+      throw new Error("opencode provider not yet implemented (Task 5)");
+  }
+}
+
+// When run directly as `bun run main.ts`, run the real loop.
+if (import.meta.main) {
+  await runWorkerLoop({
+    parseInvocation: (raw) => WorkerInvocationSchema.parse(JSON.parse(raw)),
+    runProvider: dispatch,
+  });
 }
