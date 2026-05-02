@@ -19,8 +19,10 @@ test("setupGitIdentity skips when identity is absent", async () => {
 
 test("setupGitIdentity configures user name and email", async () => {
   const calls: string[][] = [];
-  const run: CommandRunner = async (cmd) => {
+  const cwds: Array<string | undefined> = [];
+  const run: CommandRunner = async (cmd, _env, opts) => {
     calls.push(cmd);
+    cwds.push(opts?.cwd);
     return { exitCode: 0, stderr: "" };
   };
 
@@ -30,6 +32,7 @@ test("setupGitIdentity configures user name and email", async () => {
     ["git", "config", "--global", "user.name", "Dalang Bot"],
     ["git", "config", "--global", "user.email", "dalang@example.com"],
   ]);
+  expect(cwds).toEqual(["/tmp", "/tmp"]);
 });
 
 test("setupGithubGitAuth skips when no github token is present", async () => {
@@ -46,10 +49,12 @@ test("setupGithubGitAuth skips when no github token is present", async () => {
 
 test("setupGithubGitAuth configures gh and rewrites ssh github remotes to https", async () => {
   const calls: string[][] = [];
+  const cwds: Array<string | undefined> = [];
   const env = { GH_TOKEN: "token" };
-  const run: CommandRunner = async (cmd, gotEnv) => {
+  const run: CommandRunner = async (cmd, gotEnv, opts) => {
     expect(gotEnv).toBe(env);
     calls.push(cmd);
+    cwds.push(opts?.cwd);
     return { exitCode: 0, stderr: "" };
   };
 
@@ -67,6 +72,7 @@ test("setupGithubGitAuth configures gh and rewrites ssh github remotes to https"
       "ssh://git@github.com/",
     ],
   ]);
+  expect(cwds).toEqual(["/tmp", "/tmp", "/tmp"]);
 });
 
 test("setupGithubGitAuth throws when setup command fails", async () => {

@@ -1,9 +1,15 @@
 export interface CommandRunner {
-  (cmd: string[], env: Record<string, string>): Promise<{ exitCode: number; stderr: string }>;
+  (
+    cmd: string[],
+    env: Record<string, string>,
+    opts?: { cwd?: string },
+  ): Promise<{ exitCode: number; stderr: string }>;
 }
 
-export const runCommand: CommandRunner = async (cmd, env) => {
-  const proc = Bun.spawn(cmd, { stdout: "ignore", stderr: "pipe", env });
+const SAFE_GIT_SETUP_CWD = "/tmp";
+
+export const runCommand: CommandRunner = async (cmd, env, opts) => {
+  const proc = Bun.spawn(cmd, { stdout: "ignore", stderr: "pipe", env, cwd: opts?.cwd });
   const [exitCode, stderr] = await Promise.all([proc.exited, new Response(proc.stderr).text()]);
   return { exitCode, stderr };
 };
@@ -24,7 +30,7 @@ export async function setupGitIdentity(
     ["git", "config", "--global", "user.email", identity.userEmail],
   ];
   for (const cmd of commands) {
-    const result = await run(cmd, env);
+    const result = await run(cmd, env, { cwd: SAFE_GIT_SETUP_CWD });
     if (result.exitCode !== 0) {
       throw new Error(
         `git identity setup failed: ${cmd.join(" ")}: ${result.stderr.trim() || `exit ${result.exitCode}`}`,
@@ -54,7 +60,7 @@ export async function setupGithubGitAuth(
   ];
 
   for (const cmd of commands) {
-    const result = await run(cmd, env);
+    const result = await run(cmd, env, { cwd: SAFE_GIT_SETUP_CWD });
     if (result.exitCode !== 0) {
       throw new Error(
         `github git auth setup failed: ${cmd.join(" ")}: ${result.stderr.trim() || `exit ${result.exitCode}`}`,
