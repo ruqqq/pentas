@@ -66,7 +66,7 @@ test("codex projection mounts the per-worker dir and sets CODEX_HOME", async () 
   await proj.dispose();
 });
 
-test("codex projection disables GitHub connector plugin in sandbox config", async () => {
+test("codex projection disables built-in apps feature in sandbox config", async () => {
   const store = await newStore();
   await store.setCodexAuthJson('{"access_token":"v1"}');
   const sandboxesRoot = await realpath(await mkdtemp(join(tmpdir(), "sandboxes-")));
@@ -82,8 +82,8 @@ test("codex projection disables GitHub connector plugin in sandbox config", asyn
     join(proj.bindMounts[0]?.hostPath as string, "config.toml"),
     "utf8",
   );
-  expect(config).toContain('[plugins."github@openai-curated"]');
-  expect(config).toContain("enabled = false");
+  expect(config).toContain("[features]");
+  expect(config).toContain("apps = false");
 
   await proj.dispose();
 });

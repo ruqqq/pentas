@@ -82,8 +82,8 @@ async function prepareCodexCredentials(
   await writeFile(
     configPath,
     [
-      '[plugins."github@openai-curated"]',
-      "enabled = false",
+      "[features]",
+      "apps = false",
       "",
       '[plugins."superpowers@openai-curated"]',
       "enabled = true",
