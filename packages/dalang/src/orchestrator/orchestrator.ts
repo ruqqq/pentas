@@ -1,5 +1,6 @@
 // packages/dalang/src/orchestrator/orchestrator.ts
 import { resolve } from "node:path";
+import { randomUUID } from "node:crypto";
 import type { ControlPlaneAdapter } from "../control-plane/adapter";
 import type { NormalizedIssue, OrchestratorState, RetryEntry, RunningEntry } from "../types";
 import type { WorkflowFrontMatter } from "../config/schema";
@@ -28,11 +29,19 @@ export interface OrchestratorOptions {
   logger?: Logger;
 }
 
+export interface OrphanWorkspaceCleanupResult {
+  scanned: number;
+  removed: number;
+  skipped: number;
+  failed: number;
+}
+
 export class Orchestrator {
   state: OrchestratorState;
   private readonly controlPlane: ControlPlaneAdapter;
   private cfg: WorkflowFrontMatter;
   private promptTemplate: string;
+  private readonly ownerId: string;
   private readonly hostRunQuery: RunQuery;
   private readonly sandboxRunQuery?: RunQuery;
   private readonly workspaces: WorkspaceManager;
@@ -44,6 +53,7 @@ export class Orchestrator {
     this.controlPlane = opts.controlPlane;
     this.cfg = opts.config;
     this.promptTemplate = opts.promptTemplate;
+    this.ownerId = randomUUID();
     this.hostRunQuery = opts.hostRunQuery ?? opts.runQuery;
     this.sandboxRunQuery = opts.sandboxRunQuery;
     this.log = opts.logger ?? createLogger({ name: "dalang", level: "info" });
@@ -235,6 +245,11 @@ export class Orchestrator {
     );
     const work = this.runWorker(issue, attempt, controller, resumeSessionId).catch((err) => {
       this.log.error({ issue_id: issue.id, err: (err as Error).message }, "worker crashed");
+      const entry = this.state.running.get(issue.id);
+      if (entry) {
+        removeRunning(this.state, issue.id);
+        void this.cleanupWorkspace(entry);
+      }
     });
     this.inflight.push(work);
   }
@@ -257,6 +272,7 @@ export class Orchestrator {
       await this.worktrees.ensureWorktree(cwd, branch);
       await this.assertGitWorkspace(cwd);
     }
+    await this.workspaces.claimWorkspace(issue.identifier, this.ownerId, issue.id);
     const env = {
       WORKSPACE_PATH: cwd,
       ISSUE_ID: issue.id,
@@ -698,11 +714,11 @@ export class Orchestrator {
   }
 
   private async cleanupWorkspace(entry: RunningEntry): Promise<void> {
-    await this.cleanupByIdentifier({
+    await this.cleanupByIdentifierForOwner({
       id: entry.issue.id,
       identifier: entry.issue.identifier,
       state: entry.issue.state,
-    });
+    }, this.ownerId);
   }
 
   private async cleanupByIdentifier(opts: {
@@ -710,6 +726,19 @@ export class Orchestrator {
     identifier: string;
     state: string;
   }): Promise<void> {
+    await this.cleanupByIdentifierForOwner(opts, this.ownerId);
+  }
+
+  private async cleanupByIdentifierForOwner(
+    opts: {
+      id: string;
+      identifier: string;
+      state: string;
+    },
+    ownerId: string,
+  ): Promise<void> {
+    const isOwned = await this.workspaces.isWorkspaceOwnedBy(opts.identifier, ownerId);
+    if (!isOwned) return;
     const cwd = this.workspaces.pathFor(opts.identifier);
     const env = {
       WORKSPACE_PATH: cwd,
@@ -718,14 +747,56 @@ export class Orchestrator {
       ISSUE_STATE: opts.state,
       ATTEMPT: "",
     };
-    if (this.cfg.hooks.before_remove) {
-      await this.runHookLogged("before_remove", this.cfg.hooks.before_remove, cwd, env, {
-        id: opts.id,
-        identifier: opts.identifier,
-      }).catch(() => {});
+    try {
+      if (this.cfg.hooks.before_remove) {
+        await this.runHookLogged("before_remove", this.cfg.hooks.before_remove, cwd, env, {
+          id: opts.id,
+          identifier: opts.identifier,
+        }).catch(() => {});
+      }
+      if (this.worktrees) await this.worktrees.removeWorktree(cwd);
+      else await this.workspaces.removeWorkspace(opts.identifier);
+    } finally {
+      await this.workspaces.releaseWorkspaceClaim(opts.identifier, ownerId).catch(() => {});
     }
-    if (this.worktrees) await this.worktrees.removeWorktree(cwd);
-    else await this.workspaces.removeWorkspace(opts.identifier);
+  }
+
+  async cleanupOrphanWorkspaces(): Promise<OrphanWorkspaceCleanupResult> {
+    const orphans = await this.workspaces.listOrphanWorkspaceClaims();
+    const result: OrphanWorkspaceCleanupResult = {
+      scanned: orphans.length,
+      removed: 0,
+      skipped: 0,
+      failed: 0,
+    };
+    for (const orphan of orphans) {
+      const latestClaim = await this.workspaces.readWorkspaceClaim(orphan.identifier);
+      if (
+        !latestClaim ||
+        latestClaim.ownerId !== orphan.claim.ownerId ||
+        latestClaim.issueId !== orphan.claim.issueId ||
+        latestClaim.pid !== orphan.claim.pid ||
+        this.workspaces.isPidAlive(latestClaim.pid)
+      ) {
+        result.skipped += 1;
+        continue;
+      }
+
+      try {
+        await this.cleanupByIdentifierForOwner(
+          {
+            id: latestClaim.issueId,
+            identifier: orphan.identifier,
+            state: "",
+          },
+          latestClaim.ownerId,
+        );
+        result.removed += 1;
+      } catch {
+        result.failed += 1;
+      }
+    }
+    return result;
   }
 
   private async runHookLogged(
@@ -771,6 +842,15 @@ export class Orchestrator {
       this.inflight = [];
       await Promise.allSettled(all);
     }
+  }
+
+  async stop(): Promise<void> {
+    const active = Array.from(this.state.running.values());
+    for (const entry of active) {
+      entry.abort_controller.abort();
+    }
+    await Promise.all(active.map((entry) => this.cleanupWorkspace(entry).catch(() => {})));
+    await this.drainPendingForTest();
   }
 }
 

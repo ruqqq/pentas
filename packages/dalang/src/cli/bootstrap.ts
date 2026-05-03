@@ -235,6 +235,21 @@ export class Bootstrap {
       this.orch?.updateConfig(next.config, next.promptTemplate);
     });
     this.reloader.onError((err) => this.log.warn({ err: err.message }, "workflow reload error"));
+    const orphanCleanup = await this.orch.cleanupOrphanWorkspaces().catch((err) => {
+      this.log.warn({ err: (err as Error).message }, "orphan workspace cleanup failed");
+      return null;
+    });
+    if (orphanCleanup) {
+      this.log.info(
+        {
+          scanned: orphanCleanup.scanned,
+          removed: orphanCleanup.removed,
+          skipped: orphanCleanup.skipped,
+          failed: orphanCleanup.failed,
+        },
+        "orphan workspace cleanup completed",
+      );
+    }
     const port = this.opts.port ?? wf.config.server.port;
     this.server = startServer({
       state: this.orch.state,
@@ -269,7 +284,7 @@ export class Bootstrap {
     }
     this.server?.stop();
     await this.reloader.stop();
-    await this.orch?.drainPendingForTest();
+    await this.orch?.stop();
     await shutdownOpencodeServer().catch(() => {});
   }
 }

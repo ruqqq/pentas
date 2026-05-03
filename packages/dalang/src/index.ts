@@ -5,6 +5,7 @@ import { createLogger } from "./logging/logger";
 
 const log = createLogger({ name: "dalang", level: "info" });
 const args = parseArgs(Bun.argv.slice(2));
+let shuttingDown = false;
 
 if (args.help) {
   console.log(DALANG_HELP.trimEnd());
@@ -74,17 +75,27 @@ if (args.command === "auth") {
 
 const boot = new Bootstrap({ workflowPath: args.workflowPath, port: args.port });
 
-const shutdown = async () => {
+const shutdown = async (code = 0) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
   log.info("shutting down");
   await boot.stop();
-  process.exit(0);
+  process.exit(code);
 };
 
+process.on("uncaughtException", (err) => {
+  log.error({ err: (err as Error).message }, "uncaught exception");
+  void shutdown(1);
+});
+process.on("unhandledRejection", (reason) => {
+  log.error({ err: reason instanceof Error ? reason.message : String(reason) }, "unhandled rejection");
+  void shutdown(1);
+});
 process.on("SIGINT", () => {
-  void shutdown();
+  void shutdown(0);
 });
 process.on("SIGTERM", () => {
-  void shutdown();
+  void shutdown(0);
 });
 
 try {
