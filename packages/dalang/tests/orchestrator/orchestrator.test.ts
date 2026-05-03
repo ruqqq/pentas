@@ -571,6 +571,62 @@ test("successful session blocks the ticket when tracker state is unchanged", asy
   expect(orch.state.claimed.has("i1")).toBe(false);
 });
 
+test("clean successful turns do not continue forever when tracker state is unchanged", async () => {
+  const root = await tmpRoot();
+  class BlockingTracker extends FakeControlPlane {
+    comments: { id: string; body: string; author?: "user" | "agent" }[] = [];
+    states: Record<string, string> = { i1: "In Dev" };
+    override async refreshWork(ids: string[]): Promise<NormalizedIssue[]> {
+      return ids.map((id) => issue(id, this.states[id] ?? "In Dev"));
+    }
+    override async addComment(id: string, body: string, author?: "user" | "agent"): Promise<void> {
+      this.comments.push({ id, body, author });
+    }
+    override async updateState(id: string, state: string): Promise<void> {
+      this.states[id] = state;
+    }
+  }
+  const tracker = new BlockingTracker();
+  tracker.candidates = [issue("i1", "In Dev")];
+  tracker.byIds["i1"] = issue("i1", "In Dev");
+
+  const cfg = applyDefaults({
+    tracker: {
+      endpoint: "http://localhost:1",
+      active_states: ["In Dev", "Ready for Review"],
+      terminal_states: ["Done"],
+    },
+    workspace: { root },
+    agent: { max_concurrent_agents: 1, max_turns: 5 },
+    polling: { interval_ms: 1000 },
+  });
+
+  let turns = 0;
+  const orch = new Orchestrator({
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
+    runQuery: async function* () {
+      turns += 1;
+      yield { type: "system", subtype: "init", session_id: `s-${turns}` };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
+    },
+  });
+
+  await orch.tick();
+  await orch.drainPendingForTest();
+
+  expect(turns).toBe(1);
+  expect(tracker.states.i1).toBe("Blocked");
+  expect(tracker.comments).toHaveLength(1);
+  expect(orch.state.retry_attempts.has("i1")).toBe(false);
+  expect(orch.state.claimed.has("i1")).toBe(false);
+});
+
 test("failed Ready for Review session blocks when tracker state is unchanged", async () => {
   const root = await tmpRoot();
   class BlockingTracker extends FakeControlPlane {

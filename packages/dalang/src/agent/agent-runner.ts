@@ -158,7 +158,7 @@ export async function runAttempt(deps: RunAttemptDeps): Promise<RunAttemptResult
     const previousState = issue.state;
     issue = refreshed;
     if (!deps.isActiveState(issue.state)) break;
-    if (issue.state !== previousState) break;
+    if (issue.state === previousState) break;
     if (turnCount >= deps.config.maxTurns) break;
   }
 
