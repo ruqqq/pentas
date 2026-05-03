@@ -34,6 +34,7 @@ export interface WorkerSessionOptions {
   bindMounts: BindMount[];
   resources: SandboxResources;
   shim: { cmd: string[]; cwd?: string };
+  bootstrapEnv?: Record<string, string>;
   invocation: unknown;
   provider: AuthProvider;
   transcriptPath?: string;
@@ -84,7 +85,7 @@ export async function* runWorkerSession(opts: WorkerSessionOptions): AsyncGenera
       name: opts.workerId,
       image: opts.image,
       bindMounts: [...opts.bindMounts, ...creds.bindMounts],
-      env: creds.env,
+      env: { ...opts.bootstrapEnv, ...creds.env },
       resources: opts.resources,
     };
     handle = await opts.host.start(startOpts);

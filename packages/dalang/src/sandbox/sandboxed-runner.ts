@@ -113,8 +113,24 @@ function buildCloneBootstrapCommand(args: {
   checkoutDir: string;
   shimCmd: string[];
 }): string[] {
+  const sshConfigDir = "/tmp/.ssh";
+  const githubTokenShellExpr =
+    "${GH_TOKEN:-${GITHUB_TOKEN:-}}"; // explicit precedence for GH_TOKEN over GITHUB_TOKEN
   const script = [
     "set -eu",
+    `if command -v ssh >/dev/null 2>&1; then`,
+    `  mkdir -p ${shellQuote(sshConfigDir)}`,
+    `  chmod 700 ${shellQuote(sshConfigDir)}`,
+    `  export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=${shellQuote(
+      posix.join(sshConfigDir, "known_hosts"),
+    )}"`,
+    "fi",
+    `if [ -n "${githubTokenShellExpr}" ]; then`,
+    "  git config --global credential.https://github.com.username x-access-token",
+    "  git config --global credential.https://github.com.helper '!f() { echo username=x-access-token; echo password=${GH_TOKEN:-$GITHUB_TOKEN}; }; f'",
+    "  git config --global --add url.https://github.com/.insteadOf git@github.com:",
+    "  git config --global --add url.https://github.com/.insteadOf ssh://git@github.com/",
+    "fi",
     `mkdir -p ${shellQuote(args.workspaceRoot)}`,
     `if [ ! -d ${shellQuote(posix.join(args.checkoutDir, ".git"))} ]; then`,
     `  rm -rf ${shellQuote(args.checkoutDir)}`,
@@ -125,6 +141,17 @@ function buildCloneBootstrapCommand(args: {
     `exec ${args.shimCmd.map(shellQuote).join(" ")}`,
   ].join("\n");
   return ["sh", "-lc", script];
+}
+
+function cloneBootstrapEnv(
+  opts: RunQueryOptions,
+  providerExecs: SandboxConfig["providers"],
+): Record<string, string> {
+  if (opts.codex === undefined) return {};
+  const env: Record<string, string> = {};
+  if (opts.codex.env !== undefined) Object.assign(env, opts.codex.env);
+  if (providerExecs.codex.env !== undefined) Object.assign(env, providerExecs.codex.env);
+  return env;
 }
 
 export function createSandboxedRunQuery(deps: SandboxedRunnerDeps): RunQuery {
@@ -169,6 +196,7 @@ export function createSandboxedRunQuery(deps: SandboxedRunnerDeps): RunQuery {
         const invocation =
           deps.invocationOverride ??
           buildInvocation(opts, deps.config.providers, containerCwd, deps.config.git);
+        const bootstrapEnv = cloneBootstrapEnv(opts, deps.config.providers);
         const transcriptPath = join(
           deps.transcriptRoot ?? defaultSandboxTranscriptRoot(deps.sandboxesRoot),
           `${workerId}.jsonl`,
@@ -186,6 +214,7 @@ export function createSandboxedRunQuery(deps: SandboxedRunnerDeps): RunQuery {
           shim: { cmd: workerCmd, cwd: deps.repo === undefined ? containerCwd : undefined },
           invocation,
           provider,
+          bootstrapEnv,
           transcriptPath,
           ...(deps.onLifecycleEvent ? { onLifecycleEvent: deps.onLifecycleEvent } : {}),
           ...(opts.abortSignal ? { abortSignal: opts.abortSignal } : {}),

@@ -367,6 +367,68 @@ test("sandboxed RunQuery clones into compose image workspaceFolder when no host 
   expect(invocation.cwd).toBe(expectedCheckout);
 });
 
+test("sandboxed clone bootstrap passes codex env and enables ssh token-aware auth", async () => {
+  const workspaceRoot = await realpath(await mkdtemp(join(tmpdir(), "sbr-sb-codex-env-")));
+  const checkout = join(workspaceRoot, "usemeem");
+  await mkdir(checkout);
+
+  const credDir = await realpath(await mkdtemp(join(tmpdir(), "sbr-cred-")));
+  const sandboxesRoot = await realpath(await mkdtemp(join(tmpdir(), "sbr-sb-")));
+  const store = new FilesystemAuthStore(credDir);
+  await store.setCodexAuthJson('{"access_token":"test"}');
+  const host = new RecordingExecHost();
+
+  const runQuery = createSandboxedRunQuery({
+    host,
+    store,
+    sandboxesRoot,
+    repoDir: process.cwd(),
+    repo: {
+      url: "https://github.com/example/meem.git",
+      defaultBranch: "main",
+    },
+    config: {
+      enabled: true,
+      disabled_states: [],
+      image: { source: "image", tag: "fake" },
+      resources: { cpus: "1", memory: "256m", pidsLimit: 256, tmpfsSize: "32m" },
+      providers: {
+        claude: { executablePath: "claude" },
+        codex: {
+          executablePath: "codex",
+          env: { GH_TOKEN: "provider-token", HOME: "/tmp" },
+        },
+        opencode: { executablePath: "opencode" },
+      },
+    },
+    shimCmdOverride: ["/opt/dalang/bayang"],
+  });
+
+  for await (const _ev of runQuery({
+    prompt: "hi",
+    cwd: checkout,
+    model: "gpt-5.5",
+    executablePath: "codex",
+    codex: {
+      sandboxMode: "workspace-write",
+      approvalPolicy: "never",
+      networkAccessEnabled: true,
+      env: { GH_TOKEN: "runquery-token" },
+    },
+  })) {
+    // drain
+  }
+
+  expect(host.startOptions?.env).toMatchObject({
+    GH_TOKEN: "provider-token",
+    HOME: "/tmp",
+    CODEX_HOME: "/run/dalang/codex",
+  });
+  const script = host.execOptions?.cmd[2] ?? "";
+  expect(script).toContain("StrictHostKeyChecking=accept-new");
+  expect(script).toContain("git config --global credential.https://github.com.helper");
+});
+
 test("sandboxed RunQuery does not mount the host git common dir when repository cloning is configured", async () => {
   const credDir = await realpath(await mkdtemp(join(tmpdir(), "sbr-cred-")));
   const sandboxesRoot = await realpath(await mkdtemp(join(tmpdir(), "sbr-sb-")));
