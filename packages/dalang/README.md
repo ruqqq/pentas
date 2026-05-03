@@ -315,6 +315,17 @@ stored credential before dispatch and projects only that provider's credential
 into the worker. GitHub and Cloudflare tokens are separate from provider auth;
 pass them through `sandbox.providers.<provider>.env`.
 
+You can disable sandbox execution for specific tracker states with
+`sandbox.disabled_states`. Those states always run on the host runner (so they can
+use host credentials and tooling) while other states still use sandbox execution:
+
+```yaml
+sandbox:
+  enabled: true
+  disabled_states:
+    - "Ready for Review"
+```
+
 ### Git Identity And GitHub Pushes
 
 Local commits inside the worker need git identity:

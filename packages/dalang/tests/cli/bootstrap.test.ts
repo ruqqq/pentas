@@ -1,9 +1,10 @@
 // packages/dalang/tests/cli/bootstrap.test.ts
 import { test, expect } from "bun:test";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, writeFile, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Bootstrap, sandboxWorkerCommand } from "../../src/cli/bootstrap";
+import { FilesystemAuthStore } from "../../src/auth/store";
 
 const VALID = `---
 tracker:
@@ -245,6 +246,108 @@ Body for {{ issue.identifier }}.`,
   } finally {
     await boot.stop();
     papan.stop();
+  }
+});
+
+async function writeExecutable(dir: string, name: string, body: string): Promise<string> {
+  const path = join(dir, name);
+  await writeFile(path, `#!/bin/sh\n${body}\n`, "utf8");
+  await chmod(path, 0o755);
+  return path;
+}
+
+test("sandbox-enabled workflow with no disabled states checks sandbox auth store only", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "dalang-boot-sandbox-store-only-"));
+  const credRoot = join(dir, "credentials");
+  const oldDalangConfigHome = process.env.DALANG_CONFIG_HOME;
+  process.env.DALANG_CONFIG_HOME = dir;
+  process.env.WS_ROOT = join(dir, "ws");
+
+  const claudePath = await writeExecutable(dir, "failing-claude", 'echo "broken"; exit 1');
+  const path = join(dir, "WORKFLOW.md");
+  await writeFile(
+    path,
+    `---
+sandbox:
+  enabled: true
+agent_provider: claude
+claude:
+  executable_path: ${claudePath}
+tracker:
+  endpoint: http://localhost:9999
+  active_states: [Todo]
+  terminal_states: [Done]
+workspace:
+  root: $WS_ROOT
+agent:
+  max_concurrent_agents: 1
+---
+Body for {{ issue.identifier }}.`,
+    "utf8",
+  );
+
+  const store = new FilesystemAuthStore(credRoot);
+  await store.setClaudeToken("sso-token");
+
+  const boot = new Bootstrap({
+    workflowPath: path,
+    port: 0,
+    runQueryFactory,
+  });
+
+  try {
+    await boot.start();
+  } finally {
+    process.env.DALANG_CONFIG_HOME = oldDalangConfigHome;
+    await boot.stop();
+  }
+});
+
+test("sandbox-enabled workflow with disabled states requires host auth and sandbox credentials", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "dalang-boot-sandbox-host-probe-"));
+  const credRoot = join(dir, "credentials");
+  const oldDalangConfigHome = process.env.DALANG_CONFIG_HOME;
+  process.env.DALANG_CONFIG_HOME = dir;
+  process.env.WS_ROOT = join(dir, "ws");
+
+  const claudePath = await writeExecutable(dir, "broken-claude", 'echo "broken"; exit 1');
+  const path = join(dir, "WORKFLOW.md");
+  await writeFile(
+    path,
+    `---
+sandbox:
+  enabled: true
+  disabled_states:
+    - "Ready for Review"
+agent_provider: claude
+claude:
+  executable_path: ${claudePath}
+tracker:
+  endpoint: http://localhost:9999
+  active_states: [Ready for Review]
+  terminal_states: [Done]
+workspace:
+  root: $WS_ROOT
+agent:
+  max_concurrent_agents: 1
+---
+Body for {{ issue.identifier }}.`,
+    "utf8",
+  );
+
+  const store = new FilesystemAuthStore(credRoot);
+  await store.setClaudeToken("sso-token");
+
+  const boot = new Bootstrap({
+    workflowPath: path,
+    port: 0,
+  });
+
+  try {
+    await expect(boot.start()).rejects.toMatchObject({ code: "claude_auth_inactive" });
+  } finally {
+    process.env.DALANG_CONFIG_HOME = oldDalangConfigHome;
+    await boot.stop();
   }
 });
 

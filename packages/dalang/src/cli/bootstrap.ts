@@ -63,7 +63,12 @@ export class Bootstrap {
     const wf = this.reloader.current();
     validateForDispatch(wf.config);
     const sandboxed = wf.config.sandbox?.enabled === true;
-    if (!this.opts.skipAuthProbe && !sandboxed) {
+    const sandboxDisabledStates = sandboxed ? wf.config.sandbox!.disabled_states : [];
+    const shouldProbeHostProvider =
+      !this.opts.skipAuthProbe && (!sandboxed || sandboxDisabledStates.length > 0);
+    const shouldProbeSandboxCredentials =
+      !this.opts.skipAuthProbe && sandboxed;
+    if (shouldProbeHostProvider) {
       if (wf.config.agent_provider === "codex") {
         const err = await probeCodexAuth(wf.config.codex!.executable_path);
         if (err) throw new ValidationError("codex_auth_inactive", err);
@@ -85,7 +90,7 @@ export class Bootstrap {
         if (err) throw new ValidationError("claude_auth_inactive", err);
       }
     }
-    if (!this.opts.skipAuthProbe && sandboxed) {
+    if (shouldProbeSandboxCredentials) {
       const { FilesystemAuthStore, defaultStoreRoot } = await import("../auth/store");
       const store = new FilesystemAuthStore(defaultStoreRoot());
       const provider = wf.config.agent_provider;
@@ -112,9 +117,16 @@ export class Bootstrap {
       trackerApiKey: this.opts.trackerApiKey,
     });
     await controlPlane.validateConnection?.();
-    let runQuery: RunQuery;
+    const hostRunQuery = this.opts.runQueryFactory
+      ? this.opts.runQueryFactory()
+      : wf.config.agent_provider === "codex"
+        ? codexRunQuery
+        : wf.config.agent_provider === "opencode"
+          ? opencodeRunQuery
+          : sdkRunQuery;
+    let sandboxRunQuery: RunQuery | null = null;
     if (this.opts.runQueryFactory) {
-      runQuery = this.opts.runQueryFactory();
+      sandboxRunQuery = hostRunQuery;
     } else if (sandboxed) {
       const { DockerContainerHost, sweepOrphanWorkers } = await import("../sandbox/docker-host");
       const { FilesystemAuthStore, defaultStoreRoot } = await import("../auth/store");
@@ -150,7 +162,7 @@ export class Bootstrap {
         },
         "sandboxed runner selected",
       );
-      runQuery = createSandboxedRunQuery({
+      sandboxRunQuery = createSandboxedRunQuery({
         host: new DockerContainerHost(),
         store: new FilesystemAuthStore(defaultStoreRoot()),
         sandboxesRoot,
@@ -174,19 +186,15 @@ export class Bootstrap {
           log({ kind: e.kind, message: e.message, detail: e.detail }, "sandbox lifecycle");
         },
       });
-    } else {
-      runQuery =
-        wf.config.agent_provider === "codex"
-          ? codexRunQuery
-          : wf.config.agent_provider === "opencode"
-            ? opencodeRunQuery
-            : sdkRunQuery;
     }
+    const runQuery = hostRunQuery;
     this.orch = new Orchestrator({
       controlPlane,
       config: wf.config,
       promptTemplate: wf.promptTemplate,
       runQuery,
+      hostRunQuery,
+      sandboxRunQuery: sandboxRunQuery ?? hostRunQuery,
       logger: this.log,
     });
     const initialProvider = wf.config.agent_provider;

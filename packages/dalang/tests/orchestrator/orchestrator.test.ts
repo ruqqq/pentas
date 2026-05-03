@@ -113,6 +113,148 @@ test("tick dispatches eligible issue and runs an attempt to completion", async (
   expect(orch.state.completed.has("i1")).toBe(true);
 });
 
+test("routes disabled sandbox state issue to host runner", async () => {
+  const root = await tmpRoot();
+  const tracker = new FakeControlPlane();
+  tracker.candidates = [issue("i1", "Ready for Review")];
+  tracker.byIds["i1"] = issue("i1", "Done");
+
+  const cfg = applyDefaults({
+    tracker: { endpoint: "http://localhost:1", active_states: ["Ready for Review"], terminal_states: ["Done"] },
+    workspace: { root },
+    sandbox: { enabled: true, disabled_states: ["Ready for Review"] },
+    agent: { max_concurrent_agents: 1, max_turns: 1 },
+    polling: { interval_ms: 1000 },
+  });
+
+  let hostCalls = 0;
+  let sandboxCalls = 0;
+  const orch = new Orchestrator({
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
+    runQuery: async function* () {
+      throw new Error("should not run");
+    },
+    hostRunQuery: async function* () {
+      hostCalls += 1;
+      yield { type: "system", subtype: "init", session_id: "host-session" };
+      yield { type: "result", subtype: "success", usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } };
+    },
+    sandboxRunQuery: async function* () {
+      sandboxCalls += 1;
+      yield { type: "system", subtype: "init", session_id: "sandbox-session" };
+      yield { type: "result", subtype: "success", usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } };
+    },
+  });
+
+  await orch.tick();
+  await orch.drainPendingForTest();
+
+  expect(hostCalls).toBe(1);
+  expect(sandboxCalls).toBe(0);
+  expect(orch.state.completed.has("i1")).toBe(true);
+});
+
+test("routes non-disabled state issue to sandbox runner", async () => {
+  const root = await tmpRoot();
+  const tracker = new FakeControlPlane();
+  tracker.candidates = [issue("i1", "Ready for Review")];
+  tracker.byIds["i1"] = issue("i1", "Done");
+
+  const cfg = applyDefaults({
+    tracker: { endpoint: "http://localhost:1", active_states: ["Ready for Review"], terminal_states: ["Done"] },
+    workspace: { root },
+    sandbox: { enabled: true, disabled_states: ["In Dev"] },
+    agent: { max_concurrent_agents: 1, max_turns: 1 },
+    polling: { interval_ms: 1000 },
+  });
+
+  let hostCalls = 0;
+  let sandboxCalls = 0;
+  const orch = new Orchestrator({
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
+    runQuery: async function* () {
+      throw new Error("should not run");
+    },
+    hostRunQuery: async function* () {
+      hostCalls += 1;
+      yield { type: "system", subtype: "init", session_id: "host-session" };
+      yield { type: "result", subtype: "success", usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } };
+    },
+    sandboxRunQuery: async function* () {
+      sandboxCalls += 1;
+      yield { type: "system", subtype: "init", session_id: "sandbox-session" };
+      yield { type: "result", subtype: "success", usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } };
+    },
+  });
+
+  await orch.tick();
+  await orch.drainPendingForTest();
+
+  expect(hostCalls).toBe(0);
+  expect(sandboxCalls).toBe(1);
+  expect(orch.state.completed.has("i1")).toBe(true);
+});
+
+test("hot reload changes sandbox disabled states for later dispatches", async () => {
+  const root = await tmpRoot();
+  const tracker = new FakeControlPlane();
+  tracker.candidates = [issue("i1", "Ready for Review"), issue("i2", "Ready for Review")];
+  tracker.byIds["i1"] = issue("i1", "Done");
+  tracker.byIds["i2"] = issue("i2", "Done");
+
+  const cfg = applyDefaults({
+    tracker: { endpoint: "http://localhost:1", active_states: ["Ready for Review"], terminal_states: ["Done"] },
+    workspace: { root },
+    sandbox: { enabled: true, disabled_states: ["Ready for Review"] },
+    agent: { max_concurrent_agents: 1, max_turns: 1 },
+    polling: { interval_ms: 1000 },
+  });
+
+  let hostCalls = 0;
+  let sandboxCalls = 0;
+  const orch = new Orchestrator({
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
+    runQuery: async function* () {
+      throw new Error("should not run");
+    },
+    hostRunQuery: async function* () {
+      hostCalls += 1;
+      yield { type: "system", subtype: "init", session_id: `host-session-${hostCalls}` };
+      yield { type: "result", subtype: "success", usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } };
+    },
+    sandboxRunQuery: async function* () {
+      sandboxCalls += 1;
+      yield { type: "system", subtype: "init", session_id: `sandbox-session-${sandboxCalls}` };
+      yield { type: "result", subtype: "success", usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } };
+    },
+  });
+
+  await orch.tick();
+  await orch.drainPendingForTest();
+  expect(hostCalls).toBe(1);
+  expect(sandboxCalls).toBe(0);
+
+  const cfg2 = applyDefaults({
+    tracker: { endpoint: "http://localhost:1", active_states: ["Ready for Review"], terminal_states: ["Done"] },
+    workspace: { root },
+    sandbox: { enabled: true, disabled_states: [] },
+    agent: { max_concurrent_agents: 1, max_turns: 1 },
+    polling: { interval_ms: 1000 },
+  });
+  orch.updateConfig(cfg2, "x");
+
+  await orch.tick();
+  await orch.drainPendingForTest();
+  expect(hostCalls).toBe(1);
+  expect(sandboxCalls).toBe(1);
+});
+
 test("github-projects codex env injects only GitHub tokens", async () => {
   const oldGithubToken = process.env.GITHUB_TOKEN;
   const oldCodexHome = process.env.CODEX_HOME;

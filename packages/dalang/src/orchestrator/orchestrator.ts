@@ -23,6 +23,8 @@ export interface OrchestratorOptions {
   config: WorkflowFrontMatter;
   promptTemplate: string;
   runQuery: RunQuery;
+  sandboxRunQuery?: RunQuery;
+  hostRunQuery?: RunQuery;
   logger?: Logger;
 }
 
@@ -31,7 +33,8 @@ export class Orchestrator {
   private readonly controlPlane: ControlPlaneAdapter;
   private cfg: WorkflowFrontMatter;
   private promptTemplate: string;
-  private readonly runQuery: RunQuery;
+  private readonly hostRunQuery: RunQuery;
+  private readonly sandboxRunQuery?: RunQuery;
   private readonly workspaces: WorkspaceManager;
   private readonly worktrees: GitWorktreeManager | null;
   private readonly log: Logger;
@@ -41,7 +44,8 @@ export class Orchestrator {
     this.controlPlane = opts.controlPlane;
     this.cfg = opts.config;
     this.promptTemplate = opts.promptTemplate;
-    this.runQuery = opts.runQuery;
+    this.hostRunQuery = opts.hostRunQuery ?? opts.runQuery;
+    this.sandboxRunQuery = opts.sandboxRunQuery;
     this.log = opts.logger ?? createLogger({ name: "dalang", level: "info" });
     const wsRoot = resolve(expandPath(opts.config.workspace.root));
     this.workspaces = new WorkspaceManager({ root: wsRoot });
@@ -267,8 +271,15 @@ export class Orchestrator {
       await this.runHookLogged("before_run", this.cfg.hooks.before_run, cwd, env, issue);
     }
 
+    const runner = this.selectRunQuery(issue.state);
     this.log.info(
-      { issue_id: issue.id, identifier: issue.identifier, workspace_path: cwd, attempt },
+      {
+        issue_id: issue.id,
+        identifier: issue.identifier,
+        workspace_path: cwd,
+        attempt,
+        execution_mode: runner.execution_mode,
+      },
       "spawning agent",
     );
     let sandboxTranscriptPath: string | null = null;
@@ -305,7 +316,7 @@ export class Orchestrator {
       },
       isActiveState: (s) =>
         this.cfg.control_plane.active_states.some((x) => x.toLowerCase() === s.toLowerCase()),
-      runQuery: this.runQuery,
+      runQuery: runner.runQuery,
       onTranscriptPath: (path) => {
         sandboxTranscriptPath = path;
         const entry = this.state.running.get(issue.id);
@@ -642,6 +653,18 @@ export class Orchestrator {
     if (exitCode === 0) return;
     const stderr = await new Response(proc.stderr).text();
     throw new Error(`workspace is not a usable git checkout at ${cwd}: ${stderr.trim()}`);
+  }
+
+  private selectRunQuery(state: string): {
+    execution_mode: "host" | "sandbox";
+    runQuery: RunQuery;
+  } {
+    const useHost =
+      this.cfg.sandbox?.enabled !== true ||
+      this.cfg.sandbox.disabled_states.some((disabled) => disabled.toLowerCase() === state.toLowerCase());
+    return useHost
+      ? { execution_mode: "host", runQuery: this.hostRunQuery }
+      : { execution_mode: "sandbox", runQuery: this.sandboxRunQuery ?? this.hostRunQuery };
   }
 
   private buildCodexEnv(): Record<string, string> | undefined {

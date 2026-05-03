@@ -4,6 +4,7 @@ import { SandboxConfigSchema } from "../../src/config/sandbox-schema";
 test("default disabled config parses with no fields", () => {
   expect(SandboxConfigSchema.parse({ enabled: false })).toEqual({
     enabled: false,
+    disabled_states: [],
     image: { source: "devcontainer", path: ".devcontainer" },
     resources: { cpus: "2", memory: "4g", pidsLimit: 1024, tmpfsSize: "2g" },
     providers: {
@@ -64,4 +65,8 @@ test("invalid resource cpus is rejected", () => {
   expect(SandboxConfigSchema.safeParse({ enabled: true, resources: { cpus: "" } }).success).toBe(
     false,
   );
+});
+
+test("disabled_states reject empty values", () => {
+  expect(SandboxConfigSchema.safeParse({ enabled: true, disabled_states: [""] }).success).toBe(false);
 });

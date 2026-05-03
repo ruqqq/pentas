@@ -21,6 +21,7 @@ const SandboxGitConfigSchema = z.object({
 
 export const SandboxConfigSchema = z.object({
   enabled: z.boolean(),
+  disabled_states: z.array(z.string().min(1)).default([]),
   image: SandboxImageConfigSchema.default({ source: "devcontainer", path: ".devcontainer" }),
   resources: SandboxResourcesSchema,
   providers: ProviderPathsSchema,
