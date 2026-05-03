@@ -111,8 +111,7 @@ function buildCloneBootstrapCommand(args: {
   shimCmd: string[];
 }): string[] {
   const sshConfigDir = "/tmp/.ssh";
-  const githubTokenShellExpr =
-    "${GH_TOKEN:-${GITHUB_TOKEN:-}}"; // explicit precedence for GH_TOKEN over GITHUB_TOKEN
+  const githubTokenShellExpr = "${GH_TOKEN:-${GITHUB_TOKEN:-}}"; // explicit precedence for GH_TOKEN over GITHUB_TOKEN
   const script = [
     "set -eu",
     `if command -v ssh >/dev/null 2>&1; then`,

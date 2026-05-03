@@ -139,9 +139,7 @@ test("sandboxed RunQuery reports a host transcript path under .dalang/sandbox-ev
   }
 
   expect(events).toEqual([{ probe: "ok" }]);
-  expect(transcriptPath).toBe(
-    join(transcriptRoot, "dalang-worker-test-1.jsonl"),
-  );
+  expect(transcriptPath).toBe(join(transcriptRoot, "dalang-worker-test-1.jsonl"));
 });
 
 test("sandboxed RunQuery includes sandbox Codex env in the worker invocation", async () => {

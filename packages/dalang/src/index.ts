@@ -88,7 +88,10 @@ process.on("uncaughtException", (err) => {
   void shutdown(1);
 });
 process.on("unhandledRejection", (reason) => {
-  log.error({ err: reason instanceof Error ? reason.message : String(reason) }, "unhandled rejection");
+  log.error(
+    { err: reason instanceof Error ? reason.message : String(reason) },
+    "unhandled rejection",
+  );
   void shutdown(1);
 });
 process.on("SIGINT", () => {

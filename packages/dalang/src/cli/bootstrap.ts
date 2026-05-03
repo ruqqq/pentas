@@ -66,8 +66,7 @@ export class Bootstrap {
     const sandboxDisabledStates = sandboxed ? wf.config.sandbox!.disabled_states : [];
     const shouldProbeHostProvider =
       !this.opts.skipAuthProbe && (!sandboxed || sandboxDisabledStates.length > 0);
-    const shouldProbeSandboxCredentials =
-      !this.opts.skipAuthProbe && sandboxed;
+    const shouldProbeSandboxCredentials = !this.opts.skipAuthProbe && sandboxed;
     if (shouldProbeHostProvider) {
       if (wf.config.agent_provider === "codex") {
         const err = await probeCodexAuth(wf.config.codex!.executable_path);

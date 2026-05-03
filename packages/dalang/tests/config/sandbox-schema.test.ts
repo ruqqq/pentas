@@ -68,5 +68,7 @@ test("invalid resource cpus is rejected", () => {
 });
 
 test("disabled_states reject empty values", () => {
-  expect(SandboxConfigSchema.safeParse({ enabled: true, disabled_states: [""] }).success).toBe(false);
+  expect(SandboxConfigSchema.safeParse({ enabled: true, disabled_states: [""] }).success).toBe(
+    false,
+  );
 });

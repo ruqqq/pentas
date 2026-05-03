@@ -677,7 +677,9 @@ export class Orchestrator {
   } {
     const useHost =
       this.cfg.sandbox?.enabled !== true ||
-      this.cfg.sandbox.disabled_states.some((disabled) => disabled.toLowerCase() === state.toLowerCase());
+      this.cfg.sandbox.disabled_states.some(
+        (disabled) => disabled.toLowerCase() === state.toLowerCase(),
+      );
     return useHost
       ? { execution_mode: "host", runQuery: this.hostRunQuery }
       : { execution_mode: "sandbox", runQuery: this.sandboxRunQuery ?? this.hostRunQuery };
@@ -714,11 +716,14 @@ export class Orchestrator {
   }
 
   private async cleanupWorkspace(entry: RunningEntry): Promise<void> {
-    await this.cleanupByIdentifierForOwner({
-      id: entry.issue.id,
-      identifier: entry.issue.identifier,
-      state: entry.issue.state,
-    }, this.ownerId);
+    await this.cleanupByIdentifierForOwner(
+      {
+        id: entry.issue.id,
+        identifier: entry.issue.identifier,
+        state: entry.issue.state,
+      },
+      this.ownerId,
+    );
   }
 
   private async cleanupByIdentifier(opts: {

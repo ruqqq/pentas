@@ -120,7 +120,11 @@ test("routes disabled sandbox state issue to host runner", async () => {
   tracker.byIds["i1"] = issue("i1", "Done");
 
   const cfg = applyDefaults({
-    tracker: { endpoint: "http://localhost:1", active_states: ["Ready for Review"], terminal_states: ["Done"] },
+    tracker: {
+      endpoint: "http://localhost:1",
+      active_states: ["Ready for Review"],
+      terminal_states: ["Done"],
+    },
     workspace: { root },
     sandbox: { enabled: true, disabled_states: ["Ready for Review"] },
     agent: { max_concurrent_agents: 1, max_turns: 1 },
@@ -139,12 +143,20 @@ test("routes disabled sandbox state issue to host runner", async () => {
     hostRunQuery: async function* () {
       hostCalls += 1;
       yield { type: "system", subtype: "init", session_id: "host-session" };
-      yield { type: "result", subtype: "success", usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
     },
     sandboxRunQuery: async function* () {
       sandboxCalls += 1;
       yield { type: "system", subtype: "init", session_id: "sandbox-session" };
-      yield { type: "result", subtype: "success", usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
     },
   });
 
@@ -163,7 +175,11 @@ test("routes non-disabled state issue to sandbox runner", async () => {
   tracker.byIds["i1"] = issue("i1", "Done");
 
   const cfg = applyDefaults({
-    tracker: { endpoint: "http://localhost:1", active_states: ["Ready for Review"], terminal_states: ["Done"] },
+    tracker: {
+      endpoint: "http://localhost:1",
+      active_states: ["Ready for Review"],
+      terminal_states: ["Done"],
+    },
     workspace: { root },
     sandbox: { enabled: true, disabled_states: ["In Dev"] },
     agent: { max_concurrent_agents: 1, max_turns: 1 },
@@ -182,12 +198,20 @@ test("routes non-disabled state issue to sandbox runner", async () => {
     hostRunQuery: async function* () {
       hostCalls += 1;
       yield { type: "system", subtype: "init", session_id: "host-session" };
-      yield { type: "result", subtype: "success", usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
     },
     sandboxRunQuery: async function* () {
       sandboxCalls += 1;
       yield { type: "system", subtype: "init", session_id: "sandbox-session" };
-      yield { type: "result", subtype: "success", usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
     },
   });
 
@@ -207,7 +231,11 @@ test("hot reload changes sandbox disabled states for later dispatches", async ()
   tracker.byIds["i2"] = issue("i2", "Done");
 
   const cfg = applyDefaults({
-    tracker: { endpoint: "http://localhost:1", active_states: ["Ready for Review"], terminal_states: ["Done"] },
+    tracker: {
+      endpoint: "http://localhost:1",
+      active_states: ["Ready for Review"],
+      terminal_states: ["Done"],
+    },
     workspace: { root },
     sandbox: { enabled: true, disabled_states: ["Ready for Review"] },
     agent: { max_concurrent_agents: 1, max_turns: 1 },
@@ -226,12 +254,20 @@ test("hot reload changes sandbox disabled states for later dispatches", async ()
     hostRunQuery: async function* () {
       hostCalls += 1;
       yield { type: "system", subtype: "init", session_id: `host-session-${hostCalls}` };
-      yield { type: "result", subtype: "success", usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
     },
     sandboxRunQuery: async function* () {
       sandboxCalls += 1;
       yield { type: "system", subtype: "init", session_id: `sandbox-session-${sandboxCalls}` };
-      yield { type: "result", subtype: "success", usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
     },
   });
 
@@ -241,7 +277,11 @@ test("hot reload changes sandbox disabled states for later dispatches", async ()
   expect(sandboxCalls).toBe(0);
 
   const cfg2 = applyDefaults({
-    tracker: { endpoint: "http://localhost:1", active_states: ["Ready for Review"], terminal_states: ["Done"] },
+    tracker: {
+      endpoint: "http://localhost:1",
+      active_states: ["Ready for Review"],
+      terminal_states: ["Done"],
+    },
     workspace: { root },
     sandbox: { enabled: true, disabled_states: [] },
     agent: { max_concurrent_agents: 1, max_turns: 1 },

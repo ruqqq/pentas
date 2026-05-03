@@ -8,4 +8,3 @@ export function defaultSandboxesRoot(): string {
 export function defaultSandboxTranscriptRoot(): string {
   return join(homedir(), ".dalang", "sandbox-events");
 }
-
