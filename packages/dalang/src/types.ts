@@ -110,6 +110,8 @@ export interface RetryEntry {
   due_at_ms: number;
   timer_handle: ReturnType<typeof setTimeout> | null;
   error: string | null;
+  workflow_state: string | null;
+  resume_session_id: string | null;
 }
 
 export interface RunningEntry {
@@ -169,7 +171,14 @@ export type RuntimeEventKind =
   | "notification"
   | "other_message"
   | "malformed"
-  | "pr_checks_observed";
+  | "pr_checks_observed"
+  | "sandbox_unavailable"
+  | "sandbox_image_unavailable"
+  | "sandbox_start_failed"
+  | "sandbox_exec_disconnected"
+  | "sandbox_oom"
+  | "sandbox_auth_refresh_conflict"
+  | "sandbox_misconfigured";
 
 export interface RuntimeEvent {
   event: RuntimeEventKind;

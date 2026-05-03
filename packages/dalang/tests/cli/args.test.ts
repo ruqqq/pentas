@@ -56,6 +56,24 @@ test("parses lint subcommand with default workflow path", () => {
   });
 });
 
+test("parses sandbox doctor subcommand with explicit workflow path", () => {
+  expect(parseArgs(["sandbox", "doctor", "custom/WORKFLOW.md"])).toEqual({
+    command: "sandbox-doctor",
+    workflowPath: "custom/WORKFLOW.md",
+    port: null,
+    help: false,
+  });
+});
+
+test("parses sandbox doctor subcommand with default workflow path", () => {
+  expect(parseArgs(["sandbox", "doctor"])).toEqual({
+    command: "sandbox-doctor",
+    workflowPath: "./WORKFLOW.md",
+    port: null,
+    help: false,
+  });
+});
+
 test("rejects --port for lint", () => {
   expect(() => parseArgs(["lint", "--port", "3000"])).toThrow(
     "--port is only valid for serve mode",
@@ -92,6 +110,7 @@ test("help wins over invalid args", () => {
 test("help text documents supported flags and subcommands", () => {
   expect(DALANG_HELP).toContain("Usage: dalang [WORKFLOW.md] [--port <port>]");
   expect(DALANG_HELP).toContain("dalang lint [WORKFLOW.md]");
+  expect(DALANG_HELP).toContain("dalang sandbox doctor [WORKFLOW.md]");
   expect(DALANG_HELP).toContain("--help");
   expect(DALANG_HELP).toContain("-h");
 });

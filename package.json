@@ -10,12 +10,13 @@
     "test:papan:e2e": "bun run --filter=@pentas/papan test:e2e",
     "typecheck": "bun run --filter='*' typecheck",
     "lint": "oxlint",
-    "format": "oxfmt .",
-    "format:check": "bunx --bun oxfmt --check .",
-    "build": "bun run build:dalang && bun run build:papan",
+    "format": "oxfmt '**/*.{ts,tsx,js,jsx}' --no-error-on-unmatched-pattern",
+    "format:check": "bunx --bun oxfmt --check '**/*.{ts,tsx,js,jsx}' --no-error-on-unmatched-pattern",
+    "build": "bun run build:dalang && bun run build:bayang && bun run build:papan",
     "build:dalang": "bun build packages/dalang/src/index.ts --compile --target=bun --outfile=dist/dalang",
+    "build:bayang": "bun build packages/dalang/src/worker/main.ts --compile --target=bun --outfile=dist/bayang",
     "build:papan": "bun build packages/papan/src/index.ts --compile --target=bun --outfile=dist/papan",
-    "build:install": "bun run build && mkdir -p ~/.local/bin && cp dist/dalang dist/papan ~/.local/bin/"
+    "build:install": "bun run build && mkdir -p ~/.local/bin && cp dist/dalang dist/bayang dist/papan ~/.local/bin/"
   },
   "devDependencies": {
     "@types/bun": "^1.3.13",

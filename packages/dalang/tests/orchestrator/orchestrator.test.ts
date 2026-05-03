@@ -96,6 +96,7 @@ test("tick dispatches eligible issue and runs an attempt to completion", async (
     promptTemplate: "Body for {{ issue.identifier }}",
     runQuery: async function* () {
       yield { type: "system", subtype: "init", session_id: "sess-1" };
+      tracker.byIds["i1"] = issue("i1", "Done");
       yield {
         type: "result",
         subtype: "success",
@@ -112,9 +113,300 @@ test("tick dispatches eligible issue and runs an attempt to completion", async (
   expect(orch.state.completed.has("i1")).toBe(true);
 });
 
-test("workspace is removed when issue disappears between completion and continuation retry", async () => {
+test("routes disabled sandbox state issue to host runner", async () => {
   const root = await tmpRoot();
   const tracker = new FakeControlPlane();
+  tracker.candidates = [issue("i1", "Ready for Review")];
+  tracker.byIds["i1"] = issue("i1", "Done");
+
+  const cfg = applyDefaults({
+    tracker: {
+      endpoint: "http://localhost:1",
+      active_states: ["Ready for Review"],
+      terminal_states: ["Done"],
+    },
+    workspace: { root },
+    sandbox: { enabled: true, disabled_states: ["Ready for Review"] },
+    agent: { max_concurrent_agents: 1, max_turns: 1 },
+    polling: { interval_ms: 1000 },
+  });
+
+  let hostCalls = 0;
+  let sandboxCalls = 0;
+  const orch = new Orchestrator({
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
+    runQuery: async function* () {
+      throw new Error("should not run");
+    },
+    hostRunQuery: async function* () {
+      hostCalls += 1;
+      yield { type: "system", subtype: "init", session_id: "host-session" };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
+    },
+    sandboxRunQuery: async function* () {
+      sandboxCalls += 1;
+      yield { type: "system", subtype: "init", session_id: "sandbox-session" };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
+    },
+  });
+
+  await orch.tick();
+  await orch.drainPendingForTest();
+
+  expect(hostCalls).toBe(1);
+  expect(sandboxCalls).toBe(0);
+  expect(orch.state.completed.has("i1")).toBe(true);
+});
+
+test("routes non-disabled state issue to sandbox runner", async () => {
+  const root = await tmpRoot();
+  const tracker = new FakeControlPlane();
+  tracker.candidates = [issue("i1", "Ready for Review")];
+  tracker.byIds["i1"] = issue("i1", "Done");
+
+  const cfg = applyDefaults({
+    tracker: {
+      endpoint: "http://localhost:1",
+      active_states: ["Ready for Review"],
+      terminal_states: ["Done"],
+    },
+    workspace: { root },
+    sandbox: { enabled: true, disabled_states: ["In Dev"] },
+    agent: { max_concurrent_agents: 1, max_turns: 1 },
+    polling: { interval_ms: 1000 },
+  });
+
+  let hostCalls = 0;
+  let sandboxCalls = 0;
+  const orch = new Orchestrator({
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
+    runQuery: async function* () {
+      throw new Error("should not run");
+    },
+    hostRunQuery: async function* () {
+      hostCalls += 1;
+      yield { type: "system", subtype: "init", session_id: "host-session" };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
+    },
+    sandboxRunQuery: async function* () {
+      sandboxCalls += 1;
+      yield { type: "system", subtype: "init", session_id: "sandbox-session" };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
+    },
+  });
+
+  await orch.tick();
+  await orch.drainPendingForTest();
+
+  expect(hostCalls).toBe(0);
+  expect(sandboxCalls).toBe(1);
+  expect(orch.state.completed.has("i1")).toBe(true);
+});
+
+test("hot reload changes sandbox disabled states for later dispatches", async () => {
+  const root = await tmpRoot();
+  const tracker = new FakeControlPlane();
+  tracker.candidates = [issue("i1", "Ready for Review"), issue("i2", "Ready for Review")];
+  tracker.byIds["i1"] = issue("i1", "Done");
+  tracker.byIds["i2"] = issue("i2", "Done");
+
+  const cfg = applyDefaults({
+    tracker: {
+      endpoint: "http://localhost:1",
+      active_states: ["Ready for Review"],
+      terminal_states: ["Done"],
+    },
+    workspace: { root },
+    sandbox: { enabled: true, disabled_states: ["Ready for Review"] },
+    agent: { max_concurrent_agents: 1, max_turns: 1 },
+    polling: { interval_ms: 1000 },
+  });
+
+  let hostCalls = 0;
+  let sandboxCalls = 0;
+  const orch = new Orchestrator({
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
+    runQuery: async function* () {
+      throw new Error("should not run");
+    },
+    hostRunQuery: async function* () {
+      hostCalls += 1;
+      yield { type: "system", subtype: "init", session_id: `host-session-${hostCalls}` };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
+    },
+    sandboxRunQuery: async function* () {
+      sandboxCalls += 1;
+      yield { type: "system", subtype: "init", session_id: `sandbox-session-${sandboxCalls}` };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
+    },
+  });
+
+  await orch.tick();
+  await orch.drainPendingForTest();
+  expect(hostCalls).toBe(1);
+  expect(sandboxCalls).toBe(0);
+
+  const cfg2 = applyDefaults({
+    tracker: {
+      endpoint: "http://localhost:1",
+      active_states: ["Ready for Review"],
+      terminal_states: ["Done"],
+    },
+    workspace: { root },
+    sandbox: { enabled: true, disabled_states: [] },
+    agent: { max_concurrent_agents: 1, max_turns: 1 },
+    polling: { interval_ms: 1000 },
+  });
+  orch.updateConfig(cfg2, "x");
+
+  await orch.tick();
+  await orch.drainPendingForTest();
+  expect(hostCalls).toBe(1);
+  expect(sandboxCalls).toBe(1);
+});
+
+test("github-projects codex env injects only GitHub tokens", async () => {
+  const oldGithubToken = process.env.GITHUB_TOKEN;
+  const oldCodexHome = process.env.CODEX_HOME;
+  try {
+    process.env.GITHUB_TOKEN = "ghp_test";
+    process.env.CODEX_HOME = "/home/host/.codex";
+
+    const root = await tmpRoot();
+    const tracker = new FakeControlPlane();
+    tracker.candidates = [issue("i1", "Ready for Dev")];
+    tracker.byIds["i1"] = issue("i1", "Ready for Dev");
+    let observedEnv: Record<string, string> | undefined;
+
+    const cfg = applyDefaults({
+      control_plane: {
+        kind: "github-projects",
+        owner_type: "organization",
+        owner: "UseMeem",
+        project_number: 1,
+        repository: "UseMeem/meem-class",
+        status_field: "Status",
+        active_states: ["Ready for Dev"],
+        terminal_states: ["Done"],
+        ownership: { mode: "none" },
+      },
+      workspace: { root },
+      agent_provider: "codex",
+      codex: {
+        executable_path: "codex",
+        model: "gpt-5.5",
+        sandbox_mode: "danger-full-access",
+        approval_policy: "never",
+        network_access_enabled: true,
+        turn_timeout_ms: 60000,
+        read_timeout_ms: 5000,
+        stall_timeout_ms: 30000,
+      },
+      agent: { max_concurrent_agents: 1, max_turns: 1 },
+      polling: { interval_ms: 1000 },
+    });
+
+    const orch = new Orchestrator({
+      controlPlane: tracker,
+      config: cfg,
+      promptTemplate: "x",
+      runQuery: async function* (opts) {
+        observedEnv = opts.codex?.env;
+        yield { type: "thread.started", thread_id: "codex-thread" };
+        yield { type: "turn.completed", usage: { input_tokens: 1, output_tokens: 1 } };
+      },
+    });
+
+    await orch.tick();
+    await orch.drainPendingForTest();
+
+    expect(observedEnv).toEqual({ GITHUB_TOKEN: "ghp_test", GH_TOKEN: "ghp_test" });
+  } finally {
+    if (oldGithubToken === undefined) delete process.env.GITHUB_TOKEN;
+    else process.env.GITHUB_TOKEN = oldGithubToken;
+    if (oldCodexHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = oldCodexHome;
+  }
+});
+
+test("orchestrator uses sandbox-reported transcript path for running session viewer", async () => {
+  const root = await tmpRoot();
+  const tracker = new FakeControlPlane();
+  tracker.candidates = [issue("i1")];
+  tracker.byIds["i1"] = issue("i1");
+  let releaseTurn: () => void = () => {};
+
+  const cfg = applyDefaults({
+    tracker: { endpoint: "http://localhost:1", active_states: ["Todo"], terminal_states: ["Done"] },
+    workspace: { root },
+    agent: { max_concurrent_agents: 1, max_turns: 1 },
+    polling: { interval_ms: 1000 },
+  });
+
+  const transcriptPath = join(tmpdir(), "dalang-worker-test.jsonl");
+  const orch = new Orchestrator({
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
+    runQuery: async function* (opts) {
+      opts.onTranscriptPath?.(transcriptPath);
+      yield { type: "system", subtype: "init", session_id: "sandbox-session" };
+      await new Promise<void>((resolve) => {
+        releaseTurn = resolve;
+      });
+      tracker.byIds["i1"] = issue("i1", "Done");
+      yield { type: "result", subtype: "success" };
+    },
+  });
+
+  await orch.tick();
+  await Bun.sleep(10);
+
+  const running = orch.state.running.get("i1");
+  expect(running?.session?.transcript_path).toBe(transcriptPath);
+
+  releaseTurn();
+  await orch.drainPendingForTest();
+});
+
+test("workspace is removed when issue disappears between completion and continuation retry", async () => {
+  const root = await tmpRoot();
+  class RefreshFailingTracker extends FakeControlPlane {
+    override async refreshWork(_ids: string[]): Promise<NormalizedIssue[]> {
+      throw new Error("refresh unavailable");
+    }
+  }
+  const tracker = new RefreshFailingTracker();
   tracker.candidates = [issue("i1")];
   tracker.byIds["i1"] = issue("i1");
 
@@ -159,7 +451,12 @@ test("workspace is removed when issue disappears between completion and continua
 
 test("continuation retry dispatches a fresh agent when issue moved to another active state", async () => {
   const root = await tmpRoot();
-  const tracker = new FakeControlPlane();
+  class RefreshFailingTracker extends FakeControlPlane {
+    override async refreshWork(_ids: string[]): Promise<NormalizedIssue[]> {
+      throw new Error("refresh unavailable");
+    }
+  }
+  const tracker = new RefreshFailingTracker();
   tracker.candidates = [issue("i1", "In Dev")];
   tracker.byIds["i1"] = issue("i1", "In Dev");
 
@@ -203,6 +500,277 @@ test("continuation retry dispatches a fresh agent when issue moved to another ac
   await orch.drainPendingForTest();
 
   expect(dispatched).toBe(2);
+});
+
+test("successful continuation retry does not redispatch when issue remains in the same active state", async () => {
+  const root = await tmpRoot();
+  class RefreshFailingTracker extends FakeControlPlane {
+    override async refreshWork(_ids: string[]): Promise<NormalizedIssue[]> {
+      throw new Error("refresh unavailable");
+    }
+  }
+  const tracker = new RefreshFailingTracker();
+  tracker.candidates = [issue("i1", "In Dev")];
+  tracker.byIds["i1"] = issue("i1", "In Dev");
+
+  const cfg = applyDefaults({
+    tracker: {
+      endpoint: "http://localhost:1",
+      active_states: ["In Dev", "Ready for Review"],
+      terminal_states: ["Done"],
+    },
+    workspace: { root },
+    agent: { max_concurrent_agents: 1, max_turns: 1 },
+    polling: { interval_ms: 1000 },
+  });
+
+  let dispatched = 0;
+  const orch = new Orchestrator({
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
+    runQuery: async function* () {
+      dispatched += 1;
+      yield { type: "system", subtype: "init", session_id: `s-${dispatched}` };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
+    },
+  });
+
+  await orch.tick();
+  await orch.drainPendingForTest();
+  expect(dispatched).toBe(1);
+  expect(orch.state.retry_attempts.has("i1")).toBe(true);
+
+  await new Promise((r) => setTimeout(r, 1300));
+  await orch.drainPendingForTest();
+
+  expect(dispatched).toBe(1);
+  expect(orch.state.retry_attempts.has("i1")).toBe(false);
+  expect(orch.state.claimed.has("i1")).toBe(false);
+  expect(orch.state.completed.has("i1")).toBe(true);
+});
+
+test("successful session blocks the ticket when tracker state is unchanged", async () => {
+  const root = await tmpRoot();
+  class BlockingTracker extends FakeControlPlane {
+    comments: { id: string; body: string; author?: "user" | "agent" }[] = [];
+    states: Record<string, string> = { i1: "In Dev" };
+    override async refreshWork(ids: string[]): Promise<NormalizedIssue[]> {
+      return ids.map((id) => issue(id, this.states[id] ?? "In Dev"));
+    }
+    override async addComment(id: string, body: string, author?: "user" | "agent"): Promise<void> {
+      this.comments.push({ id, body, author });
+    }
+    override async updateState(id: string, state: string): Promise<void> {
+      this.states[id] = state;
+    }
+  }
+  const tracker = new BlockingTracker();
+  tracker.candidates = [issue("i1", "In Dev")];
+  tracker.byIds["i1"] = issue("i1", "In Dev");
+
+  const cfg = applyDefaults({
+    tracker: {
+      endpoint: "http://localhost:1",
+      active_states: ["In Dev", "Ready for Review"],
+      terminal_states: ["Done"],
+    },
+    workspace: { root },
+    agent: { max_concurrent_agents: 1, max_turns: 1 },
+    polling: { interval_ms: 1000 },
+  });
+
+  const orch = new Orchestrator({
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
+    runQuery: async function* () {
+      yield { type: "system", subtype: "init", session_id: "s-1" };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
+    },
+  });
+
+  await orch.tick();
+  await orch.drainPendingForTest();
+
+  expect(tracker.states.i1).toBe("Blocked");
+  expect(tracker.comments).toHaveLength(1);
+  expect(tracker.comments[0]).toMatchObject({ id: "i1", author: "agent" });
+  expect(tracker.comments[0]!.body).toContain("[AGENT MESSAGE]");
+  expect(tracker.comments[0]!.body).toContain("needs human attention");
+  expect(tracker.comments[0]!.body).toContain("In Dev");
+  expect(orch.state.retry_attempts.has("i1")).toBe(false);
+  expect(orch.state.claimed.has("i1")).toBe(false);
+});
+
+test("clean successful turns do not continue forever when tracker state is unchanged", async () => {
+  const root = await tmpRoot();
+  class BlockingTracker extends FakeControlPlane {
+    comments: { id: string; body: string; author?: "user" | "agent" }[] = [];
+    states: Record<string, string> = { i1: "In Dev" };
+    override async refreshWork(ids: string[]): Promise<NormalizedIssue[]> {
+      return ids.map((id) => issue(id, this.states[id] ?? "In Dev"));
+    }
+    override async addComment(id: string, body: string, author?: "user" | "agent"): Promise<void> {
+      this.comments.push({ id, body, author });
+    }
+    override async updateState(id: string, state: string): Promise<void> {
+      this.states[id] = state;
+    }
+  }
+  const tracker = new BlockingTracker();
+  tracker.candidates = [issue("i1", "In Dev")];
+  tracker.byIds["i1"] = issue("i1", "In Dev");
+
+  const cfg = applyDefaults({
+    tracker: {
+      endpoint: "http://localhost:1",
+      active_states: ["In Dev", "Ready for Review"],
+      terminal_states: ["Done"],
+    },
+    workspace: { root },
+    agent: { max_concurrent_agents: 1, max_turns: 5 },
+    polling: { interval_ms: 1000 },
+  });
+
+  let turns = 0;
+  const orch = new Orchestrator({
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
+    runQuery: async function* () {
+      turns += 1;
+      yield { type: "system", subtype: "init", session_id: `s-${turns}` };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
+    },
+  });
+
+  await orch.tick();
+  await orch.drainPendingForTest();
+
+  expect(turns).toBe(1);
+  expect(tracker.states.i1).toBe("Blocked");
+  expect(tracker.comments).toHaveLength(1);
+  expect(orch.state.retry_attempts.has("i1")).toBe(false);
+  expect(orch.state.claimed.has("i1")).toBe(false);
+});
+
+test("failed Ready for Review session blocks when tracker state is unchanged", async () => {
+  const root = await tmpRoot();
+  class BlockingTracker extends FakeControlPlane {
+    comments: { id: string; body: string; author?: "user" | "agent" }[] = [];
+    states: Record<string, string> = { i1: "Ready for Review" };
+    override async refreshWork(ids: string[]): Promise<NormalizedIssue[]> {
+      return ids.map((id) => issue(id, this.states[id] ?? "Ready for Review"));
+    }
+    override async addComment(id: string, body: string, author?: "user" | "agent"): Promise<void> {
+      this.comments.push({ id, body, author });
+    }
+    override async updateState(id: string, state: string): Promise<void> {
+      this.states[id] = state;
+    }
+  }
+  const tracker = new BlockingTracker();
+  tracker.candidates = [issue("i1", "Ready for Review")];
+  tracker.byIds["i1"] = issue("i1", "Ready for Review");
+
+  const cfg = applyDefaults({
+    tracker: {
+      endpoint: "http://localhost:1",
+      active_states: ["In Dev", "Ready for Review"],
+      terminal_states: ["Done"],
+    },
+    workspace: { root },
+    agent: { max_concurrent_agents: 1, max_turns: 1, max_retry_backoff_ms: 10 },
+    polling: { interval_ms: 1000 },
+  });
+
+  const orch = new Orchestrator({
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
+    runQuery: async function* () {
+      yield { type: "system", subtype: "init", session_id: "failed-review-thread" };
+      yield { type: "result", subtype: "error" };
+    },
+  });
+
+  await orch.tick();
+  await orch.drainPendingForTest();
+
+  expect(tracker.states.i1).toBe("Blocked");
+  expect(tracker.comments).toHaveLength(1);
+  expect(tracker.comments[0]).toMatchObject({ id: "i1", author: "agent" });
+  expect(tracker.comments[0]!.body).toContain("Ready for Review");
+  expect(orch.state.retry_attempts.has("i1")).toBe(false);
+  expect(orch.state.claimed.has("i1")).toBe(false);
+});
+
+test("failed retry resumes only while the issue remains in the same active state", async () => {
+  const root = await tmpRoot();
+  const tracker = new FakeControlPlane();
+  tracker.candidates = [issue("i1", "In Dev")];
+  tracker.byIds["i1"] = issue("i1", "In Dev");
+
+  const cfg = applyDefaults({
+    tracker: {
+      endpoint: "http://localhost:1",
+      active_states: ["In Dev", "Ready for Review"],
+      terminal_states: ["Done"],
+    },
+    workspace: { root },
+    agent: { max_concurrent_agents: 1, max_turns: 1, max_retry_backoff_ms: 10 },
+    polling: { interval_ms: 1000 },
+  });
+
+  const observedResumeSessionIds: Array<string | undefined> = [];
+  let dispatched = 0;
+  const orch = new Orchestrator({
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
+    runQuery: async function* (opts) {
+      observedResumeSessionIds.push(opts.resumeSessionId);
+      dispatched += 1;
+      if (dispatched === 1) {
+        yield { type: "system", subtype: "init", session_id: "failed-thread" };
+        yield { type: "result", subtype: "error" };
+        return;
+      }
+      yield { type: "system", subtype: "init", session_id: `s-${dispatched}` };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
+    },
+  });
+
+  await orch.tick();
+  await orch.drainPendingForTest();
+
+  await new Promise((r) => setTimeout(r, 30));
+  await orch.drainPendingForTest();
+
+  tracker.candidates = [issue("i1", "Ready for Review")];
+  tracker.byIds["i1"] = issue("i1", "Ready for Review");
+
+  await new Promise((r) => setTimeout(r, 1300));
+  await orch.drainPendingForTest();
+
+  expect(observedResumeSessionIds).toEqual([undefined, "failed-thread", undefined]);
 });
 
 test("tick respects max_concurrent_agents and queues the rest", async () => {

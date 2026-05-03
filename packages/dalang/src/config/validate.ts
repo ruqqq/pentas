@@ -95,6 +95,13 @@ export function validateForDispatch(cfg: WorkflowFrontMatter): void {
     );
   }
 
+  if (cfg.sandbox?.enabled === true && cfg.repo === null) {
+    throw new ValidationError(
+      "missing_repo_config",
+      "sandbox.enabled requires repo config so workers can clone the repository",
+    );
+  }
+
   if (cfg.agent_provider === "claude") {
     if (!cfg.claude || cfg.claude.executable_path.trim().length === 0) {
       throw new ValidationError(

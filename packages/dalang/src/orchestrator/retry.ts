@@ -1,5 +1,5 @@
 // packages/dalang/src/orchestrator/retry.ts
-import type { OrchestratorState } from "../types";
+import type { OrchestratorState, RetryEntry } from "../types";
 
 export function computeBackoffMs(attempt: number, capMs: number): number {
   const raw = 10000 * Math.pow(2, Math.max(attempt - 1, 0));
@@ -14,7 +14,9 @@ export interface ScheduleRetryOptions {
   attempt: number;
   delayMs: number;
   error: string | null;
-  onFire: (attempt: number) => void;
+  workflowState?: string | null;
+  resumeSessionId?: string | null;
+  onFire: (entry: RetryEntry) => void;
 }
 
 export function scheduleRetry(state: OrchestratorState, opts: ScheduleRetryOptions): void {
@@ -22,7 +24,18 @@ export function scheduleRetry(state: OrchestratorState, opts: ScheduleRetryOptio
   const handle = setTimeout(() => {
     const retry = state.retry_attempts.get(opts.issue_id);
     state.retry_attempts.delete(opts.issue_id);
-    opts.onFire(retry?.attempt ?? opts.attempt);
+    opts.onFire(
+      retry ?? {
+        issue_id: opts.issue_id,
+        identifier: opts.identifier,
+        attempt: opts.attempt,
+        due_at_ms: Date.now(),
+        timer_handle: null,
+        error: opts.error,
+        workflow_state: opts.workflowState ?? null,
+        resume_session_id: opts.resumeSessionId ?? null,
+      },
+    );
   }, opts.delayMs);
   state.retry_attempts.set(opts.issue_id, {
     issue_id: opts.issue_id,
@@ -31,6 +44,8 @@ export function scheduleRetry(state: OrchestratorState, opts: ScheduleRetryOptio
     due_at_ms: Date.now() + opts.delayMs,
     timer_handle: handle,
     error: opts.error,
+    workflow_state: opts.workflowState ?? null,
+    resume_session_id: opts.resumeSessionId ?? null,
   });
   state.claimed.add(opts.issue_id);
 }

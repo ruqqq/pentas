@@ -45,6 +45,7 @@ interface CommonRunQueryOptions {
   executablePath: string;
   abortSignal?: AbortSignal;
   resumeSessionId?: string;
+  onTranscriptPath?: (path: string) => void;
 }
 
 export type ClaudeRunQueryOptions = CommonRunQueryOptions & {
@@ -89,7 +90,9 @@ export interface RunAttemptDeps {
   isActiveState: (s: string) => boolean;
   runQuery: RunQuery;
   onEvent: (e: RuntimeEvent) => void;
+  onTranscriptPath?: (path: string) => void;
   abortSignal?: AbortSignal;
+  resumeSessionId?: string;
 }
 
 export interface RunAttemptResult {
@@ -130,8 +133,9 @@ export async function runAttempt(deps: RunAttemptDeps): Promise<RunAttemptResult
       config: deps.config,
       runQuery: deps.runQuery,
       onEvent: deps.onEvent,
+      ...(deps.onTranscriptPath ? { onTranscriptPath: deps.onTranscriptPath } : {}),
       abortSignal: deps.abortSignal,
-      resumeSessionId: threadId ?? undefined,
+      resumeSessionId: turnCount === 1 ? deps.resumeSessionId : undefined,
     });
 
     if (turn.thread_id) threadId = turn.thread_id;
@@ -154,7 +158,7 @@ export async function runAttempt(deps: RunAttemptDeps): Promise<RunAttemptResult
     const previousState = issue.state;
     issue = refreshed;
     if (!deps.isActiveState(issue.state)) break;
-    if (issue.state !== previousState) break;
+    if (issue.state === previousState) break;
     if (turnCount >= deps.config.maxTurns) break;
   }
 
@@ -167,6 +171,7 @@ interface DriveOneTurnOptions {
   config: AgentConfig;
   runQuery: RunQuery;
   onEvent: (e: RuntimeEvent) => void;
+  onTranscriptPath?: (path: string) => void;
   abortSignal?: AbortSignal;
   resumeSessionId?: string;
 }
@@ -194,6 +199,7 @@ async function driveOneTurn(opts: DriveOneTurnOptions): Promise<DriveOneTurnResu
       model: opts.config.model,
       executablePath: opts.config.executablePath,
       abortSignal: turnAbort.signal,
+      ...(opts.onTranscriptPath ? { onTranscriptPath: opts.onTranscriptPath } : {}),
       ...(opts.resumeSessionId !== undefined ? { resumeSessionId: opts.resumeSessionId } : {}),
     };
     const queryOpts: RunQueryOptions =

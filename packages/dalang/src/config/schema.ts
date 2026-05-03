@@ -1,5 +1,6 @@
 // packages/dalang/src/config/schema.ts
 import { z } from "zod";
+import { SandboxConfigSchema } from "./sandbox-schema";
 
 export const TrackerSchema = z.object({
   kind: z.literal("papan"),
@@ -360,6 +361,7 @@ const RawWorkflowFrontMatterSchema = z.preprocess(
       claude: ClaudeSchema.optional(),
       codex: CodexSchema.optional(),
       opencode: OpencodeSchema.optional(),
+      sandbox: SandboxConfigSchema.optional(),
       server: ServerSchema,
       pr_checks: PrChecksSchema,
     })
