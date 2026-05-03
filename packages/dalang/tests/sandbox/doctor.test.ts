@@ -16,6 +16,7 @@ import type {
 
 const config: SandboxConfig = {
   enabled: true,
+  disabled_states: [],
   image: { source: "image", tag: "fake" },
   resources: { cpus: "1", memory: "256m", pidsLimit: 256, tmpfsSize: "32m" },
   providers: {

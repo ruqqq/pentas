@@ -270,6 +270,10 @@ test("sandbox-enabled workflow with no disabled states checks sandbox auth store
     `---
 sandbox:
   enabled: true
+repo:
+  url: https://github.com/example/app.git
+  default_branch: main
+  branch_prefix: ""
 agent_provider: claude
 claude:
   executable_path: ${claudePath}
@@ -319,6 +323,10 @@ sandbox:
   enabled: true
   disabled_states:
     - "Ready for Review"
+repo:
+  url: https://github.com/example/app.git
+  default_branch: main
+  branch_prefix: ""
 agent_provider: claude
 claude:
   executable_path: ${claudePath}

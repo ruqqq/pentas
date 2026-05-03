@@ -162,11 +162,16 @@ export class Bootstrap {
         },
         "sandboxed runner selected",
       );
+      const sandboxRepo =
+        wf.config.repo === null || wf.config.repo === undefined
+          ? undefined
+          : { url: wf.config.repo.url, defaultBranch: wf.config.repo.default_branch };
       sandboxRunQuery = createSandboxedRunQuery({
         host: new DockerContainerHost(),
         store: new FilesystemAuthStore(defaultStoreRoot()),
         sandboxesRoot,
         repoDir: process.cwd(),
+        repo: sandboxRepo,
         config: wf.config.sandbox!,
         shimCmdOverride: sandboxWorkerCommand(),
         onLifecycleEvent: (e) => {

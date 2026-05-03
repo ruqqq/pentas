@@ -43,6 +43,28 @@ test("accepts a complete valid config", () => {
   expect(() => validateForDispatch(cfg)).not.toThrow();
 });
 
+test("rejects sandbox enabled config without repo clone settings", () => {
+  const cfg = baseConfig();
+  cfg.sandbox = {
+    enabled: true,
+    disabled_states: [],
+    image: { source: "image", tag: "fake" },
+    resources: { cpus: "1", memory: "256m", pidsLimit: 256, tmpfsSize: "32m" },
+    providers: {
+      claude: { executablePath: "claude" },
+      codex: { executablePath: "codex" },
+      opencode: { executablePath: "opencode" },
+    },
+  };
+
+  expect(() => validateForDispatch(cfg)).toThrow(ValidationError);
+  try {
+    validateForDispatch(cfg);
+  } catch (err) {
+    expect((err as ValidationError).code).toBe("missing_repo_config");
+  }
+});
+
 test("rejects when control_plane $VAR api_key is unresolved", () => {
   const cfg = applyDefaults({
     control_plane: {

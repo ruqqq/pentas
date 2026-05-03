@@ -5,7 +5,13 @@ import { join, resolve } from "node:path";
 import { FakeContainerHost } from "../../src/sandbox/fake-host";
 import { FilesystemAuthStore } from "../../src/auth/store";
 import { createSandboxedRunQuery } from "../../src/sandbox/sandboxed-runner";
-import type { ContainerHost, ContainerStartOptions } from "../../src/sandbox/types";
+import type {
+  ContainerHandle,
+  ContainerHost,
+  ContainerStartOptions,
+  ExecOptions,
+  ExecResult,
+} from "../../src/sandbox/types";
 
 const fixtureShim = resolve(import.meta.dir, "..", "fixtures", "worker", "echo-shim.ts");
 const dumpInvocationShim = resolve(
@@ -24,6 +30,29 @@ class RecordingHost extends FakeContainerHost implements ContainerHost {
   }
 }
 
+class RecordingExecHost implements ContainerHost {
+  startOptions: ContainerStartOptions | null = null;
+  execOptions: ExecOptions | null = null;
+
+  async start(opts: ContainerStartOptions): Promise<ContainerHandle> {
+    this.startOptions = opts;
+    return {
+      name: opts.name,
+      exec: async (execOpts: ExecOptions): Promise<ExecResult> => {
+        this.execOptions = execOpts;
+        return {
+          stdout: (async function* () {
+            yield JSON.stringify({ kind: "finished" });
+          })(),
+          stderr: (async function* () {})(),
+          done: Promise.resolve({ exitCode: 0, signal: null }),
+        };
+      },
+      stop: async () => {},
+    };
+  }
+}
+
 test("sandboxed RunQuery for claude provider drains echo-shim through full lifecycle", async () => {
   const credDir = await realpath(await mkdtemp(join(tmpdir(), "sbr-cred-")));
   const sandboxesRoot = await realpath(await mkdtemp(join(tmpdir(), "sbr-sb-")));
@@ -37,6 +66,7 @@ test("sandboxed RunQuery for claude provider drains echo-shim through full lifec
     repoDir: process.cwd(),
     config: {
       enabled: true,
+      disabled_states: [],
       image: { source: "image", tag: "fake" },
       resources: { cpus: "1", memory: "256m", pidsLimit: 256, tmpfsSize: "32m" },
       providers: {
@@ -76,6 +106,7 @@ test("sandboxed RunQuery reports a host transcript path under .dalang/sandbox-se
     repoDir: process.cwd(),
     config: {
       enabled: true,
+      disabled_states: [],
       image: { source: "image", tag: "fake" },
       resources: { cpus: "1", memory: "256m", pidsLimit: 256, tmpfsSize: "32m" },
       providers: {
@@ -123,6 +154,7 @@ test("sandboxed RunQuery includes sandbox Codex env in the worker invocation", a
     repoDir: process.cwd(),
     config: {
       enabled: true,
+      disabled_states: [],
       image: { source: "image", tag: "fake" },
       resources: { cpus: "1", memory: "256m", pidsLimit: 256, tmpfsSize: "32m" },
       git: { userName: "Dalang Bot", userEmail: "dalang@example.com" },
@@ -179,6 +211,7 @@ test("sandboxed RunQuery starts worker inside checkout directory under mounted w
     repoDir: process.cwd(),
     config: {
       enabled: true,
+      disabled_states: [],
       image: { source: "image", tag: "fake" },
       resources: { cpus: "1", memory: "256m", pidsLimit: 256, tmpfsSize: "32m" },
       providers: {
@@ -216,7 +249,62 @@ test("sandboxed RunQuery starts worker inside checkout directory under mounted w
   });
 });
 
-test("sandboxed RunQuery mounts the host git common dir for absolute worktree gitdir pointers", async () => {
+test("sandboxed RunQuery clones the repository inside the worker instead of bind-mounting it", async () => {
+  const credDir = await realpath(await mkdtemp(join(tmpdir(), "sbr-cred-")));
+  const sandboxesRoot = await realpath(await mkdtemp(join(tmpdir(), "sbr-sb-")));
+  const workspaceRoot = await realpath(await mkdtemp(join(tmpdir(), "sbr-ws-")));
+  const checkout = join(workspaceRoot, "meem-class-review");
+  await mkdir(checkout);
+
+  const store = new FilesystemAuthStore(credDir);
+  await store.setClaudeToken("sk-ant-oat01-xyz");
+  const host = new RecordingExecHost();
+
+  const runQuery = createSandboxedRunQuery({
+    host,
+    store,
+    sandboxesRoot,
+    repoDir: process.cwd(),
+    repo: {
+      url: "https://github.com/example/meem.git",
+      defaultBranch: "main",
+    },
+    config: {
+      enabled: true,
+      disabled_states: [],
+      image: { source: "image", tag: "fake" },
+      resources: { cpus: "1", memory: "256m", pidsLimit: 256, tmpfsSize: "32m" },
+      providers: {
+        claude: { executablePath: "claude" },
+        codex: { executablePath: "codex" },
+        opencode: { executablePath: "opencode" },
+      },
+    },
+    shimCmdOverride: ["/opt/dalang/bayang"],
+  });
+
+  for await (const _ev of runQuery({
+    prompt: "hi",
+    cwd: checkout,
+    model: "claude-haiku-4-5-20251001",
+    executablePath: "claude",
+    claude: { permissionMode: "default" },
+  })) {
+    // drain
+  }
+
+  expect(host.startOptions?.bindMounts).toEqual([]);
+  expect(host.execOptions?.cwd).toBeUndefined();
+  expect(host.execOptions?.cmd.slice(0, 2)).toEqual(["sh", "-lc"]);
+  const script = host.execOptions?.cmd[2] ?? "";
+  expect(script).toContain("git clone");
+  expect(script).toContain("https://github.com/example/meem.git");
+  expect(script).toContain("/workspace/meem-class-review");
+  const invocation = JSON.parse(host.execOptions?.env?.BAYANG_INVOCATION ?? "{}");
+  expect(invocation.cwd).toBe("/workspace/meem-class-review");
+});
+
+test("sandboxed RunQuery does not mount the host git common dir when repository cloning is configured", async () => {
   const credDir = await realpath(await mkdtemp(join(tmpdir(), "sbr-cred-")));
   const sandboxesRoot = await realpath(await mkdtemp(join(tmpdir(), "sbr-sb-")));
   const workspaceRoot = await realpath(await mkdtemp(join(tmpdir(), "sbr-ws-")));
@@ -230,15 +318,20 @@ test("sandboxed RunQuery mounts the host git common dir for absolute worktree gi
 
   const store = new FilesystemAuthStore(credDir);
   await store.setCodexAuthJson('{"access_token":"test"}');
-  const host = new RecordingHost();
+  const host = new RecordingExecHost();
 
   const runQuery = createSandboxedRunQuery({
     host,
     store,
     sandboxesRoot,
     repoDir: process.cwd(),
+    repo: {
+      url: "https://github.com/example/meem.git",
+      defaultBranch: "main",
+    },
     config: {
       enabled: true,
+      disabled_states: [],
       image: { source: "image", tag: "fake" },
       resources: { cpus: "1", memory: "256m", pidsLimit: 256, tmpfsSize: "32m" },
       providers: {
@@ -264,9 +357,14 @@ test("sandboxed RunQuery mounts the host git common dir for absolute worktree gi
     // drain
   }
 
+  expect(host.startOptions?.bindMounts).not.toContainEqual(
+    expect.objectContaining({
+      hostPath: sharedGitDir,
+    }),
+  );
   expect(host.startOptions?.bindMounts).toContainEqual({
-    hostPath: sharedGitDir,
-    containerPath: sharedGitDir,
+    hostPath: join(sandboxesRoot, host.startOptions!.name, "codex"),
+    containerPath: "/run/dalang/codex",
     readOnly: false,
   });
 });
@@ -284,6 +382,7 @@ test("sandboxed RunQuery does not forward resumeSessionId into disposable worker
     repoDir: process.cwd(),
     config: {
       enabled: true,
+      disabled_states: [],
       image: { source: "image", tag: "fake" },
       resources: { cpus: "1", memory: "256m", pidsLimit: 256, tmpfsSize: "32m" },
       providers: {

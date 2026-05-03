@@ -1,11 +1,15 @@
 import type { RunQuery, RunQueryOptions } from "../agent/agent-runner";
 import type { AuthStore } from "../auth/store";
 import type { SandboxConfig } from "../config/sandbox-schema";
-import { readFile } from "node:fs/promises";
-import { basename, dirname, join, posix, resolve } from "node:path";
+import { basename, dirname, join, posix } from "node:path";
 import { resolveImage } from "./image-source";
 import { runWorkerSession, type WorkerSessionLifecycleEvent } from "./worker-lifecycle";
 import type { ContainerHost, BindMount } from "./types";
+
+export interface SandboxRepoCloneConfig {
+  url: string;
+  defaultBranch: string;
+}
 
 export interface SandboxedRunnerDeps {
   host: ContainerHost;
@@ -16,6 +20,8 @@ export interface SandboxedRunnerDeps {
   transcriptRoot?: string;
   /** Absolute path to the repo on the host. */
   repoDir: string;
+  /** Repository source workers clone inside the container. */
+  repo?: SandboxRepoCloneConfig;
   config: SandboxConfig;
   /** Override the exec command (testing). Default uses `/opt/dalang/bayang`. */
   shimCmdOverride?: string[];
@@ -33,27 +39,6 @@ let workerCounter = 0;
 
 function defaultSandboxTranscriptRoot(sandboxesRoot: string): string {
   return join(dirname(sandboxesRoot), "sandbox-sessions");
-}
-
-async function resolveWorktreeGitCommonDir(worktreePath: string): Promise<string | null> {
-  let dotGit;
-  try {
-    dotGit = await readFile(join(worktreePath, ".git"), "utf8");
-  } catch {
-    return null;
-  }
-  const match = dotGit.match(/^gitdir:\s*(.+?)\s*$/m);
-  if (match?.[1] === undefined) return null;
-
-  const gitDir = resolve(worktreePath, match[1]);
-  try {
-    const commonDir = (await readFile(join(gitDir, "commondir"), "utf8")).trim();
-    if (commonDir.length > 0) return resolve(gitDir, commonDir);
-  } catch {
-    // A linked worktree normally has commondir; if it does not, mounting the
-    // gitdir itself still makes the absolute .git pointer usable in-container.
-  }
-  return gitDir;
 }
 
 function buildInvocation(
@@ -114,6 +99,30 @@ function providerOf(opts: RunQueryOptions): "claude" | "codex" | "opencode" {
   throw new Error("createSandboxedRunQuery: cannot determine provider");
 }
 
+function shellQuote(s: string): string {
+  return `'${s.replace(/'/g, "'\\''")}'`;
+}
+
+function buildCloneBootstrapCommand(args: {
+  repo: SandboxRepoCloneConfig;
+  workspaceRoot: string;
+  checkoutDir: string;
+  shimCmd: string[];
+}): string[] {
+  const script = [
+    "set -eu",
+    `mkdir -p ${shellQuote(args.workspaceRoot)}`,
+    `if [ ! -d ${shellQuote(posix.join(args.checkoutDir, ".git"))} ]; then`,
+    `  rm -rf ${shellQuote(args.checkoutDir)}`,
+    `  git clone ${shellQuote(args.repo.url)} ${shellQuote(args.checkoutDir)}`,
+    "fi",
+    `cd ${shellQuote(args.checkoutDir)}`,
+    `git checkout -B ${shellQuote(basename(args.checkoutDir))} ${shellQuote(`origin/${args.repo.defaultBranch}`)} 2>/dev/null || git checkout -B ${shellQuote(basename(args.checkoutDir))}`,
+    `exec ${args.shimCmd.map(shellQuote).join(" ")}`,
+  ].join("\n");
+  return ["sh", "-lc", script];
+}
+
 export function createSandboxedRunQuery(deps: SandboxedRunnerDeps): RunQuery {
   return (opts: RunQueryOptions): AsyncIterable<unknown> => {
     return {
@@ -131,18 +140,27 @@ export function createSandboxedRunQuery(deps: SandboxedRunnerDeps): RunQuery {
         const containerWorkspaceRoot =
           image.kind === "compose" ? DALANG_COMPOSE_WORKSPACE : image.workspaceFolder;
         const containerCwd = posix.join(containerWorkspaceRoot, basename(opts.cwd));
-        const worktreeMount: BindMount = {
-          hostPath: dirname(opts.cwd),
-          containerPath: containerWorkspaceRoot,
-          readOnly: false,
-        };
-        const gitCommonDir = await resolveWorktreeGitCommonDir(opts.cwd);
-        const gitMounts: BindMount[] =
-          gitCommonDir === null
-            ? []
-            : [{ hostPath: gitCommonDir, containerPath: gitCommonDir, readOnly: false }];
+        const bindMounts: BindMount[] =
+          deps.repo === undefined
+            ? [
+                {
+                  hostPath: dirname(opts.cwd),
+                  containerPath: containerWorkspaceRoot,
+                  readOnly: false,
+                },
+              ]
+            : [];
 
         const shimCmd = deps.shimCmdOverride ?? [DEFAULT_SHIM_CONTAINER_PATH];
+        const workerCmd =
+          deps.repo === undefined
+            ? shimCmd
+            : buildCloneBootstrapCommand({
+                repo: deps.repo,
+                workspaceRoot: containerWorkspaceRoot,
+                checkoutDir: containerCwd,
+                shimCmd,
+              });
         const invocation =
           deps.invocationOverride ??
           buildInvocation(opts, deps.config.providers, containerCwd, deps.config.git);
@@ -158,9 +176,9 @@ export function createSandboxedRunQuery(deps: SandboxedRunnerDeps): RunQuery {
           sandboxesRoot: deps.sandboxesRoot,
           workerId,
           image,
-          bindMounts: [worktreeMount, ...gitMounts],
+          bindMounts,
           resources: deps.config.resources,
-          shim: { cmd: shimCmd, cwd: containerCwd },
+          shim: { cmd: workerCmd, cwd: deps.repo === undefined ? containerCwd : undefined },
           invocation,
           provider,
           transcriptPath,

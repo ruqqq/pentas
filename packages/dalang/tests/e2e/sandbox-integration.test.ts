@@ -64,6 +64,7 @@ WORKDIR /workspace
     repoDir,
     config: {
       enabled: true,
+      disabled_states: [],
       image: { source: "dockerfile", path: "Dockerfile" },
       resources: { cpus: "1", memory: "512m", pidsLimit: 512, tmpfsSize: "64m" },
       providers: {
