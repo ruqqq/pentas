@@ -4,7 +4,7 @@ import type { SandboxConfig } from "../config/sandbox-schema";
 import { basename, dirname, join, posix } from "node:path";
 import { resolveImage } from "./image-source";
 import { runWorkerSession, type WorkerSessionLifecycleEvent } from "./worker-lifecycle";
-import type { ContainerHost, BindMount } from "./types";
+import type { ContainerHost, BindMount, ResolvedImage } from "./types";
 
 export interface SandboxRepoCloneConfig {
   url: string;
@@ -92,6 +92,10 @@ function buildInvocation(
 
 const DALANG_COMPOSE_WORKSPACE = "/run/dalang/workspace";
 
+function workspaceRootForImage(image: ResolvedImage): string {
+  return image.kind === "compose" ? DALANG_COMPOSE_WORKSPACE : image.workspaceFolder;
+}
+
 function providerOf(opts: RunQueryOptions): "claude" | "codex" | "opencode" {
   if (opts.claude) return "claude";
   if (opts.codex) return "codex";
@@ -132,13 +136,14 @@ export function createSandboxedRunQuery(deps: SandboxedRunnerDeps): RunQuery {
 
         const image = await resolveImage(deps.config.image, deps.repoDir);
 
-        // For compose-mode images the user's compose file already mounts something at
-        // image.workspaceFolder (typically /workspace). Adding a second mount at the
-        // same path yields undefined behavior, so dalang uses a controlled path
-        // (/run/dalang/workspace) and points the agent's cwd there. Image-mode keeps
-        // the worktree at image.workspaceFolder so the user's expectation holds.
+        // For bind-mount mode, compose images usually already mount
+        // image.workspaceFolder, so we intentionally use a separate mount target
+        // to avoid undefined compose overlay behavior.
+        // For clone mode, no host mount is used and we can safely operate at
+        // image.workspaceFolder, matching the compose image's expected workspace
+        // layout.
         const containerWorkspaceRoot =
-          image.kind === "compose" ? DALANG_COMPOSE_WORKSPACE : image.workspaceFolder;
+          deps.repo === undefined ? workspaceRootForImage(image) : image.workspaceFolder;
         const containerCwd = posix.join(containerWorkspaceRoot, basename(opts.cwd));
         const bindMounts: BindMount[] =
           deps.repo === undefined

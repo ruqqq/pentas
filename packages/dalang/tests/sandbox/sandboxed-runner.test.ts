@@ -304,6 +304,69 @@ test("sandboxed RunQuery clones the repository inside the worker instead of bind
   expect(invocation.cwd).toBe("/workspace/meem-class-review");
 });
 
+test("sandboxed RunQuery clones into compose image workspaceFolder when no host mount is used", async () => {
+  const repoDir = await realpath(await mkdtemp(join(tmpdir(), "sbr-compose-rd-")));
+  const configDir = join(repoDir, ".devcontainer");
+  const workspaceFolder = "/project";
+  const checkout = join(repoDir, "meem-class-review");
+  await mkdir(checkout);
+  await mkdir(configDir, { recursive: true });
+  await writeFile(
+    join(configDir, "devcontainer.json"),
+    JSON.stringify({
+      name: "compose-workspace-root",
+      service: "app",
+      dockerComposeFile: "compose.yml",
+      workspaceFolder,
+    }),
+  );
+
+  const credDir = await realpath(await mkdtemp(join(tmpdir(), "sbr-cred-")));
+  const sandboxesRoot = await realpath(await mkdtemp(join(tmpdir(), "sbr-sb-")));
+  const store = new FilesystemAuthStore(credDir);
+  await store.setClaudeToken("sk-ant-oat01-xyz");
+  const host = new RecordingExecHost();
+
+  const runQuery = createSandboxedRunQuery({
+    host,
+    store,
+    sandboxesRoot,
+    repoDir,
+    repo: {
+      url: "https://github.com/example/meem.git",
+      defaultBranch: "main",
+    },
+    config: {
+      enabled: true,
+      disabled_states: [],
+      image: { source: "devcontainer", path: ".devcontainer" },
+      resources: { cpus: "1", memory: "256m", pidsLimit: 256, tmpfsSize: "32m" },
+      providers: {
+        claude: { executablePath: "claude" },
+        codex: { executablePath: "codex" },
+        opencode: { executablePath: "opencode" },
+      },
+    },
+    shimCmdOverride: ["/opt/dalang/bayang"],
+  });
+
+  for await (const _ev of runQuery({
+    prompt: "hi",
+    cwd: checkout,
+    model: "claude-haiku-4-5-20251001",
+    executablePath: "claude",
+    claude: { permissionMode: "default" },
+  })) {
+    // drain
+  }
+
+  const script = host.execOptions?.cmd[2] ?? "";
+  const expectedCheckout = `${workspaceFolder}/meem-class-review`;
+  expect(script).toContain(expectedCheckout);
+  const invocation = JSON.parse(host.execOptions?.env?.BAYANG_INVOCATION ?? "{}");
+  expect(invocation.cwd).toBe(expectedCheckout);
+});
+
 test("sandboxed RunQuery does not mount the host git common dir when repository cloning is configured", async () => {
   const credDir = await realpath(await mkdtemp(join(tmpdir(), "sbr-cred-")));
   const sandboxesRoot = await realpath(await mkdtemp(join(tmpdir(), "sbr-sb-")));
