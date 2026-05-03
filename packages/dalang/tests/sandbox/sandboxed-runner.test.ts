@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { mkdir, mkdtemp, realpath } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { FakeContainerHost } from "../../src/sandbox/fake-host";
@@ -213,6 +213,61 @@ test("sandboxed RunQuery starts worker inside checkout directory under mounted w
   expect(events[0]).toMatchObject({
     provider: "codex",
     cwd: "/workspace/meem-class-review",
+  });
+});
+
+test("sandboxed RunQuery mounts the host git common dir for absolute worktree gitdir pointers", async () => {
+  const credDir = await realpath(await mkdtemp(join(tmpdir(), "sbr-cred-")));
+  const sandboxesRoot = await realpath(await mkdtemp(join(tmpdir(), "sbr-sb-")));
+  const workspaceRoot = await realpath(await mkdtemp(join(tmpdir(), "sbr-ws-")));
+  const checkout = join(workspaceRoot, "meem-class-review");
+  const sharedGitDir = join(workspaceRoot, ".repo.git");
+  const worktreeGitDir = join(sharedGitDir, "worktrees", "meem-class-review");
+  await mkdir(checkout);
+  await mkdir(worktreeGitDir, { recursive: true });
+  await writeFile(join(checkout, ".git"), `gitdir: ${worktreeGitDir}\n`);
+  await writeFile(join(worktreeGitDir, "commondir"), "../..");
+
+  const store = new FilesystemAuthStore(credDir);
+  await store.setCodexAuthJson('{"access_token":"test"}');
+  const host = new RecordingHost();
+
+  const runQuery = createSandboxedRunQuery({
+    host,
+    store,
+    sandboxesRoot,
+    repoDir: process.cwd(),
+    config: {
+      enabled: true,
+      image: { source: "image", tag: "fake" },
+      resources: { cpus: "1", memory: "256m", pidsLimit: 256, tmpfsSize: "32m" },
+      providers: {
+        claude: { executablePath: "claude" },
+        codex: { executablePath: "codex" },
+        opencode: { executablePath: "opencode" },
+      },
+    },
+    shimCmdOverride: [process.execPath, "run", dumpInvocationShim],
+  });
+
+  for await (const _ev of runQuery({
+    prompt: "hi",
+    cwd: checkout,
+    model: "gpt-5.5",
+    executablePath: "codex",
+    codex: {
+      sandboxMode: "workspace-write",
+      approvalPolicy: "never",
+      networkAccessEnabled: true,
+    },
+  })) {
+    // drain
+  }
+
+  expect(host.startOptions?.bindMounts).toContainEqual({
+    hostPath: sharedGitDir,
+    containerPath: sharedGitDir,
+    readOnly: false,
   });
 });
 

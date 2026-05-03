@@ -1,7 +1,8 @@
 import type { RunQuery, RunQueryOptions } from "../agent/agent-runner";
 import type { AuthStore } from "../auth/store";
 import type { SandboxConfig } from "../config/sandbox-schema";
-import { basename, dirname, join, posix } from "node:path";
+import { readFile } from "node:fs/promises";
+import { basename, dirname, join, posix, resolve } from "node:path";
 import { resolveImage } from "./image-source";
 import { runWorkerSession, type WorkerSessionLifecycleEvent } from "./worker-lifecycle";
 import type { ContainerHost, BindMount } from "./types";
@@ -32,6 +33,27 @@ let workerCounter = 0;
 
 function defaultSandboxTranscriptRoot(sandboxesRoot: string): string {
   return join(dirname(sandboxesRoot), "sandbox-sessions");
+}
+
+async function resolveWorktreeGitCommonDir(worktreePath: string): Promise<string | null> {
+  let dotGit;
+  try {
+    dotGit = await readFile(join(worktreePath, ".git"), "utf8");
+  } catch {
+    return null;
+  }
+  const match = dotGit.match(/^gitdir:\s*(.+?)\s*$/m);
+  if (match?.[1] === undefined) return null;
+
+  const gitDir = resolve(worktreePath, match[1]);
+  try {
+    const commonDir = (await readFile(join(gitDir, "commondir"), "utf8")).trim();
+    if (commonDir.length > 0) return resolve(gitDir, commonDir);
+  } catch {
+    // A linked worktree normally has commondir; if it does not, mounting the
+    // gitdir itself still makes the absolute .git pointer usable in-container.
+  }
+  return gitDir;
 }
 
 function buildInvocation(
@@ -114,6 +136,11 @@ export function createSandboxedRunQuery(deps: SandboxedRunnerDeps): RunQuery {
           containerPath: containerWorkspaceRoot,
           readOnly: false,
         };
+        const gitCommonDir = await resolveWorktreeGitCommonDir(opts.cwd);
+        const gitMounts: BindMount[] =
+          gitCommonDir === null
+            ? []
+            : [{ hostPath: gitCommonDir, containerPath: gitCommonDir, readOnly: false }];
 
         const shimCmd = deps.shimCmdOverride ?? [DEFAULT_SHIM_CONTAINER_PATH];
         const invocation =
@@ -131,7 +158,7 @@ export function createSandboxedRunQuery(deps: SandboxedRunnerDeps): RunQuery {
           sandboxesRoot: deps.sandboxesRoot,
           workerId,
           image,
-          bindMounts: [worktreeMount],
+          bindMounts: [worktreeMount, ...gitMounts],
           resources: deps.config.resources,
           shim: { cmd: shimCmd, cwd: containerCwd },
           invocation,
