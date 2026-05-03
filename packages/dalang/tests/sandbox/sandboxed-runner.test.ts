@@ -75,6 +75,7 @@ test("sandboxed RunQuery for claude provider drains echo-shim through full lifec
         opencode: { executablePath: "opencode" },
       },
     },
+    transcriptRoot: await realpath(await mkdtemp(join(tmpdir(), "sbr-events-"))),
     shimCmdOverride: [process.execPath, "run", fixtureShim],
     invocationOverride: { items: [{ probe: "ok" }] },
   });
@@ -92,10 +93,11 @@ test("sandboxed RunQuery for claude provider drains echo-shim through full lifec
   expect(events).toEqual([{ probe: "ok" }]);
 });
 
-test("sandboxed RunQuery reports a host transcript path under .dalang/sandbox-sessions", async () => {
+test("sandboxed RunQuery reports a host transcript path under .dalang/sandbox-events", async () => {
   const credDir = await realpath(await mkdtemp(join(tmpdir(), "sbr-cred-")));
   const workspaceRoot = await realpath(await mkdtemp(join(tmpdir(), "sbr-ws-")));
-  const sandboxesRoot = join(workspaceRoot, ".dalang", "sandboxes");
+  const transcriptRoot = await realpath(await mkdtemp(join(tmpdir(), "sbr-events-")));
+  const sandboxesRoot = await realpath(await mkdtemp(join(tmpdir(), "sbr-sb-")));
   const store = new FilesystemAuthStore(credDir);
   await store.setClaudeToken("sk-ant-oat01-xyz");
 
@@ -115,6 +117,7 @@ test("sandboxed RunQuery reports a host transcript path under .dalang/sandbox-se
         opencode: { executablePath: "opencode" },
       },
     },
+    transcriptRoot,
     shimCmdOverride: [process.execPath, "run", fixtureShim],
     invocationOverride: { items: [{ probe: "ok" }] },
     workerIdFactory: () => "dalang-worker-test-1",
@@ -137,7 +140,7 @@ test("sandboxed RunQuery reports a host transcript path under .dalang/sandbox-se
 
   expect(events).toEqual([{ probe: "ok" }]);
   expect(transcriptPath).toBe(
-    join(workspaceRoot, ".dalang", "sandbox-sessions", "dalang-worker-test-1.jsonl"),
+    join(transcriptRoot, "dalang-worker-test-1.jsonl"),
   );
 });
 
@@ -164,6 +167,7 @@ test("sandboxed RunQuery includes sandbox Codex env in the worker invocation", a
         opencode: { executablePath: "opencode" },
       },
     },
+    transcriptRoot: await realpath(await mkdtemp(join(tmpdir(), "sbr-events-"))),
     shimCmdOverride: [process.execPath, "run", dumpInvocationShim],
   });
 
@@ -220,6 +224,7 @@ test("sandboxed RunQuery starts worker inside checkout directory under mounted w
         opencode: { executablePath: "opencode" },
       },
     },
+    transcriptRoot: await realpath(await mkdtemp(join(tmpdir(), "sbr-events-"))),
     shimCmdOverride: [process.execPath, "run", dumpInvocationShim],
   });
 
@@ -280,6 +285,7 @@ test("sandboxed RunQuery clones the repository inside the worker instead of bind
         opencode: { executablePath: "opencode" },
       },
     },
+    transcriptRoot: await realpath(await mkdtemp(join(tmpdir(), "sbr-events-"))),
     shimCmdOverride: ["/opt/dalang/bayang"],
   });
 
@@ -347,6 +353,7 @@ test("sandboxed RunQuery clones into compose image workspaceFolder when no host 
         opencode: { executablePath: "opencode" },
       },
     },
+    transcriptRoot: await realpath(await mkdtemp(join(tmpdir(), "sbr-events-"))),
     shimCmdOverride: ["/opt/dalang/bayang"],
   });
 
@@ -401,6 +408,7 @@ test("sandboxed clone bootstrap passes codex env and enables ssh token-aware aut
         opencode: { executablePath: "opencode" },
       },
     },
+    transcriptRoot: await realpath(await mkdtemp(join(tmpdir(), "sbr-events-"))),
     shimCmdOverride: ["/opt/dalang/bayang"],
   });
 
@@ -465,6 +473,7 @@ test("sandboxed RunQuery does not mount the host git common dir when repository 
         opencode: { executablePath: "opencode" },
       },
     },
+    transcriptRoot: await realpath(await mkdtemp(join(tmpdir(), "sbr-events-"))),
     shimCmdOverride: [process.execPath, "run", dumpInvocationShim],
   });
 
@@ -516,6 +525,7 @@ test("sandboxed RunQuery does not forward resumeSessionId into disposable worker
         opencode: { executablePath: "opencode" },
       },
     },
+    transcriptRoot: await realpath(await mkdtemp(join(tmpdir(), "sbr-events-"))),
     shimCmdOverride: [process.execPath, "run", dumpInvocationShim],
   });
 

@@ -131,9 +131,8 @@ export class Bootstrap {
       const { DockerContainerHost, sweepOrphanWorkers } = await import("../sandbox/docker-host");
       const { FilesystemAuthStore, defaultStoreRoot } = await import("../auth/store");
       const { createSandboxedRunQuery } = await import("../sandbox/sandboxed-runner");
-      const { resolve } = await import("node:path");
-      const { expandPath } = await import("../config/env-resolver");
-      const sandboxesRoot = resolve(expandPath(wf.config.workspace.root), ".dalang", "sandboxes");
+      const { defaultSandboxesRoot } = await import("../sandbox/paths");
+      const sandboxesRoot = defaultSandboxesRoot();
 
       // Best-effort cleanup of bayang artifacts whose owning dalang
       // process is no longer running. Safe to run even if other dalang

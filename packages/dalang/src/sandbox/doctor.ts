@@ -1,10 +1,10 @@
-import { resolve } from "node:path";
 import { prepareWorkerCredentials, type AuthProvider } from "../auth/projector";
 import type { AuthStore } from "../auth/store";
 import type { SandboxConfig } from "../config/sandbox-schema";
 import { setupGitIdentity } from "../worker/github-git-auth";
 import { resolveImage } from "./image-source";
 import type { BindMount, ContainerHost, ContainerHandle } from "./types";
+import { defaultSandboxesRoot as defaultSandboxWorkersRoot } from "./paths";
 
 export interface SandboxDoctorCheck {
   name: string;
@@ -228,8 +228,8 @@ export async function runSandboxDoctor(opts: SandboxDoctorOptions): Promise<Sand
   }
 }
 
-export function defaultSandboxesRoot(workspaceRoot: string): string {
-  return resolve(workspaceRoot, ".dalang", "sandboxes");
+export function defaultSandboxesRoot(): string {
+  return defaultSandboxWorkersRoot();
 }
 
 function toolProbeScript(tool: string): string {

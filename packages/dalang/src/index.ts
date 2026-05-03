@@ -27,7 +27,7 @@ if (args.command === "lint") {
 if (args.command === "sandbox-doctor") {
   const { loadWorkflow } = await import("./config/workflow-loader");
   const { validateForDispatch } = await import("./config/validate");
-  const { expandPath, resolveGithubToken } = await import("./config/env-resolver");
+  const { resolveGithubToken } = await import("./config/env-resolver");
   const { FilesystemAuthStore, defaultStoreRoot } = await import("./auth/store");
   const { DockerContainerHost } = await import("./sandbox/docker-host");
   const { defaultSandboxesRoot, runSandboxDoctor } = await import("./sandbox/doctor");
@@ -37,11 +37,10 @@ if (args.command === "sandbox-doctor") {
     if (wf.config.sandbox?.enabled !== true) {
       throw new Error("sandbox doctor requires sandbox.enabled: true");
     }
-    const workspaceRoot = expandPath(wf.config.workspace.root);
     const result = await runSandboxDoctor({
       host: new DockerContainerHost(),
       store: new FilesystemAuthStore(defaultStoreRoot()),
-      sandboxesRoot: defaultSandboxesRoot(workspaceRoot),
+      sandboxesRoot: defaultSandboxesRoot(),
       repoDir: process.cwd(),
       workspaceDir: process.cwd(),
       config: wf.config.sandbox,

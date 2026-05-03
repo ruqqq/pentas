@@ -333,7 +333,7 @@ test("orchestrator uses sandbox-reported transcript path for running session vie
     polling: { interval_ms: 1000 },
   });
 
-  const transcriptPath = join(root, ".dalang", "sandbox-sessions", "dalang-worker-test.jsonl");
+  const transcriptPath = join(tmpdir(), "dalang-worker-test.jsonl");
   const orch = new Orchestrator({
     controlPlane: tracker,
     config: cfg,

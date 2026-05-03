@@ -5,6 +5,7 @@ import { basename, dirname, join, posix } from "node:path";
 import { resolveImage } from "./image-source";
 import { runWorkerSession, type WorkerSessionLifecycleEvent } from "./worker-lifecycle";
 import type { ContainerHost, BindMount, ResolvedImage } from "./types";
+import { defaultSandboxTranscriptRoot } from "./paths";
 
 export interface SandboxRepoCloneConfig {
   url: string;
@@ -36,10 +37,6 @@ export interface SandboxedRunnerDeps {
 const DEFAULT_SHIM_CONTAINER_PATH = "/opt/dalang/bayang";
 
 let workerCounter = 0;
-
-function defaultSandboxTranscriptRoot(sandboxesRoot: string): string {
-  return join(dirname(sandboxesRoot), "sandbox-sessions");
-}
 
 function buildInvocation(
   opts: RunQueryOptions,
@@ -198,7 +195,7 @@ export function createSandboxedRunQuery(deps: SandboxedRunnerDeps): RunQuery {
           buildInvocation(opts, deps.config.providers, containerCwd, deps.config.git);
         const bootstrapEnv = cloneBootstrapEnv(opts, deps.config.providers);
         const transcriptPath = join(
-          deps.transcriptRoot ?? defaultSandboxTranscriptRoot(deps.sandboxesRoot),
+          deps.transcriptRoot ?? defaultSandboxTranscriptRoot(),
           `${workerId}.jsonl`,
         );
         opts.onTranscriptPath?.(transcriptPath);

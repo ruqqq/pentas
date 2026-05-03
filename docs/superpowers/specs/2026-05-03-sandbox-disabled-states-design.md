@@ -69,7 +69,7 @@ Logs should include `execution_mode: "sandbox" | "host"` when spawning an agent.
 
 Transcript behavior follows the selected runner:
 
-- Sandboxed sessions continue writing raw provider events to `.dalang/sandbox-sessions/<workerId>.jsonl`.
+- Sandboxed sessions continue writing raw provider events to `.dalang/sandbox-events/<workerId>.jsonl`.
 - Host sessions keep the existing provider transcript behavior.
 
 ## Error Handling

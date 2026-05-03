@@ -138,7 +138,7 @@ The HTTP server includes a simple parsed JSONL session viewer for running agents
 - `GET /sessions/:id` renders the transcript as a table with raw JSON expandable per line.
 - `GET /api/v1/sessions/:id/transcript?max_lines=1000` returns the parsed transcript JSON.
 
-`:id` can be the issue id, issue identifier, session id, or provider thread id. Non-sandboxed Claude and Codex use their native transcript JSONL paths. Non-sandboxed opencode events are captured by dalang under `~/.dalang/opencode-sessions/<session_id>.jsonl`. Sandboxed workers record the streamed raw provider events on the host under `.dalang/sandbox-sessions/<workerId>.jsonl`, so the session viewer keeps working while the disposable container is running.
+`:id` can be the issue id, issue identifier, session id, or provider thread id. Non-sandboxed Claude and Codex use their native transcript JSONL paths. Non-sandboxed opencode events are captured by dalang under `~/.dalang/opencode-sessions/<session_id>.jsonl`. Sandboxed workers record the streamed raw provider events on the host under `.dalang/sandbox-events/<workerId>.jsonl`, so the session viewer keeps working while the disposable container is running.
 
 ---
 
@@ -179,7 +179,7 @@ For each picked-up item, dalang:
 5. Executes the image-baked `bayang` shim at `/opt/dalang/bayang`.
 6. Projects the active provider credential into the container.
 7. Executes the shim with a JSON invocation in `BAYANG_INVOCATION`.
-8. Streams provider events back to the orchestrator and records them on the host under `.dalang/sandbox-sessions/<workerId>.jsonl`.
+8. Streams provider events back to the orchestrator and records them on the host under `.dalang/sandbox-events/<workerId>.jsonl`.
 9. Tears the worker down and disposes projected credentials.
 
 The sandbox image must include an executable `bayang` at `/opt/dalang/bayang`.
