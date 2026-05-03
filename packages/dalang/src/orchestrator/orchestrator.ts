@@ -271,6 +271,7 @@ export class Orchestrator {
       { issue_id: issue.id, identifier: issue.identifier, workspace_path: cwd, attempt },
       "spawning agent",
     );
+    let sandboxTranscriptPath: string | null = null;
     const result = await runAttempt({
       issue,
       attempt,
@@ -305,15 +306,18 @@ export class Orchestrator {
       isActiveState: (s) =>
         this.cfg.control_plane.active_states.some((x) => x.toLowerCase() === s.toLowerCase()),
       runQuery: this.runQuery,
+      onTranscriptPath: (path) => {
+        sandboxTranscriptPath = path;
+        const entry = this.state.running.get(issue.id);
+        if (entry?.session) entry.session.transcript_path = path;
+      },
       onEvent: (e) => {
         const entry = this.state.running.get(issue.id);
         if (!entry) return;
         if (entry.session === null) {
-          const transcriptPath = transcriptPathFor(
-            entry.workspace_path,
-            e.thread_id,
-            entry.agent_provider,
-          );
+          const transcriptPath =
+            sandboxTranscriptPath ??
+            transcriptPathFor(entry.workspace_path, e.thread_id, entry.agent_provider);
           entry.session = {
             session_id: e.thread_id ? `${e.thread_id}-1` : "?-1",
             thread_id: e.thread_id ?? "?",
@@ -347,11 +351,9 @@ export class Orchestrator {
         if (e.thread_id && entry.session.thread_id !== e.thread_id) {
           entry.session.thread_id = e.thread_id;
           entry.session.session_id = `${e.thread_id}-1`;
-          entry.session.transcript_path = transcriptPathFor(
-            entry.workspace_path,
-            e.thread_id,
-            entry.agent_provider,
-          );
+          entry.session.transcript_path =
+            sandboxTranscriptPath ??
+            transcriptPathFor(entry.workspace_path, e.thread_id, entry.agent_provider);
           this.log.info(
             {
               issue_id: issue.id,

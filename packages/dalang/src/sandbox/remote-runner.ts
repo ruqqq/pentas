@@ -1,4 +1,6 @@
 import type { ContainerHandle } from "./types";
+import { appendFile, mkdir } from "node:fs/promises";
+import { dirname } from "node:path";
 
 export interface RemoteRunOptions {
   handle: ContainerHandle;
@@ -12,6 +14,8 @@ export interface RemoteRunOptions {
   abortSignal?: AbortSignal;
   /** JSON-serializable invocation written to the shim's stdin once at startup. */
   invocation: unknown;
+  /** Optional host-side JSONL path for raw provider events streamed by the shim. */
+  transcriptPath?: string;
 }
 
 interface ProviderEvent {
@@ -42,6 +46,11 @@ async function collectStderrTail(stderr: AsyncIterable<string>): Promise<string>
   return stderrTail.trim();
 }
 
+async function recordTranscriptEvent(path: string, payload: unknown): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  await appendFile(path, `${JSON.stringify(payload)}\n`, "utf8");
+}
+
 export async function* remoteRunQuery(opts: RemoteRunOptions): AsyncGenerator<unknown> {
   // ContainerHandle.exec doesn't support stdin in Phase 1's API. We pass the
   // invocation JSON via an env var: bayang reads it from env when stdin is
@@ -69,6 +78,7 @@ export async function* remoteRunQuery(opts: RemoteRunOptions): AsyncGenerator<un
     }
     if (!isWorkerEvent(parsed)) continue;
     if (parsed.kind === "provider_event") {
+      if (opts.transcriptPath) await recordTranscriptEvent(opts.transcriptPath, parsed.payload);
       yield parsed.payload;
     } else if (parsed.kind === "error") {
       sawError = parsed;

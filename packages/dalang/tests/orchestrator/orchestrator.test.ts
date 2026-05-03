@@ -177,6 +177,46 @@ test("github-projects codex env injects only GitHub tokens", async () => {
   }
 });
 
+test("orchestrator uses sandbox-reported transcript path for running session viewer", async () => {
+  const root = await tmpRoot();
+  const tracker = new FakeControlPlane();
+  tracker.candidates = [issue("i1")];
+  tracker.byIds["i1"] = issue("i1");
+  let releaseTurn: () => void = () => {};
+
+  const cfg = applyDefaults({
+    tracker: { endpoint: "http://localhost:1", active_states: ["Todo"], terminal_states: ["Done"] },
+    workspace: { root },
+    agent: { max_concurrent_agents: 1, max_turns: 1 },
+    polling: { interval_ms: 1000 },
+  });
+
+  const transcriptPath = join(root, ".dalang", "sandbox-sessions", "dalang-worker-test.jsonl");
+  const orch = new Orchestrator({
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
+    runQuery: async function* (opts) {
+      opts.onTranscriptPath?.(transcriptPath);
+      yield { type: "system", subtype: "init", session_id: "sandbox-session" };
+      await new Promise<void>((resolve) => {
+        releaseTurn = resolve;
+      });
+      tracker.byIds["i1"] = issue("i1", "Done");
+      yield { type: "result", subtype: "success" };
+    },
+  });
+
+  await orch.tick();
+  await Bun.sleep(10);
+
+  const running = orch.state.running.get("i1");
+  expect(running?.session?.transcript_path).toBe(transcriptPath);
+
+  releaseTurn();
+  await orch.drainPendingForTest();
+});
+
 test("workspace is removed when issue disappears between completion and continuation retry", async () => {
   const root = await tmpRoot();
   class RefreshFailingTracker extends FakeControlPlane {

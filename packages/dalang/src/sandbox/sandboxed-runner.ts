@@ -1,7 +1,7 @@
 import type { RunQuery, RunQueryOptions } from "../agent/agent-runner";
 import type { AuthStore } from "../auth/store";
 import type { SandboxConfig } from "../config/sandbox-schema";
-import { basename, dirname, posix } from "node:path";
+import { basename, dirname, join, posix } from "node:path";
 import { resolveImage } from "./image-source";
 import { runWorkerSession, type WorkerSessionLifecycleEvent } from "./worker-lifecycle";
 import type { ContainerHost, BindMount } from "./types";
@@ -11,6 +11,8 @@ export interface SandboxedRunnerDeps {
   store: AuthStore;
   /** Where per-worker tmpdirs live (e.g. dalang state dir). */
   sandboxesRoot: string;
+  /** Where host-side sandbox provider transcripts are written. */
+  transcriptRoot?: string;
   /** Absolute path to the repo on the host. */
   repoDir: string;
   config: SandboxConfig;
@@ -27,6 +29,10 @@ export interface SandboxedRunnerDeps {
 const DEFAULT_SHIM_CONTAINER_PATH = "/opt/dalang/bayang";
 
 let workerCounter = 0;
+
+function defaultSandboxTranscriptRoot(sandboxesRoot: string): string {
+  return join(dirname(sandboxesRoot), "sandbox-sessions");
+}
 
 function buildInvocation(
   opts: RunQueryOptions,
@@ -113,6 +119,11 @@ export function createSandboxedRunQuery(deps: SandboxedRunnerDeps): RunQuery {
         const invocation =
           deps.invocationOverride ??
           buildInvocation(opts, deps.config.providers, containerCwd, deps.config.git);
+        const transcriptPath = join(
+          deps.transcriptRoot ?? defaultSandboxTranscriptRoot(deps.sandboxesRoot),
+          `${workerId}.jsonl`,
+        );
+        opts.onTranscriptPath?.(transcriptPath);
 
         yield* runWorkerSession({
           host: deps.host,
@@ -125,6 +136,7 @@ export function createSandboxedRunQuery(deps: SandboxedRunnerDeps): RunQuery {
           shim: { cmd: shimCmd, cwd: containerCwd },
           invocation,
           provider,
+          transcriptPath,
           ...(deps.onLifecycleEvent ? { onLifecycleEvent: deps.onLifecycleEvent } : {}),
           ...(opts.abortSignal ? { abortSignal: opts.abortSignal } : {}),
         });

@@ -45,6 +45,7 @@ interface CommonRunQueryOptions {
   executablePath: string;
   abortSignal?: AbortSignal;
   resumeSessionId?: string;
+  onTranscriptPath?: (path: string) => void;
 }
 
 export type ClaudeRunQueryOptions = CommonRunQueryOptions & {
@@ -89,6 +90,7 @@ export interface RunAttemptDeps {
   isActiveState: (s: string) => boolean;
   runQuery: RunQuery;
   onEvent: (e: RuntimeEvent) => void;
+  onTranscriptPath?: (path: string) => void;
   abortSignal?: AbortSignal;
   resumeSessionId?: string;
 }
@@ -131,6 +133,7 @@ export async function runAttempt(deps: RunAttemptDeps): Promise<RunAttemptResult
       config: deps.config,
       runQuery: deps.runQuery,
       onEvent: deps.onEvent,
+      ...(deps.onTranscriptPath ? { onTranscriptPath: deps.onTranscriptPath } : {}),
       abortSignal: deps.abortSignal,
       resumeSessionId: turnCount === 1 ? deps.resumeSessionId : undefined,
     });
@@ -168,6 +171,7 @@ interface DriveOneTurnOptions {
   config: AgentConfig;
   runQuery: RunQuery;
   onEvent: (e: RuntimeEvent) => void;
+  onTranscriptPath?: (path: string) => void;
   abortSignal?: AbortSignal;
   resumeSessionId?: string;
 }
@@ -195,6 +199,7 @@ async function driveOneTurn(opts: DriveOneTurnOptions): Promise<DriveOneTurnResu
       model: opts.config.model,
       executablePath: opts.config.executablePath,
       abortSignal: turnAbort.signal,
+      ...(opts.onTranscriptPath ? { onTranscriptPath: opts.onTranscriptPath } : {}),
       ...(opts.resumeSessionId !== undefined ? { resumeSessionId: opts.resumeSessionId } : {}),
     };
     const queryOpts: RunQueryOptions =

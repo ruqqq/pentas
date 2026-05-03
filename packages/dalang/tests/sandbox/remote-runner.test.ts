@@ -1,5 +1,7 @@
 import { test, expect } from "bun:test";
-import { resolve } from "node:path";
+import { mkdtemp, readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { FakeContainerHost } from "../../src/sandbox/fake-host";
 import { remoteRunQuery } from "../../src/sandbox/remote-runner";
 import type {
@@ -38,6 +40,36 @@ test("remoteRunQuery yields provider_event payloads from the shim until finished
       events.push(ev);
     }
     expect(events).toEqual([{ a: 1 }, { b: 2 }]);
+  } finally {
+    await handle.stop();
+  }
+});
+
+test("remoteRunQuery records provider_event payloads to a host JSONL transcript", async () => {
+  const host = new FakeContainerHost();
+  const handle = await host.start({
+    name: "remote-runner-transcript",
+    image: dummyImage,
+    bindMounts: [],
+    env: {},
+    resources: { cpus: "1", memory: "256m", pidsLimit: 256, tmpfsSize: "32m" },
+  });
+  const transcriptDir = await mkdtemp(join(tmpdir(), "dalang-remote-transcript-"));
+  const transcriptPath = join(transcriptDir, "worker.jsonl");
+  try {
+    const events: unknown[] = [];
+    for await (const ev of remoteRunQuery({
+      handle,
+      shimCmd: [process.execPath, "run", fixtureShim],
+      invocation: { items: [{ a: 1 }, { b: 2 }] },
+      transcriptPath,
+    })) {
+      events.push(ev);
+    }
+
+    expect(events).toEqual([{ a: 1 }, { b: 2 }]);
+    const lines = (await readFile(transcriptPath, "utf8")).trim().split("\n");
+    expect(lines.map((line) => JSON.parse(line))).toEqual([{ a: 1 }, { b: 2 }]);
   } finally {
     await handle.stop();
   }

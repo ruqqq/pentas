@@ -36,6 +36,7 @@ export interface WorkerSessionOptions {
   shim: { cmd: string[]; cwd?: string };
   invocation: unknown;
   provider: AuthProvider;
+  transcriptPath?: string;
   onLifecycleEvent?: (e: WorkerSessionLifecycleEvent) => void;
   abortSignal?: AbortSignal;
 }
@@ -105,6 +106,7 @@ export async function* runWorkerSession(opts: WorkerSessionOptions): AsyncGenera
       cwd: opts.shim.cwd,
       env: creds.env,
       invocation: opts.invocation,
+      transcriptPath: opts.transcriptPath,
       abortSignal: opts.abortSignal,
     });
   } catch (err) {

@@ -62,6 +62,54 @@ test("sandboxed RunQuery for claude provider drains echo-shim through full lifec
   expect(events).toEqual([{ probe: "ok" }]);
 });
 
+test("sandboxed RunQuery reports a host transcript path under .dalang/sandbox-sessions", async () => {
+  const credDir = await realpath(await mkdtemp(join(tmpdir(), "sbr-cred-")));
+  const workspaceRoot = await realpath(await mkdtemp(join(tmpdir(), "sbr-ws-")));
+  const sandboxesRoot = join(workspaceRoot, ".dalang", "sandboxes");
+  const store = new FilesystemAuthStore(credDir);
+  await store.setClaudeToken("sk-ant-oat01-xyz");
+
+  const runQuery = createSandboxedRunQuery({
+    host: new FakeContainerHost(),
+    store,
+    sandboxesRoot,
+    repoDir: process.cwd(),
+    config: {
+      enabled: true,
+      image: { source: "image", tag: "fake" },
+      resources: { cpus: "1", memory: "256m", pidsLimit: 256, tmpfsSize: "32m" },
+      providers: {
+        claude: { executablePath: "claude" },
+        codex: { executablePath: "codex" },
+        opencode: { executablePath: "opencode" },
+      },
+    },
+    shimCmdOverride: [process.execPath, "run", fixtureShim],
+    invocationOverride: { items: [{ probe: "ok" }] },
+    workerIdFactory: () => "dalang-worker-test-1",
+  });
+
+  let transcriptPath: string | undefined;
+  const events: unknown[] = [];
+  for await (const ev of runQuery({
+    prompt: "hi",
+    cwd: process.cwd(),
+    model: "claude-haiku-4-5-20251001",
+    executablePath: "claude",
+    claude: { permissionMode: "default" },
+    onTranscriptPath: (path) => {
+      transcriptPath = path;
+    },
+  })) {
+    events.push(ev);
+  }
+
+  expect(events).toEqual([{ probe: "ok" }]);
+  expect(transcriptPath).toBe(
+    join(workspaceRoot, ".dalang", "sandbox-sessions", "dalang-worker-test-1.jsonl"),
+  );
+});
+
 test("sandboxed RunQuery includes sandbox Codex env in the worker invocation", async () => {
   const credDir = await realpath(await mkdtemp(join(tmpdir(), "sbr-cred-")));
   const sandboxesRoot = await realpath(await mkdtemp(join(tmpdir(), "sbr-sb-")));
