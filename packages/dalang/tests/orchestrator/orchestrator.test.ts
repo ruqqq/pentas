@@ -429,6 +429,57 @@ test("successful session blocks the ticket when tracker state is unchanged", asy
   expect(orch.state.claimed.has("i1")).toBe(false);
 });
 
+test("failed Ready for Review session blocks when tracker state is unchanged", async () => {
+  const root = await tmpRoot();
+  class BlockingTracker extends FakeControlPlane {
+    comments: { id: string; body: string; author?: "user" | "agent" }[] = [];
+    states: Record<string, string> = { i1: "Ready for Review" };
+    override async refreshWork(ids: string[]): Promise<NormalizedIssue[]> {
+      return ids.map((id) => issue(id, this.states[id] ?? "Ready for Review"));
+    }
+    override async addComment(id: string, body: string, author?: "user" | "agent"): Promise<void> {
+      this.comments.push({ id, body, author });
+    }
+    override async updateState(id: string, state: string): Promise<void> {
+      this.states[id] = state;
+    }
+  }
+  const tracker = new BlockingTracker();
+  tracker.candidates = [issue("i1", "Ready for Review")];
+  tracker.byIds["i1"] = issue("i1", "Ready for Review");
+
+  const cfg = applyDefaults({
+    tracker: {
+      endpoint: "http://localhost:1",
+      active_states: ["In Dev", "Ready for Review"],
+      terminal_states: ["Done"],
+    },
+    workspace: { root },
+    agent: { max_concurrent_agents: 1, max_turns: 1, max_retry_backoff_ms: 10 },
+    polling: { interval_ms: 1000 },
+  });
+
+  const orch = new Orchestrator({
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
+    runQuery: async function* () {
+      yield { type: "system", subtype: "init", session_id: "failed-review-thread" };
+      yield { type: "result", subtype: "error" };
+    },
+  });
+
+  await orch.tick();
+  await orch.drainPendingForTest();
+
+  expect(tracker.states.i1).toBe("Blocked");
+  expect(tracker.comments).toHaveLength(1);
+  expect(tracker.comments[0]).toMatchObject({ id: "i1", author: "agent" });
+  expect(tracker.comments[0]!.body).toContain("Ready for Review");
+  expect(orch.state.retry_attempts.has("i1")).toBe(false);
+  expect(orch.state.claimed.has("i1")).toBe(false);
+});
+
 test("failed retry resumes only while the issue remains in the same active state", async () => {
   const root = await tmpRoot();
   const tracker = new FakeControlPlane();

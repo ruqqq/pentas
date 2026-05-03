@@ -429,6 +429,12 @@ export class Orchestrator {
         onFire: (retry) => this.handleRetryFire(retry),
       });
     } else {
+      if (
+        issue.state.toLowerCase() === "ready for review" &&
+        (await this.blockUnchangedSuccessfulIssue(issue))
+      ) {
+        return;
+      }
       const nextAttempt = (attempt ?? 0) + 1;
       const delay = computeBackoffMs(nextAttempt, this.cfg.agent.max_retry_backoff_ms);
       this.log.warn(
