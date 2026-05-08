@@ -10,8 +10,7 @@ export interface WorkflowLintDiagnostic {
     | "workflow_load_error"
     | "unknown_liquid_variable"
     | "unknown_liquid_filter"
-    | "invalid_liquid_for"
-    | "invalid_pr_checks_state";
+    | "invalid_liquid_for";
   message: string;
 }
 
@@ -147,7 +146,6 @@ export async function lintWorkflow(path: string): Promise<WorkflowLintResult> {
   }
 
   diagnostics.push(...lintLiquidTemplate(loaded.promptTemplate));
-  diagnostics.push(...lintPrChecksStates(loaded.config));
   return { ok: diagnostics.length === 0, diagnostics };
 }
 
@@ -408,36 +406,6 @@ function normalizePath(path: string): string {
 
 function stripLiquidStrings(expression: string): string {
   return expression.replace(/"[^"]*"|'[^']*'/g, "");
-}
-
-function lintPrChecksStates(cfg: WorkflowFrontMatter): WorkflowLintDiagnostic[] {
-  if (cfg.control_plane.kind !== "github-projects") return [];
-  const prChecks = cfg.control_plane.pr_checks;
-  if (!prChecks?.enabled) return [];
-
-  const allowed = new Set([
-    ...cfg.control_plane.active_states,
-    ...cfg.control_plane.terminal_states,
-  ]);
-  const expected = [...allowed].join(", ");
-  const checks = [
-    ["wait_state", prChecks.wait_state],
-    ["pass_state", prChecks.pass_state],
-    ["fail_state", prChecks.fail_state],
-    ["escalation_state", prChecks.escalation_state],
-  ] as const;
-
-  return checks.flatMap(([field, state]) =>
-    allowed.has(state)
-      ? []
-      : [
-          {
-            severity: "error" as const,
-            code: "invalid_pr_checks_state" as const,
-            message: `Unknown pr_checks.${field} \`${state}\`; expected one of: ${expected}`,
-          },
-        ],
-  );
 }
 
 interface LiquidFilterRegistry {

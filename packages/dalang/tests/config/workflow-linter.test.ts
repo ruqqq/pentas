@@ -333,7 +333,7 @@ test("lint rejects unknown filters and invalid for collections", async () => {
   );
 });
 
-test("lint validates github-projects pr_checks states", async () => {
+test("lint accepts github-projects pr_checks handoff states outside active and terminal states", async () => {
   const path = await writeWorkflow(
     "{{ issue.title }}",
     `
@@ -361,14 +361,6 @@ control_plane:
 
   const result = await lintWorkflow(path);
 
-  expect(result.ok).toBe(false);
-  expect(result.diagnostics.map((d) => d.message)).toContain(
-    "Unknown pr_checks.wait_state `Waiting PR Checks`; expected one of: In Dev, Done",
-  );
-  expect(result.diagnostics.map((d) => d.message)).toContain(
-    "Unknown pr_checks.pass_state `Ready for Human Review`; expected one of: In Dev, Done",
-  );
-  expect(result.diagnostics.map((d) => d.message)).toContain(
-    "Unknown pr_checks.escalation_state `Ready for Human Review`; expected one of: In Dev, Done",
-  );
+  expect(result.ok).toBe(true);
+  expect(result.diagnostics).toEqual([]);
 });
