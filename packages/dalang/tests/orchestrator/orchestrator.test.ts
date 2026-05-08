@@ -554,6 +554,68 @@ test("successful continuation retry does not redispatch when issue remains in th
   expect(orch.state.completed.has("i1")).toBe(true);
 });
 
+test("pr check bounce can redispatch after successful handoff to wait state", async () => {
+  const root = await tmpRoot();
+  class RefreshFailingTracker extends FakeControlPlane {
+    override async refreshWork(_ids: string[]): Promise<NormalizedIssue[]> {
+      throw new Error("refresh unavailable");
+    }
+  }
+  const tracker = new RefreshFailingTracker();
+  tracker.candidates = [issue("i1", "In Dev")];
+  tracker.byIds["i1"] = issue("i1", "In Dev");
+
+  const cfg = applyDefaults({
+    tracker: {
+      endpoint: "http://localhost:1",
+      active_states: ["In Dev", "Ready for Review"],
+      terminal_states: ["Done"],
+    },
+    workspace: { root },
+    agent: { max_concurrent_agents: 1, max_turns: 1 },
+    polling: { interval_ms: 1000 },
+  });
+
+  let dispatched = 0;
+  const orch = new Orchestrator({
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
+    runQuery: async function* () {
+      dispatched += 1;
+      yield { type: "system", subtype: "init", session_id: `s-${dispatched}` };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
+    },
+  });
+
+  await orch.tick();
+  await orch.drainPendingForTest();
+  expect(dispatched).toBe(1);
+  expect(orch.state.completed.has("i1")).toBe(true);
+  expect(orch.state.retry_attempts.has("i1")).toBe(true);
+
+  tracker.candidates = [];
+  tracker.byIds["i1"] = issue("i1", "Waiting PR Checks");
+
+  await new Promise((r) => setTimeout(r, 1300));
+  await orch.drainPendingForTest();
+
+  expect(orch.state.retry_attempts.has("i1")).toBe(false);
+  expect(orch.state.claimed.has("i1")).toBe(false);
+
+  tracker.candidates = [issue("i1", "In Dev")];
+  tracker.byIds["i1"] = issue("i1", "In Dev");
+
+  await orch.tick();
+  await orch.drainPendingForTest();
+
+  expect(dispatched).toBe(2);
+});
+
 test("successful session blocks the ticket when tracker state is unchanged", async () => {
   const root = await tmpRoot();
   class BlockingTracker extends FakeControlPlane {

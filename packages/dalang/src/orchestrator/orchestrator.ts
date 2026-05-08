@@ -563,6 +563,7 @@ export class Orchestrator {
           "post-completion cleanup failed",
         );
       });
+      this.state.completed.delete(issueId);
       releaseClaim(this.state, issueId);
       return;
     }
