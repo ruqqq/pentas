@@ -456,6 +456,28 @@ export class Orchestrator {
         onFire: (retry) => this.handleRetryFire(retry),
       });
     } else {
+      if (result.reason === "turn_cancelled") {
+        const refreshed = await this.refreshCancelledIssue(issue);
+        if (
+          refreshed !== null &&
+          !this.cfg.control_plane.active_states.some(
+            (state) => state.toLowerCase() === refreshed.state.toLowerCase(),
+          )
+        ) {
+          this.state.completed.delete(issue.id);
+          releaseClaim(this.state, issue.id);
+          this.log.info(
+            {
+              issue_id: issue.id,
+              identifier: issue.identifier,
+              previous_state: issue.state,
+              current_state: refreshed.state,
+            },
+            "task cancelled after tracker state handoff; not retrying",
+          );
+          return;
+        }
+      }
       if (
         issue.state.toLowerCase() === "ready for review" &&
         (await this.blockUnchangedSuccessfulIssue(issue))
@@ -484,6 +506,18 @@ export class Orchestrator {
         resumeSessionId: result.thread_id,
         onFire: (retry) => this.handleRetryFire(retry),
       });
+    }
+  }
+
+  private async refreshCancelledIssue(issue: NormalizedIssue): Promise<NormalizedIssue | null> {
+    try {
+      return (await this.controlPlane.refreshWork([issue.id]))[0] ?? null;
+    } catch (err) {
+      this.log.warn(
+        { issue_id: issue.id, identifier: issue.identifier, err: (err as Error).message },
+        "cancelled task state refresh failed; falling back to retry",
+      );
+      return null;
     }
   }
 

@@ -780,6 +780,51 @@ test("failed Ready for Review session blocks when tracker state is unchanged", a
   expect(orch.state.claimed.has("i1")).toBe(false);
 });
 
+test("cancelled turn after state handoff does not schedule a retry", async () => {
+  const root = await tmpRoot();
+  const tracker = new FakeControlPlane();
+  tracker.candidates = [issue("i1", "Ready for Review")];
+  tracker.byIds["i1"] = issue("i1", "Ready for Review");
+
+  const cfg = applyDefaults({
+    tracker: {
+      endpoint: "http://localhost:1",
+      active_states: ["In Dev", "Ready for Review"],
+      terminal_states: ["Done"],
+    },
+    workspace: { root },
+    agent: { max_concurrent_agents: 1, max_turns: 1, max_retry_backoff_ms: 10 },
+    polling: { interval_ms: 1000 },
+  });
+
+  let started = false;
+  const orch = new Orchestrator({
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
+    runQuery: async function* (opts) {
+      started = true;
+      yield { type: "system", subtype: "init", session_id: "handoff-thread" };
+      await new Promise<void>((resolve) => opts.abortSignal?.addEventListener("abort", () => resolve(), { once: true }));
+    },
+  });
+
+  await orch.tick();
+  await new Promise((r) => setTimeout(r, 10));
+  expect(started).toBe(true);
+  expect(orch.state.running.has("i1")).toBe(true);
+
+  tracker.candidates = [];
+  tracker.byIds["i1"] = issue("i1", "Waiting PR Checks");
+
+  await orch.tick();
+  await orch.drainPendingForTest();
+
+  expect(orch.state.running.has("i1")).toBe(false);
+  expect(orch.state.retry_attempts.has("i1")).toBe(false);
+  expect(orch.state.claimed.has("i1")).toBe(false);
+});
+
 test("failed retry resumes only while the issue remains in the same active state", async () => {
   const root = await tmpRoot();
   const tracker = new FakeControlPlane();
