@@ -288,12 +288,22 @@ export class Orchestrator {
     }
 
     const runner = this.selectRunQuery(issue.state);
+    const agentConfigResult = this.buildAgentConfig(issue.state);
     this.log.info(
       {
         issue_id: issue.id,
         identifier: issue.identifier,
         workspace_path: cwd,
         attempt,
+        model: agentConfigResult.config.model,
+        reasoning_effort:
+          agentConfigResult.config.provider === "claude"
+            ? agentConfigResult.config.effort
+            : agentConfigResult.config.provider === "codex"
+              ? agentConfigResult.config.modelReasoningEffort
+              : undefined,
+        state_override_applied: agentConfigResult.state_override_applied,
+        state_override_key: agentConfigResult.state_override_key,
         execution_mode: runner.execution_mode,
       },
       "spawning agent",
@@ -305,7 +315,7 @@ export class Orchestrator {
       promptTemplate: this.promptTemplate,
       workspacePath: cwd,
       controlPlane: this.buildControlPlanePromptContext(),
-      config: this.buildAgentConfig(),
+      config: agentConfigResult.config,
       trackerRefresh: async (id) => {
         const r = await this.controlPlane.refreshWork([id]).catch(() => []);
         return r[0] ?? null;
@@ -647,51 +657,86 @@ export class Orchestrator {
     this.dispatch(issue, retry.attempt, resumeSessionId);
   }
 
-  private buildAgentConfig(): AgentConfig {
+  private buildAgentConfig(state: string): {
+    config: AgentConfig;
+    state_override_applied: boolean;
+    state_override_key?: string;
+  } {
     const common = {
       maxTurns: this.cfg.agent.max_turns,
     };
     if (this.cfg.agent_provider === "codex") {
       if (!this.cfg.codex) throw new Error("codex block missing despite agent_provider=codex");
+      const override = this.findStateOverride(this.cfg.codex.state_overrides, state);
       return {
-        provider: "codex",
-        ...common,
-        model: this.cfg.codex.model,
-        executablePath: this.cfg.codex.executable_path,
-        turnTimeoutMs: this.cfg.codex.turn_timeout_ms,
-        readTimeoutMs: this.cfg.codex.read_timeout_ms,
-        stallTimeoutMs: this.cfg.codex.stall_timeout_ms,
-        sandboxMode: this.cfg.codex.sandbox_mode,
-        approvalPolicy: this.cfg.codex.approval_policy,
-        networkAccessEnabled: this.cfg.codex.network_access_enabled,
-        env: this.buildCodexEnv(),
+        config: {
+          provider: "codex",
+          ...common,
+          model: override?.override.model ?? this.cfg.codex.model,
+          executablePath: this.cfg.codex.executable_path,
+          turnTimeoutMs: this.cfg.codex.turn_timeout_ms,
+          readTimeoutMs: this.cfg.codex.read_timeout_ms,
+          stallTimeoutMs: this.cfg.codex.stall_timeout_ms,
+          sandboxMode: this.cfg.codex.sandbox_mode,
+          approvalPolicy: this.cfg.codex.approval_policy,
+          networkAccessEnabled: this.cfg.codex.network_access_enabled,
+          modelReasoningEffort:
+            override?.override.model_reasoning_effort ?? this.cfg.codex.model_reasoning_effort,
+          env: this.buildCodexEnv(),
+        },
+        state_override_applied: override !== undefined,
+        state_override_key: override?.key,
       };
     }
     if (this.cfg.agent_provider === "opencode") {
       if (!this.cfg.opencode)
         throw new Error("opencode block missing despite agent_provider=opencode");
       const oc = this.cfg.opencode;
+      const override = this.findStateOverride(oc.state_overrides, state);
       return {
-        provider: "opencode",
-        ...common,
-        model: oc.model,
-        executablePath: oc.executable_path,
-        turnTimeoutMs: oc.turn_timeout_ms,
-        readTimeoutMs: oc.read_timeout_ms,
-        stallTimeoutMs: oc.stall_timeout_ms,
+        config: {
+          provider: "opencode",
+          ...common,
+          model: override?.override.model ?? oc.model,
+          executablePath: oc.executable_path,
+          turnTimeoutMs: oc.turn_timeout_ms,
+          readTimeoutMs: oc.read_timeout_ms,
+          stallTimeoutMs: oc.stall_timeout_ms,
+        },
+        state_override_applied: override !== undefined,
+        state_override_key: override?.key,
       };
     }
     if (!this.cfg.claude) throw new Error("claude block missing despite agent_provider=claude");
+    const override = this.findStateOverride(this.cfg.claude.state_overrides, state);
     return {
-      provider: "claude",
-      ...common,
-      model: this.cfg.claude.model,
-      executablePath: this.cfg.claude.executable_path,
-      turnTimeoutMs: this.cfg.claude.turn_timeout_ms,
-      readTimeoutMs: this.cfg.claude.read_timeout_ms,
-      stallTimeoutMs: this.cfg.claude.stall_timeout_ms,
-      permissionMode: this.cfg.claude.permission_mode,
+      config: {
+        provider: "claude",
+        ...common,
+        model: override?.override.model ?? this.cfg.claude.model,
+        executablePath: this.cfg.claude.executable_path,
+        turnTimeoutMs: this.cfg.claude.turn_timeout_ms,
+        readTimeoutMs: this.cfg.claude.read_timeout_ms,
+        stallTimeoutMs: this.cfg.claude.stall_timeout_ms,
+        permissionMode: this.cfg.claude.permission_mode,
+        effort: override?.override.effort ?? this.cfg.claude.effort,
+      },
+      state_override_applied: override !== undefined,
+      state_override_key: override?.key,
     };
+  }
+
+  private findStateOverride<T>(
+    overrides: Record<string, T>,
+    state: string,
+  ): { key: string; override: T } | undefined {
+    const target = state.toLowerCase();
+    for (const [key, override] of Object.entries(overrides)) {
+      if (key.toLowerCase() === target) {
+        return { key, override };
+      }
+    }
+    return undefined;
   }
 
   private async assertGitWorkspace(cwd: string): Promise<void> {

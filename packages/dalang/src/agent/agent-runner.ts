@@ -22,6 +22,7 @@ export interface CommonAgentConfig {
 export interface ClaudeAgentConfig extends CommonAgentConfig {
   provider: "claude";
   permissionMode: "auto" | "default" | "plan" | "bypassPermissions";
+  effort?: "low" | "medium" | "high" | "xhigh" | "max";
 }
 
 export interface CodexAgentConfig extends CommonAgentConfig {
@@ -29,6 +30,7 @@ export interface CodexAgentConfig extends CommonAgentConfig {
   sandboxMode: "read-only" | "workspace-write" | "danger-full-access";
   approvalPolicy: "untrusted" | "on-failure" | "on-request" | "never";
   networkAccessEnabled: boolean;
+  modelReasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
   env?: Record<string, string>;
 }
 
@@ -49,7 +51,10 @@ interface CommonRunQueryOptions {
 }
 
 export type ClaudeRunQueryOptions = CommonRunQueryOptions & {
-  claude: { permissionMode: ClaudeAgentConfig["permissionMode"] };
+  claude: {
+    permissionMode: ClaudeAgentConfig["permissionMode"];
+    effort?: ClaudeAgentConfig["effort"];
+  };
   codex?: never;
   opencode?: never;
 };
@@ -59,6 +64,7 @@ export type CodexRunQueryOptions = CommonRunQueryOptions & {
     sandboxMode: CodexAgentConfig["sandboxMode"];
     approvalPolicy: CodexAgentConfig["approvalPolicy"];
     networkAccessEnabled: boolean;
+    modelReasoningEffort?: CodexAgentConfig["modelReasoningEffort"];
     env?: Record<string, string>;
   };
   claude?: never;
@@ -204,7 +210,13 @@ async function driveOneTurn(opts: DriveOneTurnOptions): Promise<DriveOneTurnResu
     };
     const queryOpts: RunQueryOptions =
       opts.config.provider === "claude"
-        ? { ...baseOpts, claude: { permissionMode: opts.config.permissionMode } }
+        ? {
+            ...baseOpts,
+            claude: {
+              permissionMode: opts.config.permissionMode,
+              ...(opts.config.effort ? { effort: opts.config.effort } : {}),
+            },
+          }
         : opts.config.provider === "codex"
           ? {
               ...baseOpts,
@@ -212,6 +224,9 @@ async function driveOneTurn(opts: DriveOneTurnOptions): Promise<DriveOneTurnResu
                 sandboxMode: opts.config.sandboxMode,
                 approvalPolicy: opts.config.approvalPolicy,
                 networkAccessEnabled: opts.config.networkAccessEnabled,
+                ...(opts.config.modelReasoningEffort
+                  ? { modelReasoningEffort: opts.config.modelReasoningEffort }
+                  : {}),
                 ...(opts.config.env ? { env: opts.config.env } : {}),
               },
             }

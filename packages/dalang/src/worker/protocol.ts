@@ -9,6 +9,7 @@ const ClaudeInvocationSchema = z.object({
   resumeSessionId: z.string().min(1).optional(),
   claude: z.object({
     permissionMode: z.enum(["auto", "default", "plan", "bypassPermissions"]),
+    effort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional(),
   }),
 });
 
@@ -23,6 +24,7 @@ const CodexInvocationSchema = z.object({
     sandboxMode: z.enum(["read-only", "workspace-write", "danger-full-access"]),
     approvalPolicy: z.enum(["untrusted", "on-failure", "on-request", "never"]),
     networkAccessEnabled: z.boolean(),
+    modelReasoningEffort: z.enum(["minimal", "low", "medium", "high", "xhigh"]).optional(),
     env: z.record(z.string(), z.string()).optional(),
     git: z
       .object({

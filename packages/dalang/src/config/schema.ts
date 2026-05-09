@@ -110,19 +110,52 @@ export const AgentSchema = z.object({
 
 export const AgentProvider = z.enum(["claude", "codex", "opencode"]);
 
+const StateOverrideKey = z.string().min(1);
+
 export const CodexSandboxMode = z.enum(["read-only", "workspace-write", "danger-full-access"]);
 
 export const CodexApprovalPolicy = z.enum(["untrusted", "on-failure", "on-request", "never"]);
 
+export const CodexReasoningEffort = z.enum(["minimal", "low", "medium", "high", "xhigh"]);
+
+const CodexStateOverrideSchema = z
+  .object({
+    model: z.string().min(1).optional(),
+    model_reasoning_effort: CodexReasoningEffort.optional(),
+  })
+  .strict()
+  .partial();
+
+export const ClaudePermissionMode = z.enum(["auto", "default", "plan", "bypassPermissions"]);
+
+export const ClaudeEffort = z.enum(["low", "medium", "high", "xhigh", "max"]);
+
+const ClaudeStateOverrideSchema = z
+  .object({
+    model: z.string().min(1).optional(),
+    effort: ClaudeEffort.optional(),
+  })
+  .strict()
+  .partial();
+
+const OpencodeStateOverrideSchema = z
+  .object({
+    model: z.string().min(1).optional(),
+  })
+  .strict()
+  .partial();
+
 export const CodexSchema = z.object({
   executable_path: z.string().min(1),
   model: z.string().min(1),
+  model_reasoning_effort: CodexReasoningEffort.optional(),
   sandbox_mode: CodexSandboxMode,
   approval_policy: CodexApprovalPolicy,
   network_access_enabled: z.boolean().default(true),
   turn_timeout_ms: z.number().int().positive(),
   read_timeout_ms: z.number().int().positive(),
   stall_timeout_ms: z.number().int(),
+  state_overrides: z.record(StateOverrideKey, CodexStateOverrideSchema).default({}),
 });
 
 export const OpencodeSchema = z.object({
@@ -131,17 +164,18 @@ export const OpencodeSchema = z.object({
     .string()
     .min(1)
     .regex(/^[^/]+\/.+$/, "model must be in providerID/modelID form"),
+  state_overrides: z.record(StateOverrideKey, OpencodeStateOverrideSchema).default({}),
   turn_timeout_ms: z.number().int().positive(),
   read_timeout_ms: z.number().int().positive(),
   stall_timeout_ms: z.number().int(),
 });
 
-export const ClaudePermissionMode = z.enum(["auto", "default", "plan", "bypassPermissions"]);
-
 export const ClaudeSchema = z.object({
   executable_path: z.string().min(1),
   model: z.string().min(1),
+  effort: ClaudeEffort.optional(),
   permission_mode: ClaudePermissionMode,
+  state_overrides: z.record(StateOverrideKey, ClaudeStateOverrideSchema).default({}),
   turn_timeout_ms: z.number().int().positive(),
   read_timeout_ms: z.number().int().positive(),
   stall_timeout_ms: z.number().int(),
@@ -434,7 +468,9 @@ const DEFAULTS = {
   claude: {
     executable_path: "claude",
     model: "claude-opus-4-7",
+    effort: undefined,
     permission_mode: "auto",
+    state_overrides: {},
     turn_timeout_ms: 3600000,
     read_timeout_ms: 5000,
     stall_timeout_ms: 300000,
@@ -442,15 +478,18 @@ const DEFAULTS = {
   codex: {
     executable_path: "codex",
     model: "gpt-5.5",
+    model_reasoning_effort: undefined,
     sandbox_mode: "workspace-write",
     approval_policy: "never",
     network_access_enabled: true,
     turn_timeout_ms: 3600000,
     read_timeout_ms: 5000,
     stall_timeout_ms: 300000,
+    state_overrides: {},
   },
   opencode: {
     executable_path: "opencode",
+    state_overrides: {},
     turn_timeout_ms: 3600000,
     read_timeout_ms: 5000,
     stall_timeout_ms: 300000,

@@ -364,3 +364,61 @@ control_plane:
   expect(result.ok).toBe(true);
   expect(result.diagnostics).toEqual([]);
 });
+
+test("lint accepts state_overrides for active states", async () => {
+  const path = await writeWorkflow(
+    "{{ issue.title }}",
+    `
+agent_provider: codex
+tracker:
+  endpoint: http://localhost:3001
+  active_states: ["Todo", "Ready for Review"]
+  terminal_states: ["Done"]
+control_plane:
+  kind: papan
+  endpoint: http://localhost:3001
+  active_states: ["Todo", "Ready for Review"]
+  terminal_states: ["Done"]
+codex:
+  state_overrides:
+    todo:
+      model: gpt-5.5
+      model_reasoning_effort: high
+`,
+  );
+
+  const result = await lintWorkflow(path);
+
+  expect(result.ok).toBe(true);
+  expect(result.diagnostics).toEqual([]);
+});
+
+test("lint rejects state_overrides for inactive states", async () => {
+  const path = await writeWorkflow(
+    "{{ issue.title }}",
+    `
+agent_provider: codex
+tracker:
+  endpoint: http://localhost:3001
+  active_states: ["Todo"]
+  terminal_states: ["Done"]
+control_plane:
+  kind: papan
+  endpoint: http://localhost:3001
+  active_states: ["Todo"]
+  terminal_states: ["Done"]
+codex:
+  state_overrides:
+    Ready for Review:
+      model: gpt-5.5
+`,
+  );
+
+  const result = await lintWorkflow(path);
+
+  expect(result.ok).toBe(false);
+  expect(result.diagnostics.map((d) => d.code)).toContain("inactive_state_override");
+  expect(result.diagnostics.map((d) => d.message)).toContain(
+    "codex state override for inactive state `Ready for Review`",
+  );
+});

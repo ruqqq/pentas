@@ -54,7 +54,10 @@ function buildInvocation(
       cwd: containerCwd,
       model: opts.model,
       executablePath: providerExecs.claude.executablePath,
-      claude: { permissionMode: opts.claude.permissionMode },
+      claude: {
+        permissionMode: opts.claude.permissionMode,
+        ...(opts.claude.effort ? { effort: opts.claude.effort } : {}),
+      },
     };
   }
   if (opts.codex) {
@@ -68,6 +71,9 @@ function buildInvocation(
         sandboxMode: opts.codex.sandboxMode,
         approvalPolicy: opts.codex.approvalPolicy,
         networkAccessEnabled: opts.codex.networkAccessEnabled,
+        ...(opts.codex.modelReasoningEffort
+          ? { modelReasoningEffort: opts.codex.modelReasoningEffort }
+          : {}),
         ...(providerExecs.codex.env !== undefined || opts.codex.env !== undefined
           ? { env: { ...opts.codex.env, ...providerExecs.codex.env } }
           : {}),

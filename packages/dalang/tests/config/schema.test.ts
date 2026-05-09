@@ -162,6 +162,57 @@ test("rejects agent_provider=codex without a codex block", () => {
   expect(() => WorkflowFrontMatterSchema.parse(cfg)).toThrow(/codex/i);
 });
 
+test("accepts claude state_overrides with per-state effort and model", () => {
+  const cfg = applyDefaults({
+    claude: {
+      state_overrides: {
+        Todo: {
+          model: "claude-3-5-haiku-20241022",
+          effort: "medium",
+        },
+      },
+    },
+  });
+  const parsed = WorkflowFrontMatterSchema.parse(cfg);
+  expect(parsed.claude?.state_overrides.Todo).toMatchObject({
+    model: "claude-3-5-haiku-20241022",
+    effort: "medium",
+  });
+});
+
+test("accepts codex state_overrides with per-state model_reasoning_effort", () => {
+  const cfg = applyDefaults({
+    agent_provider: "codex",
+    codex: {
+      state_overrides: {
+        "Ready for Review": {
+          model_reasoning_effort: "xhigh",
+        },
+      },
+    },
+  });
+  const parsed = WorkflowFrontMatterSchema.parse(cfg);
+  expect(parsed.codex?.state_overrides["Ready for Review"]).toMatchObject({
+    model_reasoning_effort: "xhigh",
+  });
+});
+
+test("accepts opencode state_overrides with per-state model override", () => {
+  const cfg = applyDefaults({
+    agent_provider: "opencode",
+    opencode: {
+      model: "anthropic/claude-sonnet-4-6",
+      state_overrides: {
+        "ready for review": {
+          model: "google/gemini-2.5-pro",
+        },
+      },
+    },
+  });
+  const parsed = WorkflowFrontMatterSchema.parse(cfg);
+  expect(parsed.opencode?.state_overrides["ready for review"]?.model).toBe("google/gemini-2.5-pro");
+});
+
 test("rejects agent_provider=claude without a claude block", () => {
   const cfg = applyDefaults({}) as Record<string, unknown>;
   delete cfg.claude;

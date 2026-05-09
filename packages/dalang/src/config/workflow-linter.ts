@@ -10,7 +10,8 @@ export interface WorkflowLintDiagnostic {
     | "workflow_load_error"
     | "unknown_liquid_variable"
     | "unknown_liquid_filter"
-    | "invalid_liquid_for";
+    | "invalid_liquid_for"
+    | "inactive_state_override";
   message: string;
 }
 
@@ -146,7 +147,31 @@ export async function lintWorkflow(path: string): Promise<WorkflowLintResult> {
   }
 
   diagnostics.push(...lintLiquidTemplate(loaded.promptTemplate));
+  diagnostics.push(...lintProviderStateOverrides(loaded.config));
   return { ok: diagnostics.length === 0, diagnostics };
+}
+
+function lintProviderStateOverrides(config: WorkflowFrontMatter): WorkflowLintDiagnostic[] {
+  const provider = config.agent_provider;
+  const activeStates = new Set(config.control_plane.active_states.map((s) => s.toLowerCase()));
+  const overrides =
+    provider === "claude"
+      ? config.claude?.state_overrides
+      : provider === "codex"
+        ? config.codex?.state_overrides
+        : config.opencode?.state_overrides;
+  if (!overrides) return [];
+  const diagnostics: WorkflowLintDiagnostic[] = [];
+  for (const state of Object.keys(overrides)) {
+    if (!activeStates.has(state.toLowerCase())) {
+      diagnostics.push({
+        severity: "error",
+        code: "inactive_state_override",
+        message: `${provider} state override for inactive state \`${state}\``,
+      });
+    }
+  }
+  return diagnostics;
 }
 
 export function lintLiquidTemplate(template: string): WorkflowLintDiagnostic[] {

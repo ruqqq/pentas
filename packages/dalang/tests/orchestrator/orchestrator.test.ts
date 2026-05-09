@@ -223,6 +223,142 @@ test("routes non-disabled state issue to sandbox runner", async () => {
   expect(orch.state.completed.has("i1")).toBe(true);
 });
 
+test("orchestrator applies claude state override model and effort", async () => {
+  const root = await tmpRoot();
+  const tracker = new FakeControlPlane();
+  tracker.candidates = [issue("i1", "In Dev")];
+  tracker.byIds["i1"] = issue("i1", "Done");
+
+  const observed: Array<{ model: string; effort?: string }> = [];
+  const cfg = applyDefaults({
+    tracker: {
+      endpoint: "http://localhost:1",
+      active_states: ["In Dev", "Ready for Review"],
+      terminal_states: ["Done"],
+    },
+    workspace: { root },
+    agent: { max_concurrent_agents: 1, max_turns: 1 },
+    polling: { interval_ms: 1000 },
+    claude: {
+      state_overrides: {
+        "in dev": { model: "claude-3-5-haiku", effort: "max" },
+      },
+    },
+  });
+
+  const orch = new Orchestrator({
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
+    runQuery: async function* (opts) {
+      if (!opts.claude) throw new Error("claude options missing");
+      observed.push({ model: opts.model, effort: opts.claude.effort });
+      yield { type: "system", subtype: "init", session_id: "s-1" };
+      yield {
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
+    },
+  });
+
+  await orch.tick();
+  await orch.drainPendingForTest();
+
+  expect(observed).toEqual([{ model: "claude-3-5-haiku", effort: "max" }]);
+});
+
+test("orchestrator applies codex state override model and model_reasoning_effort", async () => {
+  const root = await tmpRoot();
+  const tracker = new FakeControlPlane();
+  tracker.candidates = [issue("i1", "Ready for Review")];
+  tracker.byIds["i1"] = issue("i1", "Done");
+
+  const observed: Array<{ model: string; modelReasoningEffort?: string }> = [];
+  const cfg = applyDefaults({
+    tracker: {
+      endpoint: "http://localhost:1",
+      active_states: ["Ready for Review"],
+      terminal_states: ["Done"],
+    },
+    workspace: { root },
+    agent_provider: "codex",
+    codex: {
+      model: "gpt-5",
+      state_overrides: {
+        "Ready for Review": {
+          model: "gpt-5.5",
+          model_reasoning_effort: "xhigh",
+        },
+      },
+    },
+    agent: { max_concurrent_agents: 1, max_turns: 1 },
+    polling: { interval_ms: 1000 },
+  });
+
+  const orch = new Orchestrator({
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
+    runQuery: async function* (opts) {
+      if (!opts.codex) throw new Error("codex options missing");
+      observed.push({ model: opts.model, modelReasoningEffort: opts.codex.modelReasoningEffort });
+      yield { type: "thread.started", thread_id: "thread-1" };
+      yield {
+        type: "turn.completed",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
+    },
+  });
+
+  await orch.tick();
+  await orch.drainPendingForTest();
+
+  expect(observed).toEqual([{ model: "gpt-5.5", modelReasoningEffort: "xhigh" }]);
+});
+
+test("orchestrator applies opencode state override model", async () => {
+  const root = await tmpRoot();
+  const tracker = new FakeControlPlane();
+  tracker.candidates = [issue("i1", "Todo")];
+  tracker.byIds["i1"] = issue("i1", "Done");
+
+  const observed: string[] = [];
+  const cfg = applyDefaults({
+    tracker: { endpoint: "http://localhost:1", active_states: ["Todo"], terminal_states: ["Done"] },
+    workspace: { root },
+    agent_provider: "opencode",
+    opencode: {
+      model: "anthropic/claude-sonnet-4-6",
+      state_overrides: {
+        Todo: { model: "google/gemini-2.5-pro" },
+      },
+    },
+    agent: { max_concurrent_agents: 1, max_turns: 1 },
+    polling: { interval_ms: 1000 },
+  });
+
+  const orch = new Orchestrator({
+    controlPlane: tracker,
+    config: cfg,
+    promptTemplate: "x",
+    runQuery: async function* (opts) {
+      if (!opts.opencode) throw new Error("opencode options missing");
+      observed.push(opts.model);
+      yield { type: "session.created", properties: { info: { id: "ses-1" } } };
+      yield {
+        type: "session.idle",
+        properties: { sessionID: "ses-1", tokens: { input: 1, output: 1, reasoning: 0 } },
+      };
+    },
+  });
+
+  await orch.tick();
+  await orch.drainPendingForTest();
+
+  expect(observed).toEqual(["google/gemini-2.5-pro"]);
+});
+
 test("hot reload changes sandbox disabled states for later dispatches", async () => {
   const root = await tmpRoot();
   const tracker = new FakeControlPlane();
@@ -805,7 +941,9 @@ test("cancelled turn after state handoff does not schedule a retry", async () =>
     runQuery: async function* (opts) {
       started = true;
       yield { type: "system", subtype: "init", session_id: "handoff-thread" };
-      await new Promise<void>((resolve) => opts.abortSignal?.addEventListener("abort", () => resolve(), { once: true }));
+      await new Promise<void>((resolve) =>
+        opts.abortSignal?.addEventListener("abort", () => resolve(), { once: true }),
+      );
     },
   });
 

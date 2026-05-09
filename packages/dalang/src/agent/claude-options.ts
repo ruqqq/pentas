@@ -30,6 +30,7 @@ export function buildClaudeQueryOptions(
       cwd: opts.cwd,
       model: opts.model,
       permissionMode: opts.claude.permissionMode,
+      ...(opts.claude.effort !== undefined ? { effort: opts.claude.effort } : {}),
       pathToClaudeCodeExecutable: opts.executablePath,
       resume: opts.resumeSessionId,
       abortController,

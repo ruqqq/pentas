@@ -1,24 +1,30 @@
 // packages/dalang/src/agent/codex-runner.ts
 import { Codex } from "@openai/codex-sdk";
-import type { RunQuery, RunQueryOptions } from "./agent-runner";
+import type { RunQuery, RunQueryOptions, CodexRunQueryOptions } from "./agent-runner";
 import { buildCodexChildEnv } from "./codex-env";
 
 export const codexRunQuery: RunQuery = (opts: RunQueryOptions) => {
   if (!opts.codex) {
     throw new Error("codexRunQuery requires opts.codex (provider mismatch)");
   }
+  type CodexThreadOptions = Parameters<Codex["startThread"]>[0] & {
+    modelReasoningEffort?: CodexRunQueryOptions["codex"]["modelReasoningEffort"];
+  };
 
   const codex = new Codex({
     codexPathOverride: opts.executablePath,
     env: buildCodexChildEnv(opts.codex.env),
   });
 
-  const threadOptions = {
+  const threadOptions: CodexThreadOptions = {
     workingDirectory: opts.cwd,
     model: opts.model,
     sandboxMode: opts.codex.sandboxMode,
     approvalPolicy: opts.codex.approvalPolicy,
     networkAccessEnabled: opts.codex.networkAccessEnabled,
+    ...(opts.codex.modelReasoningEffort
+      ? { modelReasoningEffort: opts.codex.modelReasoningEffort }
+      : {}),
   };
 
   const thread = opts.resumeSessionId

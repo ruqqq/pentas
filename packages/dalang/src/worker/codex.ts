@@ -30,12 +30,18 @@ export async function* runCodex(
     codexPathOverride: inv.executablePath,
     env,
   });
-  const threadOptions = {
+  type CodexThreadOptions = Parameters<Codex["startThread"]>[0] & {
+    modelReasoningEffort?: typeof inv.codex.modelReasoningEffort;
+  };
+  const threadOptions: CodexThreadOptions = {
     workingDirectory: inv.cwd,
     model: inv.model,
     sandboxMode: inv.codex.sandboxMode,
     approvalPolicy: inv.codex.approvalPolicy,
     networkAccessEnabled: inv.codex.networkAccessEnabled,
+    ...(inv.codex.modelReasoningEffort
+      ? { modelReasoningEffort: inv.codex.modelReasoningEffort }
+      : {}),
   };
   const thread = inv.resumeSessionId
     ? codex.resumeThread(inv.resumeSessionId, threadOptions)
